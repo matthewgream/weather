@@ -37,9 +37,22 @@ are both mounted outside in an IP67 case and powered by PoE.
 Please make sure to isolate the Ethernet cable on entry to your property, and preferably use shielded cable and ground the shielding.
 Do not ground these to your electricity supply ground, but ground directly to earth bonding.
 
+![Station](images/station.jpg)
+
+## server
+
+    DietPI (as base system)
+    ecowitt2mqtt
+    mosquitto (for MQTT broker)
+    avahi (for multicast DNS)
+    http-server (nodejs + express)
+    noip update scripts
+    ddns update scripts
+    
 You need to install DietPI, then the software components including systemd service scripts and defaults. The system is minimal
 and all processes, including server components, run as root. The MQTT broker is not password protected. The server publishes itself 
 as 'weather.local' using avahi. UPNP to establish an inbound sshd gateway and NOIP provides DDNS. You should ensure sshd is public
-key authentication only.
+key authentication only. The Ecowitt sinks need to be configured as per Ecowitt2MQTT instructions.
 
-![Station](images/station.jpg)
+![Server](images/server.jpg)
+
