@@ -22,6 +22,8 @@ are both mounted outside in an IP67 case and powered by PoE.
 
     Inkplate2 (with case & battery)
 
+    https://soldered.com/product/inkplate-2/
+
 ![Display](images/display.jpg)
 
 ## station
@@ -32,7 +34,14 @@ are both mounted outside in an IP67 case and powered by PoE.
     Generic 10/100 POE splitter
     USBA splitter (for POE splitter o power both Zero and Gateway)
     USBA to Micro-USB (to power the Zero)
-    IP67 box (in this case, mounted about 4 metres above ground)
+    IP67 box 200x120x75 (in this case, mounted about 4 metres above ground)
+
+    https://www.aliexpress.com/item/1005007064834607.html
+    https://www.aliexpress.com/item/4000022488083.html
+    https://www.aliexpress.com/item/1005005264135330.html
+    https://www.aliexpress.com/item/1005004230399849.html
+    https://www.aliexpress.com/item/1005006147721647.html
+    https://www.aliexpress.com/item/1005005367221276.html
 
 Please make sure to isolate the Ethernet cable on entry to your property, and preferably use shielded cable and ground the shielding.
 Do not ground these to your electricity supply ground, but ground directly to earth bonding.
@@ -48,6 +57,12 @@ Do not ground these to your electricity supply ground, but ground directly to ea
     http-server (nodejs + express)
     noip update scripts
     ddns update scripts
+
+    https://dietpi.com
+    https://github.com/bachya/ecowitt2mqtt
+    https://github.com/eclipse/mosquitto
+    https://avahi.org
+    https://nodejs.org
     
 You need to install DietPI, then the software components including systemd service scripts and defaults. The system is minimal
 and all processes, including server components, run as root. The MQTT broker is not password protected. The server publishes itself 
@@ -59,6 +74,12 @@ services including Ecowitt itself.
 
 ## client
 
+    Arduino IDE
+    ArduinoJson
+    Inkplate2
+    
+    https://www.arduino.cc/en/software
+    
 The client software builds under Arduino IDE and is simple in execution:
 
 ![Client](images/client.jpg)
