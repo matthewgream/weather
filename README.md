@@ -1,5 +1,5 @@
 
-# weather-inkplate2
+# weather-ecowitt-inkplate2
 
 IOT weather display for Ecowitt devices using Inkpad2
 
