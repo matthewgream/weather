@@ -9,14 +9,14 @@ IOT weather display for Ecowitt devices using Inkpad2
                   mosquitto (localhost) --> node express app (as mqtt subscriber)
 
     Inkplate2 Arduino -->
-        wake up every N minutes
-        connect to WLAN as defined
-        request JSON updated variables from node express app
+        wake up from deep sleep every N=5 minutes
+        connect to WLAN
+        request JSON variables, served by node express app
         render variables into epaper display
-        go back to deep sleep
+        deep sleep
 
-In this case, local device is a Raspberry Pi Zero (32 bit) running DietPI, with an Ethernet HAT. Zero and GW1100
-are both mounted outside in an IP67 case and powered by PoE.
+In this case, the local device is a Raspberry Pi Zero (32 bit) running DietPI, with an Ethernet HAT.
+Zero and GW1100 are both mounted outside in an IP67 case and powered by PoE.
 
 ## display
 
@@ -28,7 +28,7 @@ are both mounted outside in an IP67 case and powered by PoE.
 
 ## station
 
-    Raspbery Pi Zero (with DietPI installation), no WiFi needed
+    Raspbery Pi Zero H (WiFi version not needed)
     Waveshave Ethernet/USB Hat
     Ecowitt Gateway GW1100 (unfortunately WiFi only)
     Generic 10/100 POE splitter
@@ -43,8 +43,9 @@ are both mounted outside in an IP67 case and powered by PoE.
     https://www.aliexpress.com/item/1005006147721647.html
     https://www.aliexpress.com/item/1005005367221276.html
 
-Please make sure to isolate the Ethernet cable on entry to your property, and preferably use shielded cable and ground the shielding.
-Do not ground these to your electricity supply ground, but ground directly to earth bonding.
+If you use an external PoE cable, make sure to isolate the Ethernet cable on entry to your property,
+and preferably use shielded cable and ground the shielding. Do not ground these to your electricity supply
+ground, but ground directly to earth bonding.
 
 ![Station](images/station.jpg)
 
@@ -64,11 +65,11 @@ Do not ground these to your electricity supply ground, but ground directly to ea
     https://avahi.org
     https://nodejs.org
     
-You need to install DietPI, then the software components including systemd service scripts and defaults. The system is minimal
+Install DietPI then the software components including systemd service scripts and defaults. The system is minimal
 and all processes, including server components, run as root. The MQTT broker is not password protected. The server publishes itself 
-as 'weather.local' using avahi. UPNP to establish an inbound sshd gateway and NOIP provides DDNS. You should ensure sshd is public
-key authentication only. The Ecowitt sinks need to be configured as per Ecowitt2MQTT instructions. You can still publish to other
-services including Ecowitt itself.
+as 'weather.local' using mDNS via. avahi. UPnP is used to configure an inbound sshd gateway and No-IP for DDNS. Configure sshd as public
+key authentication only -- no password. The Ecowitt sinks must to be configured as per ecowitt2mqtt instructions. The sinks can still
+publish to other services including Ecowitt itself.
 
 ![Server](images/server.jpg)
 
