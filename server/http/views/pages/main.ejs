@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@700&display=swap" rel="stylesheet">
+
+    <style>
+    body {
+        font-family: 'Inter', serif;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .temp { font-size: 2vw; text-align: center; }
+    </style>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        function adjustFontSize () {
+            adjustFont ('.temp', 0.2);
+        }
+        function adjustFont (selector, targetWidthRatio) {
+            const element = document.querySelector (selector);
+            const viewportWidth = window.innerWidth / 2;
+            let fontSize = 2.5;
+            while (element.offsetWidth < targetWidthRatio * viewportWidth && fontSize < 50) {
+                fontSize += 0.1;
+                element.style.fontSize = `${fontSize}vw`;
+            }
+        }
+        io.connect ().on ('update', (vars) => {
+			if (vars.weather_branna) {
+				document.querySelector ('.temp .temp-value-branna-temperature').textContent = vars.weather_branna.tempin;
+				document.querySelector ('.temp .temp-value-branna-humidity').textContent = vars.weather_branna.humidityin;
+				document.querySelector ('.temp .temp-value-branna-pressure').textContent = vars.weather_branna.baromabs;
+				//
+				document.querySelector ('.temp .temp-value-lake-surface').textContent = vars.weather_branna.tf_ch1;
+				document.querySelector ('.temp .temp-value-lake-submerged').textContent = vars.weather_branna.tf_ch2;
+			} else if (vars.weather_ulrikashus) {
+				document.querySelector ('.temp .temp-value-ulrikashus-temperature').textContent = vars.weather_ulrikashus.tempin;
+				document.querySelector ('.temp .temp-value-ulrikashus-humidity').textContent = vars.weather_ulrikashus.humidityin;
+				document.querySelector ('.temp .temp-value-ulrikashus-pressure').textContent = vars.weather_ulrikashus.baromabs;
+			}
+        });
+        window.onload = adjustFontSize;
+        window.onresize = adjustFontSize;
+    </script>
+</head>
+<body>
+    <div class="temp">
+		<b>lake</b><br />
+			surface: <span class="temp-value-lake-surface"><%= vars?.weather_branna?.tf_ch1 || 'n/a' %></span>°C,
+			submerged: <span class="temp-value-lake-submerged"><%= vars?.weather_branna?.tf_ch2 || 'n/a' %></span>°C<br /><br />
+		<b>outside</b><br />
+			temperature: <span class="temp-value-branna-temperature"><%= vars?.weather_branna?.tempin || 'n/a' %></span>°C,
+			humidity: <span class="temp-value-branna-humidity"><%= vars?.weather_branna?.humidityin || 'n/a' %></span>%,
+			pressure: <span class="temp-value-branna-pressure"><%= vars?.weather_branna?.baromabs || 'n/a' %></span> hPa<br /><br />
+		<b>ulrikashus</b><br />
+			temperature: <span class="temp-value-ulrikashus-temperature"><%= vars?.weather_ulrikashus?.tempin || 'n/a' %></span>°C,
+			humidity: <span class="temp-value-ulrikashus-humidity"><%= vars?.weather_ulrikashus?.humidityin || 'n/a' %></span>%,
+			pressure: <span class="temp-value-ulrikashus-pressure"><%= vars?.weather_ulrikashus?.baromabs || 'n/a' %></span> hPa<br />
+    </div>
+</body>
+</html>

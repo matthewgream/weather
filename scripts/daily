@@ -1,0 +1,4 @@
+#!/bin/bash
+. /opt/weather/scripts/secrets.txt
+/opt/weather/scripts/upnp_sshd_forwarding &
+/opt/weather/scripts/noip_update &

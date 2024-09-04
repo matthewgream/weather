@@ -1,0 +1,16 @@
+[Unit]
+Description=ECOWITT2MQTT daemon
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=ecowitt2mqtt -c /etc/default/ecowitt2mqtt
+ExecReload=kill -HUP $MAINPID
+KillMode=process
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+

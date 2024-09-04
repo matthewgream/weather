@@ -1,0 +1,8 @@
+#!/bin/sh
+
+if [ -f /opt/weather/scripts/daily ]; then
+        /bin/sh /opt/weather/scripts/daily &
+fi
+
+exit 0
+

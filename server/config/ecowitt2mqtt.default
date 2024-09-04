@@ -1,0 +1,30 @@
+---
+mqtt_broker: 127.0.0.1
+mqtt_port: 1883
+mqtt_topic: weather
+
+verbose: true
+
+gateways:
+  897E636DC042B59B734AED4F3D37A248:
+    input_data_format: ecowitt
+    input_unit_system: imperial
+    output_unit_system: metric
+    disable_calculated_data: true
+    precision: 4
+    mqtt_topic: weather_branna
+  C51189CD5DE1BD123D923BDBD51FC4BC:
+    input_data_format: ecowitt
+    input_unit_system: imperial
+    output_unit_system: metric
+    disable_calculated_data: true
+    precision: 4
+    mqtt_topic: weather_ulrikashus
+  A51189CD5DE1BD123D923BDBD51FC4BC:
+    input_data_format: ecowitt
+    input_unit_system: imperial
+    output_unit_system: metric
+    disable_calculated_data: true
+    precision: 4
+    mqtt_topic: weather_mormorshus
+

@@ -1,0 +1,15 @@
+#!/bin/bash
+
+service='weather-sshd-inbound'
+port_ext=8892
+port_int=22
+protocol=tcp
+
+address=`ip address | grep 192 | awk '{ print $2; }'`
+check=`/usr/bin/upnpc -L | grep $service`
+if [ -z "$check" ]; then
+        /usr/bin/upnpc -e $service -r $port_int $port_ext $protocol > /dev/null
+elif [[ "$check" != *"$address"* ]] || [[ "$check" != *"$port_ext"* ]] || [[ "$check" != *"$port_int"* ]]; then
+        /usr/bin/upnpc -d $port_ext $protocol > /dev/null > /dev/null
+        /usr/bin/upnpc -e $service -r $port_int $port_ext $protocol > /dev/null
+fi
