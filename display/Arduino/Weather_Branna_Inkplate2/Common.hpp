@@ -30,8 +30,8 @@ String identify (void);
 const Variables DEFAULT_CONFIG = {
     { "name", "Weather Display Branna" },
     { "vers", "0.99" },
-    { "ssid", },
-    { "pass", },
+    { "ssid", DEFAULT_NETWORK_SSID },
+    { "pass", DEFAULT_NETWORK_PASS },
     { "host", "weather-display-inkplate2-" + identify () },
     { "link", "http://weather.local/vars" },
     { "secs", "300" },
