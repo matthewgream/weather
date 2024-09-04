@@ -52,7 +52,14 @@ Do not ground these to your electricity supply ground, but ground directly to ea
 You need to install DietPI, then the software components including systemd service scripts and defaults. The system is minimal
 and all processes, including server components, run as root. The MQTT broker is not password protected. The server publishes itself 
 as 'weather.local' using avahi. UPNP to establish an inbound sshd gateway and NOIP provides DDNS. You should ensure sshd is public
-key authentication only. The Ecowitt sinks need to be configured as per Ecowitt2MQTT instructions.
+key authentication only. The Ecowitt sinks need to be configured as per Ecowitt2MQTT instructions. You can still publish to other
+services including Ecowitt itself.
 
 ![Server](images/server.jpg)
+
+## client
+
+The client software builds under Arduino IDE and is simple in execution:
+
+![Client](images/client.jpg)
 
