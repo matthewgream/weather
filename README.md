@@ -35,5 +35,5 @@ Ethernet cable
 
 Please make sure to isolate the cable on entry to your property, and preferably use shielded cable and ground the shielding.
 
-[!Station](images/station.jpg)
+![Station](images/station.jpg)
 
