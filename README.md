@@ -20,20 +20,26 @@ are both mounted outside in an IP67 case and powered by PoE.
 
 ## display
 
-Inkplate2
+    Inkplate2 (with case & battery)
 
 ![Display](images/display.jpg)
 
 ## station
 
-Raspbery Pi Zero (with DietPI)
-Waveshave Ethernet/USB Hat
-Generic 10/100 POE splitter
-USBA splitter + USBA to Micro-USB
-IP67 box
-Ethernet cable
+    Raspbery Pi Zero (with DietPI installation), no WiFi needed
+    Waveshave Ethernet/USB Hat
+    Ecowitt Gateway GW1100 (unfortunately WiFi only)
+    Generic 10/100 POE splitter
+    USBA splitter (for POE splitter o power both Zero and Gateway)
+    USBA to Micro-USB (to power the Zero)
+    IP67 box (in this case, mounted about 4 metres above ground)
 
-Please make sure to isolate the cable on entry to your property, and preferably use shielded cable and ground the shielding.
+Please make sure to isolate the Ethernet cable on entry to your property, and preferably use shielded cable and ground the shielding.
+Do not ground these to your electricity supply ground, but ground directly to earth bonding.
+
+You need to install DietPI, then the software components including systemd service scripts and defaults. The system is minimal
+and all processes, including server components, run as root. The MQTT broker is not password protected. The server publishes itself 
+as 'weather.local' using avahi. UPNP to establish an inbound sshd gateway and NOIP provides DDNS. You should ensure sshd is public
+key authentication only.
 
 ![Station](images/station.jpg)
-
