@@ -4,10 +4,10 @@
 IOT weather display for Ecowitt devices using Inkpad2.
 
     Ecowitt sources (e.g. WN36 weather array, WN34 temperature sensors)
-        -- rf 866 mhz --> Ecowitt sinks (e.g. console WS3900, gateway GW1100)
-        -- http --> ecowitt2mqtt (as mqtt publisher, on local device)
-        -- mqtt (localhost) --> mosquitto (on same device)
-        -- mqtt (localhost) --> nodejs app w/ express (as mqtt subscriber, on same device)
+        --> rf 866 mhz --> Ecowitt sinks (e.g. console WS3900, gateway GW1100)
+        --> http --> ecowitt2mqtt (as mqtt publisher, on local device)
+        --> mqtt (localhost) --> mosquitto (on same device)
+        --> mqtt (localhost) --> nodejs app w/ express (as mqtt subscriber, on same device)
 
     Inkplate2 Arduino -->
         wake up from deep sleep every N=5 minutes
