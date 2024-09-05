@@ -5,20 +5,27 @@ IOT weather display for Ecowitt devices using Inkpad2.
 
     SERVER
     
-    Ecowitt sources (e.g. WN36 weather array, WN34 temperature sensors)
-        --> rf 866 mhz --> Ecowitt sinks (e.g. console WS3900, gateway GW1100)
-        --> http --> ecowitt2mqtt (as mqtt publisher, on local device)
-        --> mqtt (localhost) --> mosquitto (on same device)
-        --> mqtt (localhost) --> nodejs app w/ express (as mqtt subscriber, on same device)
+    Ecowitt sources (e.g. WN36 array, WN34 temp sensors)
+        measure weather variables and send via. rf 866 mhz (OTA up to 100m) to Ecowitt sinks
+    Ecowitt sinks (e.g. WS3900 console, GW1100 gateway)
+        package variables and send in Ecowitt format using http (Wifi network) to ecowitt2mqtt.py (on server)
+    ecowitt2mqtt.py (on server)
+        transforms and sends variables (as JSON) using mqtt publish (localhost) to mosquitto (on server, as mqtt broker)
+    mosquitto (on server)
+        acts as mqtt broker for ecowitt2mqtt.py, nodejs app, and any other clients
+    nodejs app w/ express (on server)
+        receive and cache variables (as JSON) using mqtt subscribe (localhost) from mosquitto (on server, as mqtt broker)
+        respond to http request (WiFi network) with cached variables (as JSON) to clients (e.g. Inkplate2)
+        provide human readable (live refreshed) web interface for cached variables
 
     CLIENT
     
     Inkplate2 (Arduino ESP32 w/ WiFi, battery and case) -->
         wake up from deep sleep every N=5 minutes
         connect to WLAN
-        request JSON variables, served by nodejs app
-        render variables into epaper display
-        deep sleep
+        request variables (as JSON), served by nodejs app
+        render selected variables into epaper display
+        deep sleep w/ wake up alarm
 
 In this case, the server components (ecowitt2mqtt, mosquitto, nodejs) are housed on a Raspberry Pi Zero (32 bit)
 running DietPI with an Ethernet HAT, paired with a Ecowitt GW1100 as a sink, both of which are mounted outside
