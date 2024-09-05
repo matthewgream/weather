@@ -1,7 +1,7 @@
 #!/bin/sh
 
-if [ -f /opt/weather/scripts/daily ]; then
-        /bin/sh /opt/weather/scripts/daily &
+if [ -f /opt/weather/server/scripts/daily ]; then
+        /bin/sh /opt/weather/server/scripts/daily &
 fi
 
 exit 0
