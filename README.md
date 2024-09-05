@@ -81,7 +81,11 @@ publish to other services including Ecowitt itself.
     
     https://www.arduino.cc/en/software
     
-The client software builds under Arduino IDE and is simple in execution:
+The client software builds under Arduino IDE and is simple in execution as below. Note the intent to minimise wifi enablement time
+and power on time to conserve battery, and to only refresh display if network update succeeds. Will update with battery performance at
+a later time. The standard Inkplate library has been included and stripped down to remove unneeded modules (e.g. JPG, PNG and BMP
+images, and colour dithering), but the code will build against the standard library. The files Secrets.hpp (in the Arduino project
+folder) and secrets.txt (in the server config files) have been suppressed from the repository for obvious reasons.
 
 ![Client](images/client.jpg)
 
