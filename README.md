@@ -46,6 +46,7 @@ red and black. The USB-C port is for charging and communications. The provided b
 
     Raspbery Pi Zero H (WiFi version not needed) -- https://www.aliexpress.com/item/1005007064834607.html
     Waveshave Ethernet/USB Hat -- https://www.aliexpress.com/item/4000022488083.html
+    MicroSD card (4GB minimum, I'm using 16GB) -- https://www.amazon.co.uk/dp/B07DVG12SF
     Ecowitt Gateway GW1100 (WiFi only) -- https://www.aliexpress.com/item/1005005264135330.html
     Generic 10/100 POE splitter --  https://www.aliexpress.com/item/1005004230399849.html
     USBA splitter (for POE splitter to both Zero and Gateway) -- https://www.aliexpress.com/item/1005006147721647.html
