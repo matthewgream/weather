@@ -76,7 +76,9 @@ as 'weather.local' using mDNS via. avahi. UPnP is used to configure an inbound s
 key authentication only -- no password. The Ecowitt sinks must to be configured as per ecowitt2mqtt instructions. The sinks can still
 publish to other services including Ecowitt itself.
 
-![Server](images/server.jpg)
+![Server](images/server2.jpg)
+![Server](images/server1.jpg)
+
 ![Server](images/ecowitt.jpg)
 
 ## client (software)
