@@ -5,7 +5,7 @@ After=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/opt/weather/server/http/main.js
+ExecStart=/opt/weather/server/http/server.js
 ExecReload=kill -HUP $MAINPID
 KillMode=process
 Restart=on-failure

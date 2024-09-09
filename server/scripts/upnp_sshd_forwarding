@@ -1,15 +1,12 @@
 #!/bin/bash
 
-service='weather-sshd-inbound'
-port_ext=8892
-port_int=22
-protocol=tcp
+# requires UPNP_SERVICE, UPNP_PORT_EXT, UPNP_PORT_INT, UPNP_PROTOCOL
 
-address=`ip address | grep 192 | awk '{ print $2; }'`
-check=`/usr/bin/upnpc -L | grep $service`
-if [ -z "$check" ]; then
-        /usr/bin/upnpc -e $service -r $port_int $port_ext $protocol > /dev/null
-elif [[ "$check" != *"$address"* ]] || [[ "$check" != *"$port_ext"* ]] || [[ "$check" != *"$port_int"* ]]; then
-        /usr/bin/upnpc -d $port_ext $protocol > /dev/null > /dev/null
-        /usr/bin/upnpc -e $service -r $port_int $port_ext $protocol > /dev/null
+ADDRESS=`ip address | grep 192 | awk '{ print $2; }'`
+CHECK=`/usr/bin/upnpc -L | grep $UPNP_SERVICE`
+if [ -z "$CHECK" ]; then
+        /usr/bin/upnpc -e $UPNP_SERVICE -r $UPNP_PORT_INT $UPNP_PORT_EXT $UPNP_PROTOCOL > /dev/null
+elif [[ "$CHECK" != *"$ADDRESS"* ]] || [[ "$CHECK" != *"$UPNP_PORT_EXT"* ]] || [[ "$CHECK" != *"$UPNP_PORT_INT"* ]]; then
+        /usr/bin/upnpc -d $UPNP_PORT_EXT $UPNP_PROTOCOL > /dev/null > /dev/null
+        /usr/bin/upnpc -e $UPNP_SERVICE -r $UPNP_PORT_INT $UPNP_PORT_EXT $UPNP_PROTOCOL > /dev/null
 fi

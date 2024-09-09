@@ -66,8 +66,8 @@ ground, but ground directly to earth bonding.
     mosquitto (for MQTT broker) -- https://github.com/eclipse/mosquitto
     avahi (for multicast DNS) -- https://avahi.org
     http-server (nodejs + express) -- https://nodejs.org
-    noip update scripts
-    ddns update scripts
+    upnp update scripts
+    ddns update scripts (if required)
 
 Sources: https://github.com/matthewgream/weather/tree/main/server
 
