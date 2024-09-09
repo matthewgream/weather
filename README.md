@@ -88,7 +88,7 @@ publish to other services including Ecowitt itself.
     ArduinoJson library -- https://arduinojson.org
     Inkplate2 library -- https://github.com/SolderedElectronics/Inkplate-Arduino-library
 
-Sources: https://github.com/matthewgream/weather/tree/main/display/Arduino
+Sources: https://github.com/matthewgream/weather/tree/main/client/Arduino
 
 The client software builds under Arduino IDE and is simple in execution as below. Note the intent to minimise wifi enablement time
 and power on time to conserve battery, and to only refresh display if network update succeeds. Will update with battery performance at

@@ -3,8 +3,8 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const name = 'weather_server';
-const port = 80;
-const data = '/opt/weather/server/http';
+const port = process.env.PORT || 80;
+const data = process.env.DATA || '/opt/weather/server/http';
 const subs = [ 'weather_branna', 'weather_ulrikashus' ];
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -12,7 +12,7 @@ const subs = [ 'weather_branna', 'weather_ulrikashus' ];
 const exp = require ('express');
 const xxx = exp ();
 xxx.set ('view engine', 'ejs');
-xxx.set ('views', data + "/views");
+xxx.set ('views', data);
 
 const server = require ('http').createServer (xxx);
 const socket = require ('socket.io') (server);
@@ -31,7 +31,7 @@ mqtt_client.on ('message', (topic, message) => {
 //
 
 xxx.get ('/', function (req, res) {
-    res.render ('pages/main', { vars: mqtt_content });
+    res.render ('main', { vars: mqtt_content });
 });
 
 xxx.get ('/vars', function (req, res) {
