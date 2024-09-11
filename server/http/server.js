@@ -31,7 +31,7 @@ mqtt_client.on ('message', (topic, message) => {
 //
 
 xxx.get ('/', function (req, res) {
-    res.render ('main', { vars: mqtt_content });
+    res.render ('server', { vars: mqtt_content });
 });
 
 xxx.get ('/vars', function (req, res) {

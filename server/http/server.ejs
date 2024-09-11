@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #4299e1;
+            --text-color: #2d3748;
+            --bg-color: #f0f4f8;
+            --card-bg: white;
+            --card-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --spacing-sm: 0.5rem;
+            --spacing-md: 1rem;
+            --spacing-lg: 1.5rem;
+            --font-size-sm: 0.875rem;
+            --font-size-base: 1rem;
+            --font-size-lg: 1.125rem;
+            --font-size-xl: 1.25rem;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            font-size: var(--font-size-base);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            padding: var(--spacing-md);
+        }
+        .dashboard {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: var(--spacing-lg);
+            box-shadow: var(--card-shadow);
+            width: 100%;
+            max-width: 600px;
+        }
+        h2 {
+            margin-top: 0;
+            margin-bottom: var(--spacing-md);
+            color: var(--primary-color);
+            font-size: var(--font-size-xl);
+        }
+        .section { margin-bottom: var(--spacing-lg); }
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: var(--spacing-sm);
+        }
+        .label { font-weight: bold; }
+        .value {
+            color: var(--primary-color);
+            font-size: var(--font-size-lg);
+            font-weight: bold;
+        }
+        .unit {
+            font-size: var(--font-size-sm);
+            color: var(--text-color);
+            margin-left: 0.25rem;
+        }
+        @media (max-width: 480px) {
+            .dashboard { padding: var(--spacing-md); }
+            .data-row {
+                flex-direction: row;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .value { text-align: right; }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard" id="weather-dashboard"></div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const weatherData = [
+            {
+                title: 'Lake', id: 'lake',
+                dataPoints: [
+                    { label: 'Surface', id: 'surface', unit: '°C', path: 'weather_branna.tf_ch1' },
+                    { label: 'Submerged', id: 'submerged', unit: '°C', path: 'weather_branna.tf_ch2' }
+                ]
+            },
+            {
+                title: 'Outside', id: 'outside',
+                dataPoints: [
+                    { label: 'Temperature', id: 'temp', unit: '°C', path: 'weather_branna.tempin' },
+                    { label: 'Humidity', id: 'humidity', unit: '%', path: 'weather_branna.humidityin', decimals: 0 },
+                    { label: 'Pressure', id: 'pressure', unit: 'hPa', path: 'weather_branna.baromabs', decimals: 0 }
+                ]
+            },
+            {
+                title: 'Ulrikashus', id: 'ulrikashus',
+                dataPoints: [
+                    { label: 'Temperature', id: 'temp', unit: '°C', path: 'weather_ulrikashus.tempin' },
+                    { label: 'Humidity', id: 'humidity', unit: '%', path: 'weather_ulrikashus.humidityin', decimals: 0 },
+                    { label: 'Pressure', id: 'pressure', unit: 'hPa', path: 'weather_ulrikashus.baromabs', decimals: 0 }
+                ]
+            }
+        ];
+        const getValueFromPath = (obj, path) => path.split ('.').reduce ((acc, part) => acc && acc [part], obj);
+        const formatValue = (value, decimals = 1) => value != null ? value.toFixed (decimals) : 'n/a';
+        const createDataPoint = (sectionId, point, vars) => `
+            <div class="data-row">
+                <span class="label">${point.label}</span>
+                <span class="value">
+                    <span id="${sectionId}-${point.id}">${formatValue (getValueFromPath (vars, point.path), point.decimals)}</span>
+                    <span class="unit">${point.unit}</span>
+                </span>
+            </div>`;
+        const createSection = (section, vars) => `
+            <section class="section">
+                <h2>${section.title}</h2>
+                ${section.dataPoints.map(point => createDataPoint (section.id, point, vars)).join ('')}
+            </section> `;
+        const renderDisplay = (vars) =>
+            document.getElementById ('weather-dashboard').innerHTML = weatherData.map (section => createSection (section, vars)).join ('');
+	const updateElement = (id, value, decimals = 1) =>
+            (value != null && document.getElementById (id)) && (document.getElementById (id).textContent = formatValue (value, decimals));
+        const updateWeather = (data) =>
+            weatherData.forEach (section => {
+                section.dataPoints.forEach (point => {
+                    const value = getValueFromPath (data, point.path);
+                    if (value != null) updateElement (`${section.id}-${point.id}`, value, point.decimals);
+                });
+            });
+        renderDisplay (<%- JSON.stringify (vars) %>);
+        io ().on ('update', updateWeather);
+    </script>
+</body>
+</html>
