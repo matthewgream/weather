@@ -91,8 +91,9 @@ publish to other services including Ecowitt itself.
 Sources: https://github.com/matthewgream/weather/tree/main/client/Arduino
 
 The client software builds under Arduino IDE and is simple in execution as below. Note the intent to minimise wifi enablement time
-and power on time to conserve battery, and to only refresh display if network update succeeds. Will update with battery performance at
-a later time. The standard Inkplate library has been included and stripped down to remove unneeded modules (e.g. JPG, PNG and BMP
+and power on time to conserve battery, and to only refresh display if network update succeeds. Initial testing with a 5 minute
+update interval resulted in a life of 6 days and 17 hours (161 hours, 9687 minutes) before the battery was exhausted.
+The standard Inkplate library has been included and stripped down to remove unneeded modules (e.g. JPG, PNG and BMP
 images, and colour dithering), but the code will build against the standard library. The files Secrets.hpp (in the Arduino project
 folder) and secrets.txt (in the server config files) have been suppressed from the repository for obvious reasons.
 
