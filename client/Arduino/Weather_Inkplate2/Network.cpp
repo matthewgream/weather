@@ -13,6 +13,7 @@
 // -----------------------------------------------------------------------------------------------
 
 Network::Network (const String &host, const String &ssid, const String &pass): _info (ssid)  {
+    WiFi.persistent (false);
     WiFi.setHostname (host.c_str ());
     WiFi.setAutoReconnect (true);
     WiFi.mode (WIFI_STA);
