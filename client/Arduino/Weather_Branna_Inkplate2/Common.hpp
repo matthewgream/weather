@@ -1,6 +1,6 @@
 
-#ifndef __DEFAULTS_HPP__
-#define __DEFAULTS_HPP__
+#ifndef __COMMON_HPP__
+#define __COMMON_HPP__
 
 // -----------------------------------------------------------------------------------------------
 
