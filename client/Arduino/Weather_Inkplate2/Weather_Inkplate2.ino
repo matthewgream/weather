@@ -23,29 +23,27 @@ static Inkplate view;
 
 void setup () {
     int secs = DEFAULT_RESTART_SECS;
-    //delay (5000);
-    Serial.begin (DEFAULT_SERIAL_BAUD);
-    Serial.println ();
-    Serial.println ("*** " + DEFAULT_CONFIG.at ("name") + " V" + DEFAULT_CONFIG.at ("vers") + "-" + __COMPILE_TIMESTAMP__ + " (" + DEFAULT_CONFIG.at ("host") + ") ***");
-    Serial.println ();
+    DEBUG_START ();
+    DEBUG_PRINTLN ();
+    DEBUG_PRINTLN ("*** " + DEFAULT_CONFIG.at ("name") + " V" + DEFAULT_CONFIG.at ("vers") + "-" + __COMPILE_TIMESTAMP__ + " (" + DEFAULT_CONFIG.at ("host") + ") ***");
+    DEBUG_PRINTLN ();
     try {
         Program program (DEFAULT_CONFIG);
         secs = program.exec (view);
     } catch (const std::exception& e) {
-        Serial.print ("exception: ");
-        Serial.println (e.what ());
+        DEBUG_PRINT ("exception: ");
+        DEBUG_PRINTLN (e.what ());
     } catch (...) {
-        Serial.print ("exception: ");
-        Serial.println ("unknown");
+        DEBUG_PRINT ("exception: ");
+        DEBUG_PRINTLN ("unknown");
     }
     if (secs > 0)
         esp_sleep_enable_timer_wakeup (1000L * 1000L * secs);
-    Serial.println ();
-    Serial.print ("[deep sleep: ");
-    Serial.print (secs);
-    Serial.println (" secs]");
-    Serial.flush ();
-    Serial.end (true);
+    DEBUG_PRINTLN ();
+    DEBUG_PRINT ("[deep sleep: ");
+    DEBUG_PRINT (secs);
+    DEBUG_PRINTLN (" secs]");
+    DEBUG_END ();
     esp_deep_sleep_start ();
 }
 
