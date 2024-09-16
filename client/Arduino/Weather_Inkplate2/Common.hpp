@@ -65,4 +65,17 @@ String time_iso (const std::time_t t);
 
 // -----------------------------------------------------------------------------------------------
 
+template <typename F>
+void exception_catcher (F&& f) {
+    try {
+        f ();
+    } catch (const std::exception& e) {
+        DEBUG_PRINT ("exception: "); DEBUG_PRINTLN (e.what ());
+    } catch (...) {
+        DEBUG_PRINT ("exception: "); DEBUG_PRINTLN ("unknown");
+    }
+};
+
+// -----------------------------------------------------------------------------------------------
+
 #endif

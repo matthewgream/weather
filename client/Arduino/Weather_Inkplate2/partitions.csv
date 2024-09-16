@@ -1,0 +1,2 @@
+nvs,      data, nvs,     0x009000,  0x007000,
+factory,  app,  factory, 0x010000,  0x3F0000,

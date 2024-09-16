@@ -22,21 +22,17 @@ static constexpr char __COMPILE_TIMESTAMP__ [] = {
 static Inkplate view;
 
 void setup () {
-    int secs = DEFAULT_RESTART_SECS;
     DEBUG_START ();
     DEBUG_PRINTLN ();
     DEBUG_PRINTLN ("*** " + DEFAULT_CONFIG.at ("name") + " V" + DEFAULT_CONFIG.at ("vers") + "-" + __COMPILE_TIMESTAMP__ + " (" + DEFAULT_CONFIG.at ("host") + ") ***");
     DEBUG_PRINTLN ();
-    try {
+
+    int secs = DEFAULT_RESTART_SECS;
+    exception_catcher ([&] () { 
         Program program (DEFAULT_CONFIG);
         secs = program.exec (view);
-    } catch (const std::exception& e) {
-        DEBUG_PRINT ("exception: ");
-        DEBUG_PRINTLN (e.what ());
-    } catch (...) {
-        DEBUG_PRINT ("exception: ");
-        DEBUG_PRINTLN ("unknown");
-    }
+    });
+
     if (secs > 0)
         esp_sleep_enable_timer_wakeup (1000L * 1000L * secs);
     DEBUG_PRINTLN ();
