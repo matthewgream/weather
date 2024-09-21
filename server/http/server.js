@@ -9,7 +9,7 @@ const data = process.env.DATA || '/opt/weather/server';
 const data_views = process.env.DATA_VIEWS || data + '/http';
 const data_images = process.env.DATA_IMAGES || data + '/images';
 
-const subs = [ 'weather_branna', 'weather_ulrikashus' ];
+const subs = [ 'weather/#' ];
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -78,24 +78,23 @@ xxx.put ('/images', image_upload.single ('image'), (req, res) => {
 	}
     try {
         const uploadedName = req.file.originalname, uploadedData = fs.readFileSync (req.file.path); fs.unlinkSync (req.file.path);
-        console.log (`/images upload received: '${uploadedName}' (${uploadedData.size} bytes) through '${req.file.path}'`);
         const compressedName = path.join (data_images, uploadedName), compressedData = image_dataCompress (uploadedData);
         fs.writeFileSync (compressedName, compressedData);
-        console.log (`/images upload succeeded: '${compressedName}' (${compressedData.size} bytes)`);
+        console.log (`/images upload succeeded: '${uploadedName}' (${uploadedData.size} bytes) --> '${compressedName}' (${compressedData.size} bytes)`);
         res.send ('File uploaded, compressed, and saved successfully.');
     } catch (error) {
-        console.error (`/images upload failed: ${error}`);
+        console.error (`/images upload failed: error <<<${error}>>>`);
         res.status (500).send ('File upload error');
     }
 });
 xxx.get ('/images/:filename', (req, res) => {
     const downloadName = req.params.filename, downloadPath = path.join (data_images, downloadName);
-    console.log (`/images download request: ${downloadName} (${downloadPath})`);
     try {
         res.set ('Content-Type', 'application/octet-stream');
         res.send (fs.readFileSync (downloadPath));
+    	console.log (`/images download succeeded: ${downloadName} (${downloadPath})`);
     } catch (error) {
-        console.error (`/images download failed: ${error}`);
+        console.error (`/images download failed: ${downloadName} (${downloadPath}), error <<<${error}>>>`);
         res.status (404).send ('File not found');
     }
 });

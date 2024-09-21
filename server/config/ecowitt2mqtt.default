@@ -12,19 +12,19 @@ gateways:
     output_unit_system: metric
     disable_calculated_data: true
     precision: 4
-    mqtt_topic: weather_branna
+    mqtt_topic: weather/branna
   C51189CD5DE1BD123D923BDBD51FC4BC:
     input_data_format: ecowitt
     input_unit_system: imperial
     output_unit_system: metric
     disable_calculated_data: true
     precision: 4
-    mqtt_topic: weather_ulrikashus
-  A51189CD5DE1BD123D923BDBD51FC4BC:
+    mqtt_topic: weather/ulrikashus
+  09712DEFC053360CC6F0A9C6B412FD6D:
     input_data_format: ecowitt
     input_unit_system: imperial
     output_unit_system: metric
     disable_calculated_data: true
     precision: 4
-    mqtt_topic: weather_mormorshus
+    mqtt_topic: weather/mormorshus
 

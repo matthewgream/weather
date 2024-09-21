@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Weather Dashboard</title>
+    <title>Weather</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -79,59 +79,66 @@
     <div class="dashboard" id="weather-dashboard"></div>
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        const weatherData = [
+        const format = (elem, valu) => (valu != null) ? valu.toFixed (elem.decimals ?? 0) : 'n/a';
+        const secs = [
             {
-                title: 'Lake', id: 'lake',
-                dataPoints: [
-                    { label: 'Surface', id: 'surface', unit: '°C', path: 'weather_branna.tf_ch1' },
-                    { label: 'Submerged', id: 'submerged', unit: '°C', path: 'weather_branna.tf_ch2' }
+                name: 'Lake', id: 'lake',
+                elems: [
+                    { label: 'Surface', id: 'surface', unit: '°C', path: 'weather/branna.tf_ch1', decimals: 1, format },
+                    { label: 'Submerged', id: 'submerged', unit: '°C', path: 'weather/branna.tf_ch2', decimals: 1, format }
                 ]
             },
             {
-                title: 'Outside', id: 'outside',
-                dataPoints: [
-                    { label: 'Temperature', id: 'temp', unit: '°C', path: 'weather_branna.tempin' },
-                    { label: 'Humidity', id: 'humidity', unit: '%', path: 'weather_branna.humidityin', decimals: 0 },
-                    { label: 'Pressure', id: 'pressure', unit: 'hPa', path: 'weather_branna.baromabs', decimals: 0 }
+                name: 'Outside', id: 'outside',
+                elems: [
+                    { label: 'Temperature', id: 'temp', unit: '°C', path: 'weather/branna.tempin', decimals: 1, format },
+                    { label: 'Humidity', id: 'humidity', unit: '%', path: 'weather/branna.humidityin', format },
+                    { label: 'Pressure', id: 'pressure', unit: 'hPa', path: 'weather/branna.baromrel', format }
                 ]
             },
             {
-                title: 'Ulrikashus', id: 'ulrikashus',
-                dataPoints: [
-                    { label: 'Temperature', id: 'temp', unit: '°C', path: 'weather_ulrikashus.tempin' },
-                    { label: 'Humidity', id: 'humidity', unit: '%', path: 'weather_ulrikashus.humidityin', decimals: 0 },
-                    { label: 'Pressure', id: 'pressure', unit: 'hPa', path: 'weather_ulrikashus.baromabs', decimals: 0 }
+                name: 'Ulrikashus', id: 'ulrikashus',
+                elems: [
+                    { label: 'Temperature', id: 'temp', unit: '°C', path: 'weather/ulrikashus.tempin', decimals: 1, format },
+                    { label: 'Humidity', id: 'humidity', unit: '%', path: 'weather/ulrikashus.humidityin', format },
+                    { label: 'Pressure', id: 'pressure', unit: 'hPa', path: 'weather/ulrikashus.baromrel', format }
                 ]
-            }
+            },
+            {
+                name: 'Mormorshus', id: 'mormorshus',
+                elems: [
+                    { label: 'Temperature', id: 'temp', unit: '°C', path: 'weather/mormorshus.tempin', decimals: 1, format },
+                    { label: 'Humidity', id: 'humidity', unit: '%', path: 'weather/mormorshus.humidityin', format },
+                    { label: 'Pressure', id: 'pressure', unit: 'hPa', path: 'weather/mormorshus.baromrel', format }
+                ]
+	    }
         ];
-        const getValueFromPath = (obj, path) => path.split ('.').reduce ((acc, part) => acc && acc [part], obj);
-        const formatValue = (value, decimals = 1) => value != null ? value.toFixed (decimals) : 'n/a';
-        const createDataPoint = (sectionId, point, vars) => `
-            <div class="data-row">
-                <span class="label">${point.label}</span>
-                <span class="value">
-                    <span id="${sectionId}-${point.id}">${formatValue (getValueFromPath (vars, point.path), point.decimals)}</span>
-                    <span class="unit">${point.unit}</span>
-                </span>
-            </div>`;
-        const createSection = (section, vars) => `
-            <section class="section">
-                <h2>${section.title}</h2>
-                ${section.dataPoints.map(point => createDataPoint (section.id, point, vars)).join ('')}
-            </section> `;
-        const renderDisplay = (vars) =>
-            document.getElementById ('weather-dashboard').innerHTML = weatherData.map (section => createSection (section, vars)).join ('');
-	const updateElement = (id, value, decimals = 1) =>
-            (value != null && document.getElementById (id)) && (document.getElementById (id).textContent = formatValue (value, decimals));
-        const updateWeather = (data) =>
-            weatherData.forEach (section => {
-                section.dataPoints.forEach (point => {
-                    const value = getValueFromPath (data, point.path);
-                    if (value != null) updateElement (`${section.id}-${point.id}`, value, point.decimals);
-                });
-            });
-        renderDisplay (<%- JSON.stringify (vars) %>);
-        io ().on ('update', updateWeather);
+        const locate = (data, path) => path.split ('.').reduce ((accm, part) => accm && accm [part], data);
+		const create = (secs, vars) => {
+			const __elem = (sect, elem, vars) => `
+            	<div class="data-row">
+                	<span class="label">${elem.label}</span>
+                	<span class="value">
+                    	<span id="${sect}-${elem.id}">${elem.format (elem, locate (vars, elem.path))}</span>
+                    	<span class="unit">${elem.unit}</span>
+                	</span>
+            	</div>`;
+			const __sect = (sect, vars) => `
+            	<section class="section">
+                	<h2>${sect.name}</h2>
+                	${sect.elems.map (elem => __elem (sect.id, elem, vars)).join ('')}
+            	</section> `;
+            document.getElementById ('weather-dashboard').innerHTML = secs.map (sect => __sect (sect, vars)).join ('');
+		}
+		const update = (vars) =>
+			secs.forEach (sect =>
+				sect.elems.forEach (elem => {
+                    const valu = locate (vars, elem.path), id = `${sect.id}-${elem.id}`;
+            		if (valu != null && document.getElementById (id) != null) document.getElementById (id).textContent = elem.format (elem, valu);
+				}
+			));
+        create (secs, <%- JSON.stringify (vars) %>);
+        io ().on ('update', update);
     </script>
 </body>
 </html>
