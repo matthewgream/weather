@@ -1,18 +1,18 @@
 
-#ifndef __COMMON_HPP__
-#define __COMMON_HPP__
+// -----------------------------------------------------------------------------------------------
+
+#include <map>
+
+typedef std::map <String, String> Variables;
 
 // -----------------------------------------------------------------------------------------------
 
-#include "Inkplate.h"
-#include "Secrets.hpp"
+#include <Arduino.h>
 
-// -----------------------------------------------------------------------------------------------
-
-//#define DEBUG
+#define DEBUG
 #ifdef DEBUG
-  extern bool DEBUG_AVAILABLE;
-  #define DEBUG_START(...) Serial.begin (DEFAULT_SERIAL_BAUD); DEBUG_AVAILABLE = !Serial ? false : true;
+  bool DEBUG_AVAILABLE = false;
+  #define DEBUG_START(...) Serial.begin (DEFAULT_SERIAL_BAUD); DEBUG_AVAILABLE = !Serial ? false : true; delay (5*1000L);
   #define DEBUG_END(...) Serial.flush (); Serial.end ()
   #define DEBUG_PRINT(...) if (DEBUG_AVAILABLE) Serial.print(__VA_ARGS__)
   #define DEBUG_PRINTLN(...) if (DEBUG_AVAILABLE) Serial.println(__VA_ARGS__)
@@ -25,43 +25,57 @@
 
 // -----------------------------------------------------------------------------------------------
 
-#include <map>
-
-typedef std::map <String, String> Variables;
-
-#define DEFAULT_SERIAL_BAUD 115200
-#define DEFAULT_RESTART_SECS 30
-#define DEFAULT_NETWORK_CONNECT_RETRY_COUNT 20
-#define DEFAULT_NETWORK_CONNECT_RETRY_DELAY 1000
-#define DEFAULT_NETWORK_REQUEST_RETRY_COUNT 5
-#define DEFAULT_NETWORK_REQUEST_RETRY_DELAY 5000
-#define DEFAULT_NETWORK_CLIENT_NODELAY true
-#define DEFAULT_NETWORK_CLIENT_TIMEOUT 5000
-#define DEFAULT_NETWORK_CLIENT_USERAGENT "WeatherDisplay (Inkplate2; ESP32)"
-
-// -----------------------------------------------------------------------------------------------
-
-String identify (void);
-
-const Variables DEFAULT_CONFIG = {
-    { "name", "Weather Display Branna" },
-    { "vers", "0.99" },
-    { "ssid", DEFAULT_NETWORK_SSID },
-    { "pass", DEFAULT_NETWORK_PASS },
-    { "host", "weather-display-inkplate2-" + identify () },
-    { "link", "http://weather.local/vars" },
-    { "secs", "300" },
-};
-
-// -----------------------------------------------------------------------------------------------
-
 #include <ArduinoJson.h>
 
-size_t convert (Variables &vars, const JsonVariantConst& json);
+void __convert (Variables &vars, const JsonVariantConst& json, const String& path) {
+    if (json.is <JsonObjectConst> ()) {
+        for (const auto& obj : json.as <JsonObjectConst> ())
+            __convert (vars, obj.value (), path.isEmpty () ? obj.key ().c_str () : path + "/" + obj.key ().c_str ());
+    } else if (json.is <JsonArrayConst> ()) {
+        int index = 0;
+        for (const auto& obj : json.as <JsonArrayConst> ())
+            __convert (vars, obj, path + "[" + String (index ++) + "]");
+    } else {
+        vars [path] = json.as <String> ();
+    }
+}
+size_t convert (Variables &vars, const JsonVariantConst& json) {
+    __convert (vars, json, "");
+    return vars.size ();
+}
+
+// -----------------------------------------------------------------------------------------------
 
 #include <ctime>
 
-String time_iso (const std::time_t t);
+String time_iso (const std::time_t t) {
+    const struct tm *timeinfo = std::gmtime (&t);
+    const char timestr [sizeof ("yyyy-mm-ddThh:mm:ssZ") + 1] = { 
+        (char) ('0' + ((timeinfo->tm_year + 1900) / 1000) % 10), (char) ('0' + ((timeinfo->tm_year + 1900) / 100) % 10), (char) ('0' + ((timeinfo->tm_year + 1900) / 10) % 10), (char) ('0' + (timeinfo->tm_year + 1900) % 10), '-', 
+        (char) ('0' + ((timeinfo->tm_mon + 1) / 10) % 10), (char) ('0' + (timeinfo->tm_mon + 1) % 10), '-', 
+        (char) ('0' + ((timeinfo->tm_mday) / 10) % 10), (char) ('0' + (timeinfo->tm_mday) % 10),
+        'T', 
+        (char) ('0' + ((timeinfo->tm_hour) / 10) % 10), (char) ('0' + (timeinfo->tm_hour) % 10), ':', 
+        (char) ('0' + ((timeinfo->tm_min) / 10) % 10), (char) ('0' + (timeinfo->tm_min) % 10), ':', 
+        (char) ('0' + ((timeinfo->tm_sec) / 10) % 10), (char) ('0' + (timeinfo->tm_sec) % 10),
+        'Z', 
+        '\0'
+    };
+    return String (timestr);
+}
+
+// -----------------------------------------------------------------------------------------------
+
+#include <Arduino.h>
+
+String identify (void) {
+    #define NIBBLE_TO_HEX_CHAR(nibble) ((char) ((nibble) < 10 ? '0' + (nibble) : 'A' + ((nibble) - 10)))
+    #define BYTE_TO_HEX(byte) NIBBLE_TO_HEX_CHAR ((byte) >> 4), NIBBLE_TO_HEX_CHAR ((byte) & 0x0F)
+    uint8_t macaddr [6];
+    esp_read_mac (macaddr, ESP_MAC_WIFI_STA);
+    const char macstr [12 + 1] = { BYTE_TO_HEX (macaddr [0]), BYTE_TO_HEX (macaddr [1]), BYTE_TO_HEX (macaddr [2]), BYTE_TO_HEX (macaddr [3]), BYTE_TO_HEX (macaddr [4]), BYTE_TO_HEX (macaddr [5]), '\0' };
+    return String (macstr);
+}
 
 // -----------------------------------------------------------------------------------------------
 
@@ -77,5 +91,3 @@ void exception_catcher (F&& f) {
 };
 
 // -----------------------------------------------------------------------------------------------
-
-#endif

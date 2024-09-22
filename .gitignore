@@ -1,7 +1,7 @@
 third_party
 node_modules
-display/cli/subscriber
 build
 secrets.txt
 Secrets.hpp
 package-lock.json
+.theia

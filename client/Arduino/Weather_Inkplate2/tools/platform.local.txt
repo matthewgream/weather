@@ -1,0 +1,2 @@
+# copy into C:\Users\[USERNAME]\AppData\Local\Arduino15\packages\Inkplate_Boards\hardware\esp32\8.1.0 as platform.local.txt and restart IDE
+recipe.hooks.postbuild.9.pattern.windows=powershell.exe -ExecutionPolicy Bypass -File {build.source.path}\tools\upload_fota.ps1 -file_info {build.source.path}\Config.hpp -path_build {build.path} -image {build.path}\{build.project_name}.bin -verbose
