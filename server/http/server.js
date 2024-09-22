@@ -76,11 +76,16 @@ xxx.put ('/images', image_upload.single ('image'), (req, res) => {
         console.error (`/images upload failed: file has no name or has bad type/version (received '${req.file.originalname}')`);
         return res.status (400).send ('File has no name or bad type/version');
 	}
+    if (fs.existsSync (path.join (data_images, req.file.originalname) + '.zz')) {
+		console.error (`/images upload failed: file already exists as '${uploadedName}'`);
+		return res.status (409).send ('File with this name already exists');
+     }
+
     try {
         const uploadedName = req.file.originalname, uploadedData = fs.readFileSync (req.file.path); fs.unlinkSync (req.file.path);
-        const compressedName = path.join (data_images, uploadedName), compressedData = image_dataCompress (uploadedData);
+        const compressedName = path.join (data_images, uploadedName) + '.zz', compressedData = image_dataCompress (uploadedData);
         fs.writeFileSync (compressedName, compressedData);
-        console.log (`/images upload succeeded: '${uploadedName}' (${uploadedData.size} bytes) --> '${compressedName}' (${compressedData.size} bytes)`);
+        console.log (`/images upload succeeded: '${uploadedName}' (${uploadedData.length} bytes) --> '${compressedName}' (${compressedData.length} bytes)`);
         res.send ('File uploaded, compressed, and saved successfully.');
     } catch (error) {
         console.error (`/images upload failed: error <<<${error}>>>`);
