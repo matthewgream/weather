@@ -1,8 +1,16 @@
 
 // -----------------------------------------------------------------------------------------------
 
+#include "Inkplate.h"
+
 #include "Common.hpp"
+#include "Secrets.hpp"
+#include "Config.hpp"
+#include "Network.hpp"
+#include "Render.hpp"
 #include "Program.hpp"
+
+#include "UtilityOTA.hpp"
 
 // -----------------------------------------------------------------------------------------------
 
@@ -19,27 +27,34 @@ static constexpr char __COMPILE_TIMESTAMP__ [] = {
 
 // -----------------------------------------------------------------------------------------------
 
+static const String build (DEFAULT_CONFIG.at ("name") + " V" + DEFAULT_CONFIG.at ("vers") + "-" + __COMPILE_TIMESTAMP__ + " (" + DEFAULT_CONFIG.at ("host") + ")");
 static Inkplate view;
+static Program program (DEFAULT_CONFIG);
 
 void setup () {
+
     DEBUG_START ();
     DEBUG_PRINTLN ();
-    DEBUG_PRINTLN ("*** " + DEFAULT_CONFIG.at ("name") + " V" + DEFAULT_CONFIG.at ("vers") + "-" + __COMPILE_TIMESTAMP__ + " (" + DEFAULT_CONFIG.at ("host") + ") ***");
+    DEBUG_PRINTLN ("*** " + build + " ***");
     DEBUG_PRINTLN ();
 
     int secs = DEFAULT_RESTART_SECS;
     exception_catcher ([&] () { 
-        Program program (DEFAULT_CONFIG);
         secs = program.exec (view);
     });
 
-    if (secs > 0)
-        esp_sleep_enable_timer_wakeup (1000L * 1000L * secs);
+    // XXX this needs to be once per day to save power ...
+    ota_check_and_update (DEFAULT_CONFIG.at ("ssid"), DEFAULT_CONFIG.at ("pass"), DEFAULT_NETWORK_CONNECT_RETRY_COUNT, DEFAULT_NETWORK_CONNECT_RETRY_DELAY,
+      DEFAULT_CONFIG.at ("sw-json"), DEFAULT_CONFIG.at ("sw-type"), DEFAULT_CONFIG.at ("sw-vers"));
+
     DEBUG_PRINTLN ();
     DEBUG_PRINT ("[deep sleep: ");
     DEBUG_PRINT (secs);
     DEBUG_PRINTLN (" secs]");
     DEBUG_END ();
+
+    if (secs > 0)
+        esp_sleep_enable_timer_wakeup (1000L * 1000L * secs);
     esp_deep_sleep_start ();
 }
 
