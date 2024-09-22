@@ -43,9 +43,14 @@ void setup () {
         secs = program.exec (view);
     });
 
-    // XXX this needs to be once per day to save power ...
-    ota_check_and_update (DEFAULT_CONFIG.at ("ssid"), DEFAULT_CONFIG.at ("pass"), DEFAULT_NETWORK_CONNECT_RETRY_COUNT, DEFAULT_NETWORK_CONNECT_RETRY_DELAY,
-      DEFAULT_CONFIG.at ("sw-json"), DEFAULT_CONFIG.at ("sw-type"), DEFAULT_CONFIG.at ("sw-vers"));
+    RTC_DATA_ATTR static unsigned long ota_counter = 0;
+    ota_counter += secs;
+    DEBUG_PRINT ("[ota_counter: "); DEBUG_PRINT (ota_counter); DEBUG_PRINT (" until "); DEBUG_PRINT (DEFAULT_SOFTWARE_TIME); DEBUG_PRINTLN ("]");
+    if (ota_counter >= DEFAULT_SOFTWARE_TIME) { // not exact, but good enough
+        ota_counter = 0;
+        ota_check_and_update (DEFAULT_CONFIG.at ("ssid"), DEFAULT_CONFIG.at ("pass"), DEFAULT_NETWORK_CONNECT_RETRY_COUNT, DEFAULT_NETWORK_CONNECT_RETRY_DELAY,
+          DEFAULT_CONFIG.at ("sw-json"), DEFAULT_CONFIG.at ("sw-type"), DEFAULT_CONFIG.at ("sw-vers"));
+    }
 
     DEBUG_PRINTLN ();
     DEBUG_PRINT ("[deep sleep: ");
