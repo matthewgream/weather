@@ -27,35 +27,28 @@ static constexpr char __COMPILE_TIMESTAMP__ [] = {
 
 // -----------------------------------------------------------------------------------------------
 
-static const String build (DEFAULT_CONFIG.at ("name") + " V" + DEFAULT_CONFIG.at ("vers") + "-" + __COMPILE_TIMESTAMP__ + " (" + DEFAULT_CONFIG.at ("host") + ")");
-static Inkplate view;
-static Program program (DEFAULT_CONFIG);
-
 void setup () {
 
     DEBUG_START ();
-    DEBUG_PRINTLN ();
-    DEBUG_PRINTLN ("*** " + build + " ***");
-    DEBUG_PRINTLN ();
+    DEBUG_PRINTF ("\n*** %s V%s-%s (%s) ***\n\n", DEFAULT_CONFIG.at ("name").c_str (), DEFAULT_CONFIG.at ("vers").c_str (), __COMPILE_TIMESTAMP__, DEFAULT_CONFIG.at ("host").c_str ());
 
+    Inkplate *view = new Inkplate ();
+    Program *program = new Program (DEFAULT_CONFIG);
     int secs = DEFAULT_RESTART_SECS;
     exception_catcher ([&] () { 
-        secs = program.exec (view);
+        secs = program->exec (*view);
     });
 
-    RTC_DATA_ATTR static unsigned long ota_counter = 0;
-    ota_counter += secs;
-    DEBUG_PRINT ("[ota_counter: "); DEBUG_PRINT (ota_counter); DEBUG_PRINT (" until "); DEBUG_PRINT (DEFAULT_SOFTWARE_TIME); DEBUG_PRINTLN ("]");
-    if (ota_counter >= DEFAULT_SOFTWARE_TIME) { // not exact, but good enough
+    PersistentValue <uint32_t> ota_counter ("program", "ota", 0);
+    ota_counter += (uint32_t) secs;
+    DEBUG_PRINTF ("[ota_counter: %lu until %lu]\n", (unsigned long) ota_counter, DEFAULT_SOFTWARE_TIME);
+    if (ota_counter >= (unsigned long) DEFAULT_SOFTWARE_TIME) { // not exact, but good enough
         ota_counter = 0;
         ota_check_and_update (DEFAULT_CONFIG.at ("ssid"), DEFAULT_CONFIG.at ("pass"), DEFAULT_NETWORK_CONNECT_RETRY_COUNT, DEFAULT_NETWORK_CONNECT_RETRY_DELAY,
           DEFAULT_CONFIG.at ("sw-json"), DEFAULT_CONFIG.at ("sw-type"), DEFAULT_CONFIG.at ("sw-vers"));
     }
 
-    DEBUG_PRINTLN ();
-    DEBUG_PRINT ("[deep sleep: ");
-    DEBUG_PRINT (secs);
-    DEBUG_PRINTLN (" secs]");
+    DEBUG_PRINTF ("[deep sleep: %d secs]\n", secs);
     DEBUG_END ();
 
     if (secs > 0)

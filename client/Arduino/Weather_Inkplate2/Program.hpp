@@ -16,15 +16,10 @@ public:
         if (load (_conf, vars)) {
             view.begin ();
 #ifdef DEBUG
-            for (const auto& pair : vars) {
-                DEBUG_PRINT (pair.first);
-                DEBUG_PRINT (" = ");
-                DEBUG_PRINTLN (pair.second);
-            }
-            if (vars.find ("timestamp") != vars.end ()) {
-                DEBUG_PRINT ("produced at ");
-                DEBUG_PRINTLN (time_iso (std::atol (vars.at ("timestamp").c_str ()))); 
-            }
+            for (const auto& pair : vars)
+                DEBUG_PRINTF ("# %s = %s\n", pair.first.c_str (), pair.second.c_str ());
+            if (vars.find ("timestamp") != vars.end ())
+                DEBUG_PRINTF ("produced at '%s'.\n", time_iso (std::atol (vars.at ("timestamp").c_str ())).c_str ()); 
 #endif
             if (show (_conf, vars, view))
                 view.display ();
@@ -42,8 +37,7 @@ protected:
         while (!network.request (conf.at ("link"), json) || !convert (vars, json.as <JsonVariant> ())) {
             if (++ cnt > DEFAULT_NETWORK_REQUEST_RETRY_COUNT)
                 throw std::runtime_error ("network request failed");
-            DEBUG_PRINT ("network request retry #");
-            DEBUG_PRINTLN (cnt);
+            DEBUG_PRINTF ("network request retry #%d\n", cnt);
             delay (DEFAULT_NETWORK_REQUEST_RETRY_DELAY);
         }
         network.disconnect ();

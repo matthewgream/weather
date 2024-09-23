@@ -190,13 +190,13 @@ const std::vector <Renderer*> renderers_default = {
 };
 typedef std::pair <String, Renderer*> RendererPair;
 const std::vector <RendererPair> renderers_byvalue = {
-    { "weather/ulrikashus/runtime",    new Renderer_Faulty       (I_OFF_X, I_OFF_Y (0), I_SIZ, I_SIZ, INKPLATE2_RED, INKPLATE2_WHITE, { "weather/ulrikashus/tempin", "weather/ulrikashus/humidityin", "weather/ulrikashus/baromabs" }) },
+    { "weather/ulrikashus/runtime",    new Renderer_Faulty       (I_OFF_X, I_OFF_Y (0), I_SIZ, I_SIZ, INKPLATE2_RED, INKPLATE2_WHITE, { "weather/ulrikashus/tempin", "weather/ulrikashus/humidityin", "weather/ulrikashus/baromrel" }) },
     { "weather/ulrikashus/tempin",     new Renderer_Temperature  (T_OFF_X (0), T_OFF_Y (0), INKPLATE2_BLACK, INKPLATE2_WHITE) },
     { "weather/ulrikashus/humidityin", new Renderer_Humidity     (T_OFF_X (1), T_OFF_Y (0), INKPLATE2_BLACK, INKPLATE2_WHITE) },
     { "weather/ulrikashus/baromrel",   new Renderer_Pressure     (T_OFF_X (2), T_OFF_Y (0), INKPLATE2_BLACK, INKPLATE2_WHITE) },
-    { "weather/branna/runtime",        new Renderer_Faulty       (I_OFF_X, I_OFF_Y (1), I_SIZ, I_SIZ, INKPLATE2_RED, INKPLATE2_WHITE, { "weather/branna/tempin", "weather/branna/humidityin", "weather/branna/baromabs" }) },
-    { "weather/branna/tempin",         new Renderer_Temperature  (T_OFF_X (0), T_OFF_Y (1), INKPLATE2_BLACK, INKPLATE2_WHITE) },
-    { "weather/branna/humidityin",     new Renderer_Humidity     (T_OFF_X (1), T_OFF_Y (1), INKPLATE2_BLACK, INKPLATE2_WHITE) },
+    { "weather/branna/runtime",        new Renderer_Faulty       (I_OFF_X, I_OFF_Y (1), I_SIZ, I_SIZ, INKPLATE2_RED, INKPLATE2_WHITE, { "weather/branna/temp", "weather/branna/humidity", "weather/branna/baromrel" }) },
+    { "weather/branna/temp",           new Renderer_Temperature  (T_OFF_X (0), T_OFF_Y (1), INKPLATE2_BLACK, INKPLATE2_WHITE) },
+    { "weather/branna/humidity",       new Renderer_Humidity     (T_OFF_X (1), T_OFF_Y (1), INKPLATE2_BLACK, INKPLATE2_WHITE) },
     { "weather/branna/baromrel",       new Renderer_Pressure     (T_OFF_X (2), T_OFF_Y (1), INKPLATE2_BLACK, INKPLATE2_WHITE) },
     { "weather/branna/runtime",        new Renderer_Faulty       (I_OFF_X, I_OFF_Y (2), I_SIZ, I_SIZ, INKPLATE2_RED, INKPLATE2_WHITE, { "weather/branna/tf_ch1", "weather/branna/tf_ch2" }) },
     { "weather/branna/tf_ch1",         new Renderer_Temperature  (T_OFF_X (0), T_OFF_Y (2), INKPLATE2_BLACK, INKPLATE2_WHITE) }, 

@@ -30,34 +30,29 @@ public:
     bool connect (void) {
         if (WiFi.isConnected ())
             return true;
-        DEBUG_PRINT ("WiFi connecting to '");
-        DEBUG_PRINT (_info);
-        DEBUG_PRINT ("' ...");
+        DEBUG_PRINTF ("WiFi connecting to '%s' ...", _info.c_str ());
         int cnt = 0;
         while (!WiFi.isConnected ()) {
             if (++ cnt > DEFAULT_NETWORK_CONNECT_RETRY_COUNT) {
-                DEBUG_PRINTLN (" failed.");
+                DEBUG_PRINTF (" failed.\n");
                 return false;
             }
-            DEBUG_PRINT (".");
+            DEBUG_PRINTF (".");
             delay (DEFAULT_NETWORK_CONNECT_RETRY_DELAY);
         }
-        DEBUG_PRINT (" succeeded: address=");
-        DEBUG_PRINTLN (WiFi.localIP ());
+        DEBUG_PRINTF (" succeeded: address='%s'\n", WiFi.localIP ().toString ().c_str ());
         return true;
     }
 
     bool disconnect (void) {
         if (!WiFi.isConnected ())
             return true;
-        DEBUG_PRINT ("WiFi disconnecting from '");
-        DEBUG_PRINT (_info);
-        DEBUG_PRINT ("' ...");
+        DEBUG_PRINTF ("WiFi disconnecting from '%s' ...", _info.c_str ());
         if (!WiFi.disconnect ()) {
-          DEBUG_PRINTLN (" failed.");
+          DEBUG_PRINTF (" failed.\n");
           return false;
         }
-        DEBUG_PRINTLN (" succeeded.");
+        DEBUG_PRINTF (" succeeded.\n");
         return true;
     }
 
@@ -65,9 +60,7 @@ public:
         if (WiFi.isConnected ())
             return true;
         if (!WiFi.reconnect ()) {
-            DEBUG_PRINT ("WiFi reconnecting to '");
-            DEBUG_PRINT (_info);
-            DEBUG_PRINTLN ("' ... failed.");
+            DEBUG_PRINTF ("WiFi reconnecting to '%s' ... failed.\n", _info.c_str ());
             return false;
         }
         return connect ();
@@ -82,31 +75,20 @@ public:
         http.getStream ().setNoDelay (DEFAULT_NETWORK_CLIENT_NODELAY);
         http.getStream ().setTimeout (DEFAULT_NETWORK_CLIENT_TIMEOUT);
         http.setUserAgent (DEFAULT_NETWORK_CLIENT_USERAGENT);
-        DEBUG_PRINT ("WiFi requesting from '");
-        DEBUG_PRINT (link);
-        DEBUG_PRINT ("' ...");
+        DEBUG_PRINTF ("WiFi requesting from '%s' ...", link.c_str ());
         http.begin (link);
         const int code = http.GET ();
         if (code == HTTP_CODE_OK) {
             DeserializationError error = deserializeJson (json, http.getStream ());
             if (!error) {
-                DEBUG_PRINT (" succeeded: size=");
-                DEBUG_PRINTLN (http.getSize ());
-                // DEBUG_PRINTLN ("JSON -->");
-                // serializeJsonPretty (json, Serial);
-                // DEBUG_PRINTLN ();
-                // DEBUG_PRINTLN ("<--");
+                DEBUG_PRINTF (" succeeded: size='%d'.\n", http.getSize ());
                 http.end ();
                 return true;
             } else {
-                DEBUG_PRINT (" failed: JSON deserialisation, error='");
-                DEBUG_PRINT (error.c_str ());
-                DEBUG_PRINTLN ("'.");
+                DEBUG_PRINTF (" failed: JSON deserialisation, error='%s'.\n", error.c_str ());
             }
         } else {
-            DEBUG_PRINT (" failed: network request, error='");
-            DEBUG_PRINT (http.errorToString (code).c_str ());
-            DEBUG_PRINTLN ("'.");
+            DEBUG_PRINTF (" failed: network request, error='%s'.\n", http.errorToString (code).c_str ());
         }
         http.end ();
         return false;
