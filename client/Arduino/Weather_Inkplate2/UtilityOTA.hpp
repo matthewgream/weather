@@ -32,7 +32,8 @@ static bool __ota_network_connect (const char *ssid, const char *pass, const int
 static void __ota_server_check_and_update (const char *json, const char *type, const char *vers) {
     DEBUG_PRINTF ("OTA_CHECK_AND_UPDATE: check json='%s', type='%s', vers='%s' ...", json, type, vers);
     esp32FOTA ota (type, vers);
-    ota.setManifestURL (json);
+    String url (String (json) + String ("?version=") + String (vers));
+    ota.setManifestURL (url.c_str ());
     const bool update = ota.execHTTPcheck ();
     if (update) {
         char version [32] = { '\0' }; ota.getPayloadVersion (version);

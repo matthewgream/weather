@@ -15,7 +15,7 @@
 
 #define DEFAULT_SOFTWARE_TIME (60*60*12) // check every 12 hours
 #define DEFAULT_SOFTWARE_TYPE "weatherdisplay-inkplate2-esp32"
-#define DEFAULT_SOFTWARE_VERS "1.2.3"
+#define DEFAULT_SOFTWARE_VERS "1.2.4"
 #define DEFAULT_SOFTWARE_JSON "http://weather.local/images/images.json"
 
 // -----------------------------------------------------------------------------------------------
