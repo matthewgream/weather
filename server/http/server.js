@@ -64,7 +64,7 @@ const image_dataManifest = (directory) => Object.values (fs.readdirSync (directo
 xxx.get ('/images/images.json', async (req, res) => {
     const url_base = `http://${host}:${port}/images/`;
     const manifest = image_dataManifest (data_images).map (({ filename, ...rest }) => ({ ...rest, url: url_base + filename }));
-    console.log (`/images manifest request: ${manifest.length} items, ${JSON.stringify (manifest).length} bytes, types = ${manifest.map (item => item.type).join (', ')}`);
+    console.log (`/images manifest request: ${manifest.length} items, ${JSON.stringify (manifest).length} bytes, types = ${manifest.map (item => item.type).join (', ')}, version = ${ req.query.version || 'unspecified'}`);
     res.json (manifest);
 });
 xxx.put ('/images', image_upload.single ('image'), (req, res) => {
@@ -79,8 +79,7 @@ xxx.put ('/images', image_upload.single ('image'), (req, res) => {
     if (fs.existsSync (path.join (data_images, req.file.originalname) + '.zz')) {
         console.error (`/images upload failed: file already exists as '${path.join (data_images, req.file.originalname)}'`);
         return res.status (409).send ('File with this name already exists');
-     }
-
+    }
     try {
         const uploadedName = req.file.originalname, uploadedData = fs.readFileSync (req.file.path); fs.unlinkSync (req.file.path);
         const compressedName = path.join (data_images, uploadedName) + '.zz', compressedData = image_dataCompress (uploadedData);
