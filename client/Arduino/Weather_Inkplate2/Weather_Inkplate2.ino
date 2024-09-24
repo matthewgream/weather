@@ -41,8 +41,8 @@ void setup () {
 
     PersistentValue <uint32_t> ota_counter ("program", "ota", 0);
     ota_counter += (uint32_t) secs;
-    DEBUG_PRINTF ("[ota_counter: %lu until %lu]\n", (unsigned long) ota_counter, DEFAULT_SOFTWARE_TIME);
-    if (ota_counter >= (unsigned long) DEFAULT_SOFTWARE_TIME) { // not exact, but good enough
+    DEBUG_PRINTF ("[ota_counter: %lu until %d]\n", (unsigned long) ota_counter, DEFAULT_SOFTWARE_TIME);
+    if (ota_counter >= (uint32_t) DEFAULT_SOFTWARE_TIME) { // not exact, but good enough
         ota_counter = 0;
         ota_check_and_update (DEFAULT_CONFIG.at ("ssid"), DEFAULT_CONFIG.at ("pass"), DEFAULT_NETWORK_CONNECT_RETRY_COUNT, DEFAULT_NETWORK_CONNECT_RETRY_DELAY,
           DEFAULT_CONFIG.at ("sw-json"), DEFAULT_CONFIG.at ("sw-type"), DEFAULT_CONFIG.at ("sw-vers"));

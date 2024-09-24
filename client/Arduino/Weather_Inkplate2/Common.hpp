@@ -11,8 +11,8 @@ typedef std::map <String, String> Variables;
 
 #define DEBUG
 #ifdef DEBUG
-  bool DEBUG_AVAILABLE = false;
-  #define DEBUG_START(...) Serial.begin (DEFAULT_SERIAL_BAUD); DEBUG_AVAILABLE = !Serial ? false : true; delay (5*1000L);
+  bool DEBUG_AVAILABLE = true;
+  #define DEBUG_START(...) Serial.begin (DEFAULT_SERIAL_BAUD); if (DEBUG_AVAILABLE) delay (5*1000L);
   #define DEBUG_END(...) Serial.flush (); Serial.end ()
   #define DEBUG_PRINTF(...) if (DEBUG_AVAILABLE) Serial.printf (__VA_ARGS__)
 #else
