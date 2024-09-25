@@ -29,7 +29,8 @@ static bool __ota_network_connect (const char *ssid, const char *pass, const int
     DEBUG_PRINTF (" succeeded, address='%s'.\n", WiFi.localIP ().toString ().c_str ());
     return true;
 }
-static void __ota_server_check_and_update (const char *json, const char *type, const char *vers) {
+using __ota_callback_update_completed = std::function<void()>;
+static void __ota_server_check_and_update (const char *json, const char *type, const char *vers, __ota_callback_update_completed func) {
     DEBUG_PRINTF ("OTA_CHECK_AND_UPDATE: check json='%s', type='%s', vers='%s' ...", json, type, vers);
     esp32FOTA ota (type, vers);
     String url (String (json) + String ("?version=") + String (vers));
@@ -44,17 +45,18 @@ static void __ota_server_check_and_update (const char *json, const char *type, c
         bool restart = false;
         ota.setUpdateFinishedCb ([&](int partition, bool _restart) { __ota_update_success (partition, _restart); restart = _restart; });
         ota.execOTA ();
+        if (func != nullptr)
+          func ();
         if (restart)
             ESP.restart ();
     } else {
         DEBUG_PRINTF (" no newer vers, no action taken.\n");
     }
 }
-
-static void ota_check_and_update (const String& ssid, const String& pass, const int retry_count, const int retry_delay, const String& json, const String& type, const String& vers) {
+static void ota_check_and_update (const String& ssid, const String& pass, const int retry_count, const int retry_delay, const String& json, const String& type, const String& vers, __ota_callback_update_completed func = nullptr) {
     WiFi.mode (WIFI_STA);
     if (__ota_network_connect (ssid.c_str (), pass.c_str (), retry_count, retry_delay))
-        __ota_server_check_and_update (json.c_str (), type.c_str (), vers.c_str ());
+        __ota_server_check_and_update (json.c_str (), type.c_str (), vers.c_str (), func);
     WiFi.mode (WIFI_OFF);
 }
 

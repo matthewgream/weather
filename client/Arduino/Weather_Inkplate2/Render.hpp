@@ -184,25 +184,25 @@ public:
 #define T_OFF_Y(x) (I_OFF_Y (x) + ((I_FRAME_Y - T_SIZ) / 2) + T_SIZ - T_ADJ_Y)
 
 const std::vector <Renderer*> renderers_default = {
-    new Renderer_Bitmap  (I_OFF_X, I_OFF_Y (0), icon_home, I_SIZ, I_SIZ, INKPLATE2_BLACK, INKPLATE2_WHITE),
-    new Renderer_Bitmap  (I_OFF_X, I_OFF_Y (1), icon_tree, I_SIZ, I_SIZ, INKPLATE2_BLACK, INKPLATE2_WHITE),
-    new Renderer_Bitmap  (I_OFF_X, I_OFF_Y (2), icon_lake, I_SIZ, I_SIZ, INKPLATE2_BLACK, INKPLATE2_WHITE),
+    new Renderer_Bitmap (I_OFF_X, I_OFF_Y (0), icon_home, I_SIZ, I_SIZ, INKPLATE2_BLACK, INKPLATE2_WHITE),
+    new Renderer_Bitmap (I_OFF_X, I_OFF_Y (1), icon_tree, I_SIZ, I_SIZ, INKPLATE2_BLACK, INKPLATE2_WHITE),
+    new Renderer_Bitmap (I_OFF_X, I_OFF_Y (2), icon_lake, I_SIZ, I_SIZ, INKPLATE2_BLACK, INKPLATE2_WHITE),
 };
 typedef std::pair <String, Renderer*> RendererPair;
 const std::vector <RendererPair> renderers_byvalue = {
-    { "weather/ulrikashus/runtime",    new Renderer_Faulty       (I_OFF_X, I_OFF_Y (0), I_SIZ, I_SIZ, INKPLATE2_RED, INKPLATE2_WHITE, { "weather/ulrikashus/tempin", "weather/ulrikashus/humidityin", "weather/ulrikashus/baromrel" }) },
-    { "weather/ulrikashus/tempin",     new Renderer_Temperature  (T_OFF_X (0), T_OFF_Y (0), INKPLATE2_BLACK, INKPLATE2_WHITE) },
-    { "weather/ulrikashus/humidityin", new Renderer_Humidity     (T_OFF_X (1), T_OFF_Y (0), INKPLATE2_BLACK, INKPLATE2_WHITE) },
-    { "weather/ulrikashus/baromrel",   new Renderer_Pressure     (T_OFF_X (2), T_OFF_Y (0), INKPLATE2_BLACK, INKPLATE2_WHITE) },
-    { "weather/branna/runtime",        new Renderer_Faulty       (I_OFF_X, I_OFF_Y (1), I_SIZ, I_SIZ, INKPLATE2_RED, INKPLATE2_WHITE, { "weather/branna/temp", "weather/branna/humidity", "weather/branna/baromrel" }) },
-    { "weather/branna/temp",           new Renderer_Temperature  (T_OFF_X (0), T_OFF_Y (1), INKPLATE2_BLACK, INKPLATE2_WHITE) },
-    { "weather/branna/humidity",       new Renderer_Humidity     (T_OFF_X (1), T_OFF_Y (1), INKPLATE2_BLACK, INKPLATE2_WHITE) },
-    { "weather/branna/baromrel",       new Renderer_Pressure     (T_OFF_X (2), T_OFF_Y (1), INKPLATE2_BLACK, INKPLATE2_WHITE) },
-    { "weather/branna/runtime",        new Renderer_Faulty       (I_OFF_X, I_OFF_Y (2), I_SIZ, I_SIZ, INKPLATE2_RED, INKPLATE2_WHITE, { "weather/branna/tf_ch1", "weather/branna/tf_ch2" }) },
-    { "weather/branna/tf_ch1",         new Renderer_Temperature  (T_OFF_X (0), T_OFF_Y (2), INKPLATE2_BLACK, INKPLATE2_WHITE) }, 
-    { "weather/branna/tf_ch2",         new Renderer_Temperature  (T_OFF_X (1), T_OFF_Y (2), INKPLATE2_BLACK, INKPLATE2_WHITE) },
-    { "weather/branna/tf_batt1",       new Renderer_BatteryLow   (I_OFF_X, I_OFF_Y (2), I_SIZ, I_SIZ, INKPLATE2_RED, INKPLATE2_WHITE, 1.5) },
-    { "weather/branna/tf_batt2",       new Renderer_BatteryLow   (I_OFF_X, I_OFF_Y (2), I_SIZ, I_SIZ, INKPLATE2_RED, INKPLATE2_WHITE, 1.5) },
+    { "house/__runtime",    new Renderer_Faulty       (I_OFF_X, I_OFF_Y (0), I_SIZ, I_SIZ, INKPLATE2_RED, INKPLATE2_WHITE, { "house/__checks[0]", "house/__checks[1]", "house/__checks[2]" }) },
+    { "house/temp",         new Renderer_Temperature  (T_OFF_X (0), T_OFF_Y (0), INKPLATE2_BLACK, INKPLATE2_WHITE) },
+    { "house/humidity",     new Renderer_Humidity     (T_OFF_X (1), T_OFF_Y (0), INKPLATE2_BLACK, INKPLATE2_WHITE) },
+    { "house/barom",        new Renderer_Pressure     (T_OFF_X (2), T_OFF_Y (0), INKPLATE2_BLACK, INKPLATE2_WHITE) },
+    { "outside/__runtime",  new Renderer_Faulty       (I_OFF_X, I_OFF_Y (1), I_SIZ, I_SIZ, INKPLATE2_RED, INKPLATE2_WHITE, { "outside/__checks[0]", "outside/__checks[1]", "outside/__checks[2]" }) },
+    { "outside/temp",       new Renderer_Temperature  (T_OFF_X (0), T_OFF_Y (1), INKPLATE2_BLACK, INKPLATE2_WHITE) },
+    { "outside/humidity",   new Renderer_Humidity     (T_OFF_X (1), T_OFF_Y (1), INKPLATE2_BLACK, INKPLATE2_WHITE) },
+    { "outside/barom",      new Renderer_Pressure     (T_OFF_X (2), T_OFF_Y (1), INKPLATE2_BLACK, INKPLATE2_WHITE) },
+    { "outside/__runtime",  new Renderer_Faulty       (I_OFF_X, I_OFF_Y (2), I_SIZ, I_SIZ, INKPLATE2_RED, INKPLATE2_WHITE, { "lake/surface_temp", "lake/submerged_temp" }) },
+    { "lake/surface_temp",  new Renderer_Temperature  (T_OFF_X (0), T_OFF_Y (2), INKPLATE2_BLACK, INKPLATE2_WHITE) }, 
+    { "lake/submerged_temp",new Renderer_Temperature  (T_OFF_X (1), T_OFF_Y (2), INKPLATE2_BLACK, INKPLATE2_WHITE) },
+    { "lake/surface_batt",  new Renderer_BatteryLow   (I_OFF_X, I_OFF_Y (2), I_SIZ, I_SIZ, INKPLATE2_RED, INKPLATE2_WHITE, 1.5) },
+    { "lake/submerged_batt",new Renderer_BatteryLow   (I_OFF_X, I_OFF_Y (2), I_SIZ, I_SIZ, INKPLATE2_RED, INKPLATE2_WHITE, 1.5) },
 };
 
 // -----------------------------------------------------------------------------------------------
