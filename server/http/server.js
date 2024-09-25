@@ -105,6 +105,28 @@ xxx.get ('/images/:filename', (req, res) => {
 
 //
 
+xxx.get ('/sets', async (req, res) => {
+    const { mac } = req.query;
+    if (!mac) {
+        console.error (`/sets request failed: no mac address provided`);
+        return res.status (400).json ({ error: 'MAC address required' });
+    }
+    try {
+        const sets = JSON.parse (fs.readFileSync (path.join (__dirname, 'config.json'), 'utf8'));
+        if (!sets [mac]) {
+            console.log (`/sets request failed: no config for mac=${mac}`);
+            return res.status (404).json ({ error: 'MAC address unknown' });
+        }
+        res.json (sets [mac]);
+        console.log (`/sets request succeeded: ${mac}`);
+    } catch (error) {
+        console.error (`/sets request failed: error reading config file, error <<${error}>>`);
+        res.status (500).json ({ error: 'Internal server error' });
+    }
+});
+
+//
+
 xxx.use (function (req, res) {
     res.status (404).send ("not found");
 });
