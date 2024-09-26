@@ -15,7 +15,7 @@
 
 #define DEFAULT_SOFTWARE_TIME (60*60*12) // check every 12 hours
 #define DEFAULT_SOFTWARE_TYPE "weatherdisplay-inkplate2-esp32"
-#define DEFAULT_SOFTWARE_VERS "1.2.4"
+#define DEFAULT_SOFTWARE_VERS "1.3.0"
 #define DEFAULT_SOFTWARE_JSON "http://weather.local/images/images.json"
 
 // -----------------------------------------------------------------------------------------------
@@ -27,6 +27,7 @@ const Variables DEFAULT_CONFIG = {
     { "ssid", DEFAULT_NETWORK_SSID },
     { "pass", DEFAULT_NETWORK_PASS },
     { "link", "http://weather.local/vars" },
+    { "sets", "http://weather.local/sets" },
     { "secs", "300" },
 
     { "sw-type", DEFAULT_SOFTWARE_TYPE },

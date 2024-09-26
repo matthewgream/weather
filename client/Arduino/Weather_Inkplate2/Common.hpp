@@ -9,7 +9,7 @@ typedef std::map <String, String> Variables;
 
 #include <Arduino.h>
 
-#define DEBUG
+//#define DEBUG
 #ifdef DEBUG
   bool DEBUG_AVAILABLE = true;
   #define DEBUG_START(...) Serial.begin (DEFAULT_SERIAL_BAUD); if (DEBUG_AVAILABLE) delay (5*1000L);
@@ -31,6 +31,7 @@ class _PersistentData {
 public:
     static int _initialised;
     static bool _initialise () { return _initialised || (++ _initialised && nvs_flash_init () == ESP_OK && nvs_flash_init_partition (DEFAULT_PERSISTENT_PARTITION) == ESP_OK); }
+    static void _reset () { nvs_flash_erase_partition (DEFAULT_PERSISTENT_PARTITION); }
 private:
     nvs_handle_t _handle;
     const bool _okay = false;
@@ -41,6 +42,21 @@ public:
     inline bool set (const char *name, uint32_t value) const { return  (_okay && nvs_set_u32 (_handle, name, value) == ESP_OK); }
     inline bool get (const char *name, int32_t *value) const { return (_okay && nvs_get_i32 (_handle, name, value) == ESP_OK); }
     inline bool set (const char *name, int32_t value) const { return  (_okay && nvs_set_i32 (_handle, name, value) == ESP_OK); }
+    inline bool get (const char *name, String *value) const { 
+        if (!_okay) return false;
+        size_t size;
+        if (nvs_get_str (_handle, name, NULL, &size) != ESP_OK)
+            return false;
+        char *str = (char *) malloc (size);
+        if (nvs_get_str (_handle, name, str, &size) != ESP_OK) {
+            free (str);
+            return false;
+        }
+        (*value) = str;
+        free (str);
+        return true;
+    }
+    inline bool set (const char *name, const String &value) const { return  (_okay && nvs_set_str (_handle, name, value.c_str ()) == ESP_OK); }
 
 };
 int _PersistentData::_initialised = 0;

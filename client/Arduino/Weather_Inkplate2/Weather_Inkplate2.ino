@@ -45,7 +45,7 @@ void setup () {
     if (ota_counter >= (uint32_t) DEFAULT_SOFTWARE_TIME) { // not exact, but good enough
         ota_counter = 0;
         ota_check_and_update (DEFAULT_CONFIG.at ("ssid"), DEFAULT_CONFIG.at ("pass"), DEFAULT_NETWORK_CONNECT_RETRY_COUNT, DEFAULT_NETWORK_CONNECT_RETRY_DELAY,
-          DEFAULT_CONFIG.at ("sw-json"), DEFAULT_CONFIG.at ("sw-type"), DEFAULT_CONFIG.at ("sw-vers"));
+          DEFAULT_CONFIG.at ("sw-json"), DEFAULT_CONFIG.at ("sw-type"), DEFAULT_CONFIG.at ("sw-vers"), [program] () { program->reset (); });
     }
 
     DEBUG_PRINTF ("[deep sleep: %d secs]\n", secs);
