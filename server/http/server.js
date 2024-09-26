@@ -105,7 +105,7 @@ xxx.get ('/images/:filename', (req, res) => {
 
 //
 
-xxx.get ('/sets', async (req, res) => {
+xxx.get ('/sets', (req, res) => {
     const { mac } = req.query;
     if (!mac) {
         console.error (`/sets request failed: no mac address provided`);
@@ -114,7 +114,7 @@ xxx.get ('/sets', async (req, res) => {
     try {
         const sets = JSON.parse (fs.readFileSync (path.join (__dirname, 'config.json'), 'utf8'));
         if (!sets [mac]) {
-            console.log (`/sets request failed: no config for mac=${mac}`);
+            console.log (`/sets request failed: no config for ${mac}`);
             return res.status (404).json ({ error: 'MAC address unknown' });
         }
         res.json (sets [mac]);
