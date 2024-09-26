@@ -112,15 +112,15 @@ xxx.get ('/sets', (req, res) => {
         return res.status (400).json ({ error: 'MAC address required' });
     }
     try {
-        const sets = JSON.parse (fs.readFileSync (path.join (__dirname, 'config.json'), 'utf8'));
+        const sets = JSON.parse (fs.readFileSync (path.join (__dirname, 'client.json'), 'utf8'));
         if (!sets [mac]) {
-            console.log (`/sets request failed: no config for ${mac}`);
+            console.log (`/sets request failed: no client for ${mac}`);
             return res.status (404).json ({ error: 'MAC address unknown' });
         }
         res.json (sets [mac]);
         console.log (`/sets request succeeded: ${mac}`);
     } catch (error) {
-        console.error (`/sets request failed: error reading config file, error <<${error}>>`);
+        console.error (`/sets request failed: error reading client file, error <<${error}>>`);
         res.status (500).json ({ error: 'Internal server error' });
     }
 });
