@@ -25,7 +25,7 @@ public:
             for (const auto& pair : vars)
                 DEBUG_PRINTF ("# %s = %s\n", pair.first.c_str (), pair.second.c_str ());
             if (vars.find ("timestamp") != vars.end ())
-                DEBUG_PRINTF ("produced at '%s'.\n", time_iso (std::atol (vars.at ("timestamp").c_str ())).c_str ()); 
+                DEBUG_PRINTF ("produced at %s\n", time_iso (std::atol (vars.at ("timestamp").c_str ())).c_str ()); 
 #endif
             for (const auto& pair : sets) {
                 const auto search = vars.find (pair.second);
@@ -40,27 +40,30 @@ public:
 
 protected:
   
+    void _fetch (const Variables &conf, const String& link, JsonDocument &json, const std::function <bool (JsonDocument &)>& func) {
+        Network network (conf.at ("host"), conf.at ("ssid"), conf.at ("pass"));
+        if (!network.connect ())
+            throw std::runtime_error ("network connect failed");
+        int cnt = 0;
+        while (!network.request (link, json) || !func (json)) { // XXX
+            if (++ cnt > DEFAULT_NETWORK_REQUEST_RETRY_COUNT)
+                throw std::runtime_error ("network request failed");
+            DEBUG_PRINTF ("network request retry #%d\n", cnt);
+            delay (DEFAULT_NETWORK_REQUEST_RETRY_DELAY);
+        }
+        network.disconnect ();
+    }
+
     bool setup (const Variables &conf, Variables& sets) {
         PersistentValue <String> s ("program", "sets", "");
         String c = (String) s;
         JsonDocument json;
         if (c.isEmpty ()) {
-          //
-          Network network (conf.at ("host"), conf.at ("ssid"), conf.at ("pass"));
-          if (!network.connect ())
-              throw std::runtime_error ("network connect failed");
-          int cnt = 0;
-          String link (conf.at ("sets") + String ("?mac=") + identify ());
-          while (!network.request (link, json) || !serializeJson (json, c)) {
-              if (++ cnt > DEFAULT_NETWORK_REQUEST_RETRY_COUNT)
-                  throw std::runtime_error ("network request failed");
-              DEBUG_PRINTF ("network request retry #%d\n", cnt);
-              delay (DEFAULT_NETWORK_REQUEST_RETRY_DELAY);
-          }
-          network.disconnect ();
+          _fetch (conf, conf.at ("sets") + String ("?mac=") + identify (), json, [&] (JsonDocument& doc) { return serializeJson (doc, c); });
           s = c;
-          DEBUG_PRINTF ("fetch conf = %s\n", c.c_str ());
+          DEBUG_PRINTF ("sets downloaded: <<<%s>>>\n", c.c_str ());
         } else {
+          DEBUG_PRINTF ("sets persistent: <<<%s>>>\n", c.c_str ());
           deserializeJson (json, c);
       }
       return convert (sets, json.as <JsonVariant> ());
@@ -68,17 +71,7 @@ protected:
     
     bool load (const Variables &conf, Variables &vars) {
         JsonDocument json;
-        Network network (conf.at ("host"), conf.at ("ssid"), conf.at ("pass"));
-        if (!network.connect ())
-            throw std::runtime_error ("network connect failed");
-        int cnt = 0;
-        while (!network.request (conf.at ("link"), json) || !convert (vars, json.as <JsonVariant> ())) {
-            if (++ cnt > DEFAULT_NETWORK_REQUEST_RETRY_COUNT)
-                throw std::runtime_error ("network request failed");
-            DEBUG_PRINTF ("network request retry #%d\n", cnt);
-            delay (DEFAULT_NETWORK_REQUEST_RETRY_DELAY);
-        }
-        network.disconnect ();
+        _fetch (conf, conf.at ("link"), json, [&] (JsonDocument& doc) { return convert (vars, json.as <JsonVariant> ()); });
         return true;
     }
   

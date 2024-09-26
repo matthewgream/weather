@@ -30,29 +30,29 @@ public:
     bool connect (void) {
         if (WiFi.isConnected ())
             return true;
-        DEBUG_PRINTF ("WiFi connecting to '%s' ...", _info.c_str ());
+        DEBUG_PRINTF ("WiFi connecting to %s ...", _info.c_str ());
         int cnt = 0;
         while (!WiFi.isConnected ()) {
             if (++ cnt > DEFAULT_NETWORK_CONNECT_RETRY_COUNT) {
-                DEBUG_PRINTF (" failed.\n");
+                DEBUG_PRINTF (" failed\n");
                 return false;
             }
             DEBUG_PRINTF (".");
             delay (DEFAULT_NETWORK_CONNECT_RETRY_DELAY);
         }
-        DEBUG_PRINTF (" succeeded: address='%s'\n", WiFi.localIP ().toString ().c_str ());
+        DEBUG_PRINTF (" succeeded: address=%s\n", WiFi.localIP ().toString ().c_str ());
         return true;
     }
 
     bool disconnect (void) {
         if (!WiFi.isConnected ())
             return true;
-        DEBUG_PRINTF ("WiFi disconnecting from '%s' ...", _info.c_str ());
+        DEBUG_PRINTF ("WiFi disconnecting from %s ...", _info.c_str ());
         if (!WiFi.disconnect ()) {
-          DEBUG_PRINTF (" failed.\n");
+          DEBUG_PRINTF (" failed\n");
           return false;
         }
-        DEBUG_PRINTF (" succeeded.\n");
+        DEBUG_PRINTF (" succeeded\n");
         return true;
     }
 
@@ -60,7 +60,7 @@ public:
         if (WiFi.isConnected ())
             return true;
         if (!WiFi.reconnect ()) {
-            DEBUG_PRINTF ("WiFi reconnecting to '%s' ... failed.\n", _info.c_str ());
+            DEBUG_PRINTF ("WiFi reconnecting to %s ... failed\n", _info.c_str ());
             return false;
         }
         return connect ();
@@ -81,14 +81,14 @@ public:
         if (code == HTTP_CODE_OK) {
             DeserializationError error = deserializeJson (json, http.getStream ());
             if (!error) {
-                DEBUG_PRINTF (" succeeded: size='%d'.\n", http.getSize ());
+                DEBUG_PRINTF (" succeeded: size=%d\n", http.getSize ());
                 http.end ();
                 return true;
             } else {
-                DEBUG_PRINTF (" failed: JSON deserialisation, error='%s'.\n", error.c_str ());
+                DEBUG_PRINTF (" failed: JSON deserialisation, error=%s\n", error.c_str ());
             }
         } else {
-            DEBUG_PRINTF (" failed: network request, error='%s'.\n", http.errorToString (code).c_str ());
+            DEBUG_PRINTF (" failed: network request, error=%s\n", http.errorToString (code).c_str ());
         }
         http.end ();
         return false;

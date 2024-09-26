@@ -9,16 +9,16 @@ typedef std::map <String, String> Variables;
 
 #include <Arduino.h>
 
-//#define DEBUG
+#define DEBUG
 #ifdef DEBUG
-  bool DEBUG_AVAILABLE = true;
-  #define DEBUG_START(...) Serial.begin (DEFAULT_SERIAL_BAUD); if (DEBUG_AVAILABLE) delay (5*1000L);
-  #define DEBUG_END(...) Serial.flush (); Serial.end ()
-  #define DEBUG_PRINTF(...) if (DEBUG_AVAILABLE) Serial.printf (__VA_ARGS__)
+    bool DEBUG_AVAILABLE = true;
+    #define DEBUG_START(...) Serial.begin (DEFAULT_SERIAL_BAUD); if (DEBUG_AVAILABLE) delay (5*1000L);
+    #define DEBUG_END(...) Serial.flush (); Serial.end ()
+    #define DEBUG_PRINTF(...) if (DEBUG_AVAILABLE) Serial.printf (__VA_ARGS__)
 #else
-  #define DEBUG_START(...)
-  #define DEBUG_END(...)
-  #define DEBUG_PRINTF(...)
+    #define DEBUG_START(...)
+    #define DEBUG_END(...)
+    #define DEBUG_PRINTF(...)
 #endif
 
 // -----------------------------------------------------------------------------------------------
@@ -43,18 +43,17 @@ public:
     inline bool get (const char *name, int32_t *value) const { return (_okay && nvs_get_i32 (_handle, name, value) == ESP_OK); }
     inline bool set (const char *name, int32_t value) const { return  (_okay && nvs_set_i32 (_handle, name, value) == ESP_OK); }
     inline bool get (const char *name, String *value) const { 
-        if (!_okay) return false;
         size_t size;
-        if (nvs_get_str (_handle, name, NULL, &size) != ESP_OK)
-            return false;
-        char *str = (char *) malloc (size);
-        if (nvs_get_str (_handle, name, str, &size) != ESP_OK) {
+        if (_okay && nvs_get_str (_handle, name, NULL, &size) == ESP_OK) {
+            char *str = (char *) malloc (size);
+            if (nvs_get_str (_handle, name, str, &size) == ESP_OK) {
+                (*value) = str;
+                free (str);
+                return true;
+            }
             free (str);
-            return false;
         }
-        (*value) = str;
-        free (str);
-        return true;
+        return false;
     }
     inline bool set (const char *name, const String &value) const { return  (_okay && nvs_set_str (_handle, name, value.c_str ()) == ESP_OK); }
 
