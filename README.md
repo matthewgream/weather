@@ -17,14 +17,18 @@ IOT weather display for Ecowitt devices using Inkpad2.
         receive and cache variables (as JSON) using mqtt subscribe (localhost) from mosquitto (on server, as mqtt broker)
         respond to http request (WiFi network) with cached variables (as JSON) to clients (e.g. Inkplate2)
         provide human readable (live refreshed) web interface for cached variables
+        provide configuration variable mappings to multiple clients based on MAC address
+        store firmware from development tools and provide firmware checks and updates to clients
 
     CLIENT
     
     Inkplate2 (Arduino ESP32 w/ WiFi, battery and case) -->
         wake up from deep sleep every N=5 minutes
         connect to WLAN
+        if not configured, request configuration from server
         request variables (as JSON), served by nodejs app
         render selected variables into epaper display
+        periodically check and update firmware if required
         deep sleep w/ wake up alarm
 
 In this case, the server components (ecowitt2mqtt, mosquitto, nodejs) are housed on a Raspberry Pi Zero (32 bit)
@@ -58,6 +62,7 @@ and preferably use shielded cable and ground the shielding. Do not ground these 
 ground, but ground directly to earth bonding.
 
 ![Station](images/station.jpg)
+<table><tr><td><img src="images/station2.jpg" alt="Station 2"/></td><td><img src="images/station3.jpg" alt="Station 3"/></td></tr></table>
 
 ## server (software)
 
@@ -77,8 +82,8 @@ as 'weather.local' using mDNS via. avahi. UPnP is used to configure an inbound s
 key authentication only -- no password. The Ecowitt sinks must to be configured as per ecowitt2mqtt instructions. The sinks can still
 publish to other services including Ecowitt itself.
 
-![Server](images/server2.jpg)
 ![Server](images/server1.jpg)
+![Server](images/server2.jpg)
 
 ![Server](images/ecowitt.jpg)
 
@@ -95,7 +100,11 @@ and power on time to conserve battery, and to only refresh display if network up
 update interval resulted in a life of 6 days and 17 hours (161 hours, 9687 minutes), which at 5 minute intervals is 1937 updates, before the battery was exhausted.
 The standard Inkplate library has been included and stripped down to remove unneeded modules (e.g. JPG, PNG and BMP
 images, and colour dithering), but the code will build against the standard library. The files Secrets.hpp (in the Arduino project
-folder) and secrets.txt (in the server config files) have been suppressed from the repository for obvious reasons.
+folder) and secrets.txt (in the server config files) have been suppressed from the repository for obvious reasons. If the client
+does not have any configuration, it will request from the server keyed upon its MAC address. Periodically, the client will check
+the current firmware version and download any updates.
+
+Note the Arduino IDE scripts that automatically transfer new firmware versions to the server and store them compressed.
 
 ![Client](images/client.jpg)
 
