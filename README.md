@@ -70,15 +70,14 @@ ground, but ground directly to earth bonding.
     ecowitt2mqtt -- https://github.com/bachya/ecowitt2mqtt
     mosquitto (for MQTT broker) -- https://github.com/eclipse/mosquitto
     avahi (for multicast DNS) -- https://avahi.org
-    http-server (nodejs + express) -- https://nodejs.org
+    http-server (nodejs + express + modules) -- https://nodejs.org
     upnp update scripts
-    ddns update scripts (if required)
 
 Sources: https://github.com/matthewgream/weather/tree/main/server
 
 Install DietPI then the software components including systemd service scripts and defaults. The system is minimal
 and all processes, including server components, run as root. The MQTT broker is not password protected. The server publishes itself 
-as 'weather.local' using mDNS via. avahi. UPnP is used to configure an inbound sshd gateway and No-IP for DDNS. Configure sshd as public
+as 'weather.local' using mDNS via. avahi. UPnP is used to configure an inbound sshd gateway. Configure sshd as public
 key authentication only -- no password. The Ecowitt sinks must to be configured as per ecowitt2mqtt instructions. The sinks can still
 publish to other services including Ecowitt itself.
 
@@ -92,6 +91,8 @@ publish to other services including Ecowitt itself.
     Arduino IDE -- https://www.arduino.cc/en/software
     ArduinoJson library -- https://arduinojson.org
     Inkplate2 library -- https://github.com/SolderedElectronics/Inkplate-Arduino-library
+    flashz -- https://github.com/vortigont/esp32-flashz
+    esp32fota -- https://github.com/chrisjoyce911/esp32FOTA
 
 Sources: https://github.com/matthewgream/weather/tree/main/client/Arduino
 
