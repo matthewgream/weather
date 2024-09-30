@@ -61,7 +61,7 @@ If you use an external PoE cable, make sure to isolate the Ethernet cable on ent
 and preferably use shielded cable and ground the shielding. Do not ground these to your electricity supply
 ground, but ground directly to earth bonding.
 
-![Station](images/station.jpg)
+![Station](images/station1.jpg)
 <table><tr><td><img src="images/station2.jpg" alt="Station 2"/></td><td><img src="images/station3.jpg" alt="Station 3"/></td></tr></table>
 
 ## server (software)
