@@ -7,9 +7,10 @@
 
 class Program {
     const Variables &_conf;
+    PersistentValue <String> _sets_PERSISTENT;
 
 public:
-    Program (const Variables &conf): _conf (conf) {}
+    Program (const Variables &conf): _conf (conf), _sets_PERSISTENT ("program", "sets", "") {}
 
     void reset () {
         _PersistentData::_reset ();
@@ -55,16 +56,15 @@ protected:
     }
 
     bool setup (const Variables &conf, Variables& sets) {
-        PersistentValue <String> s ("program", "sets", "");
-        String c = (String) s;
+        String sets_persistent = (String) _sets_PERSISTENT;
         JsonDocument json;
-        if (c.isEmpty ()) {
-          _fetch (conf, conf.at ("sets") + String ("?mac=") + identify (), json, [&] (JsonDocument& doc) { return serializeJson (doc, c); });
-          s = c;
-          DEBUG_PRINTF ("sets downloaded: <<<%s>>>\n", c.c_str ());
+        if (sets_persistent.isEmpty ()) {
+          _fetch (conf, conf.at ("sets") + String ("?mac=") + identify (), json, [&] (JsonDocument& doc) { return serializeJson (doc, sets_persistent); });
+          _sets_PERSISTENT = sets_persistent;
+          DEBUG_PRINTF ("sets downloaded: <<<%s>>>\n", sets_persistent.c_str ());
         } else {
-          DEBUG_PRINTF ("sets persistent: <<<%s>>>\n", c.c_str ());
-          deserializeJson (json, c);
+          DEBUG_PRINTF ("sets persistent: <<<%s>>>\n", sets_persistent.c_str ());
+          deserializeJson (json, sets_persistent);
       }
       return convert (sets, json.as <JsonVariant> ());
     }

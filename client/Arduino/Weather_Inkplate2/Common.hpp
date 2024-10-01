@@ -9,7 +9,7 @@ typedef std::map <String, String> Variables;
 
 #include <Arduino.h>
 
-#define DEBUG
+//#define DEBUG
 #ifdef DEBUG
     bool DEBUG_AVAILABLE = true;
     #define DEBUG_START(...) Serial.begin (DEFAULT_SERIAL_BAUD); if (DEBUG_AVAILABLE) delay (5*1000L);
