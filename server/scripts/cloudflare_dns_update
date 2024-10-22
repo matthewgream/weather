@@ -7,5 +7,5 @@ curl --silent --request PUT \
   --url https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$CF_RECORD_ID \
   --header "Content-Type: application/json" \
   --header "Authorization: Bearer $CF_TOKEN" \
-  --data "{ \"name\": \"$CF_DNS_NAME\", \"proxied\": false, \"ttl\": 3600, \"content\": \"$CF_DNS_ADDR\", \"type\": \"A\" }"  > /dev/null
+  --data "{ \"name\": \"$CF_DNS_NAME\", \"proxied\": false, \"ttl\": 3600, \"content\": \"$CF_DNS_ADDR\", \"type\": \"A\" }" | jq
 
