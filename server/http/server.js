@@ -2,51 +2,133 @@
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+const fs = require ('fs');
+const path = require ('path');
+
+function loadConfig () {
+    try {
+        const configPath = path.join(__dirname, 'secrets.txt');
+        const vars = {};
+        fs.readFileSync(configPath, 'utf8').split('\n').forEach(line => {
+            const [key, value] = line.split('=').map(s => s.trim());
+            if (key && value)
+                vars[key] = value;
+        });
+        return vars;
+    } catch (err) {
+        console.warn('Could not load secrets.txt, using defaults');
+        return {};
+    }
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+const conf = loadConfig ();
+
 const name = 'weather_server';
-const host = process.env.HOST || 'weather.local';
-const port = process.env.PORT || 80;
-const data = process.env.DATA || '/opt/weather/server';
-const data_views = process.env.DATA_VIEWS || data + '/http';
-const data_images = process.env.DATA_IMAGES || data + '/images';
+const fqdn = conf.FQDN;
+const host = conf.HOST;
+const port = conf.PORT;
+const data = conf.DATA;
+const data_views = data + '/http';
+const data_images = data + '/images';
 
 const subs = [ 'weather/#' ];
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+//const http = require('http');
+const https = require('https');
+
+const letsencrypt = `/etc/letsencrypt/live/${fqdn}`;
+const privateKey = fs.readFileSync(`${letsencrypt}/privkey.pem`, 'utf8');
+const certificate = fs.readFileSync(`${letsencrypt}/cert.pem`, 'utf8');
+const ca = fs.readFileSync(`${letsencrypt}/chain.pem`, 'utf8');
+const credentials = {
+	key: privateKey,
+	cert: certificate,
+	ca: ca
+};
+
 const exp = require ('express');
 const xxx = exp ();
 xxx.set ('view engine', 'ejs');
 xxx.set ('views', data_views);
+xxx.use (require ('express-minify-html') ({
+        override: true,
+        exception_url: false,
+        htmlMinifier: {
+                removeComments: true,
+                collapseWhitespace: true,
+                collapseBooleanAttributes: true,
+                removeAttributeQuotes: true,
+                removeEmptyAttributes: true,
+                minifyCSS: true,
+                minifyJS: true,
+                minifyURLs: true
+        }
+}));
+xxx.use (exp.static ('/dev/shm'));
 
-const server = require ('http').createServer (xxx);
+//const server = http.createServer (xxx);
+const server = https.createServer(credentials, xxx);
 const socket = require ('socket.io') (server);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
+
+async function updateSnapshot() {
+	const exec = require('child_process').exec;
+	const fs_async = require('fs').promises;
+    const tempPath = '/dev/shm/snapshot_temp.jpg';
+    const finalPath = '/dev/shm/snapshot.jpg';
+    
+    try {
+        await new Promise((resolve, reject) => {
+            exec(`ffmpeg -y -rtsp_transport tcp -i '${conf.RTSP}' -vframes 1 ${tempPath}`,
+                (error) => {
+                    if (error) reject(error);
+                    else resolve();
+                });
+        });
+        await fs_async.rename(tempPath, finalPath);
+    } catch (error) {
+        console.error('Error updating snapshot:', error);
+        try {
+            await fs_async.unlink(tempPath);
+        } catch (e) {
+        }
+    }
+}
+updateSnapshot();
+setInterval(updateSnapshot, 30000);
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+const { formatInTimeZone } = require('date-fns-tz');
 
 const mqtt_content = {}, mqtt_client = require ('mqtt').connect ('mqtt://localhost');
 mqtt_client.on ('connect', () => mqtt_client.subscribe (subs, () => {
     console.log ('mqtt connected & subscribed');
 }));
 mqtt_client.on ('message', (topic, message) => {
-    mqtt_content [topic] = JSON.parse (message.toString ());
-    socket.emit ('update', { [topic]: mqtt_content [topic] });
+    mqtt_content [topic] = { ...JSON.parse (message.toString ()), timestamp: formatInTimeZone (new Date(), conf.TZ, "yyyy-MM-dd'T'HH:mm:ssXXX'Z'").replace (":00'Z", 'Z') };
+	if (topic == 'weather/branna')
+    	socket.emit ('update', { [topic]: mqtt_content [topic] });
 });
 
 //
 
 xxx.get ('/', function (req, res) {
-    res.render ('server', { vars: mqtt_content });
+    res.render ('server', { vars: { 'weather/branna': mqtt_content ['weather/branna'] } });
 });
 
 xxx.get ('/vars', function (req, res) {
     console.log (`/vars requested from '${req.headers ['x-forwarded-for'] || req.connection.remoteAddress}'`);
-    res.json ({ timestamp: Math.floor (Date.now () / 1000), ...mqtt_content });
+    res.json ({ mqtt_content });
 });
 
 //
 
-const fs = require ('fs');
-const path = require ('path');
 const zlib = require ('zlib');
 const multer = require ('multer');
 
