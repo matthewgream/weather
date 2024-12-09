@@ -1,7 +1,6 @@
 third_party
 node_modules
 build
-secrets.txt
-Secrets.hpp
+[sS]ecrets.*
 package-lock.json
 .theia

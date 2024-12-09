@@ -64,6 +64,48 @@
             color: var(--text-color);
             margin-left: 0.25rem;
         }
+		.update-timestamp {
+    		text-align: center;
+    		margin-top: 20px;
+    		color: #666;
+    		font-size: 0.9em;
+		}
+		.external-links {
+    		text-align: center;
+    		margin-top: 10px;
+    		color: #666;
+		}
+		.external-links a {
+    		text-decoration: none;
+    		color: #0066cc;
+		}
+		.external-links a:hover {
+    		text-decoration: underline;
+		}
+		.camera-container {
+    		text-align: center;
+    		margin: 20px 0;
+		}
+		.weather-camera {
+    		max-width: 100%;
+    		height: auto;
+    		border-radius: 4px;
+    		box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+		}
+		.camera-hint {
+    		font-size: 0.8em;
+    		color: #666;
+    		margin-top: 5px;
+    		text-align: center;
+    		font-style: italic;
+		}
+		.camera-container a {
+    		display: inline-block;
+    		cursor: pointer;
+		}
+		.weather-camera:hover {
+    		opacity: 0.9;
+		}
         @media (max-width: 480px) {
             .dashboard { padding: var(--spacing-md); }
             .data-row {
@@ -78,41 +120,37 @@
 <body>
     <div class="dashboard" id="weather-dashboard"></div>
     <script src="/socket.io/socket.io.js"></script>
+	<%- include('secrets.ejs') %>
     <script>
+		//
         const format = (elem, valu) => (valu != null) ? valu.toFixed (elem.decimals ?? 0) : 'n/a';
+        const formatWindSpeed = (elem, valu) => (valu != null) ? (valu / 3.6).toFixed (elem.decimals ?? 0) : 'n/a';
+		const formatWindDirection = (elem, valu) => (valu == null) ? 'n/a' : `${valu.toFixed(elem.decimals ?? 0)}° ${['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'] [ Math.floor(((valu + 11.25) % 360) / 22.5) ]}`;
         const secs = [
-            {
-                name: 'Lake', id: 'lake',
-                elems: [
-                    { label: 'Surface', id: 'surface', unit: '°C', path: 'weather/branna.tf_ch1', decimals: 1, format },
-                    { label: 'Submerged', id: 'submerged', unit: '°C', path: 'weather/branna.tf_ch2', decimals: 1, format }
-                ]
-            },
             {
                 name: 'Outside', id: 'outside',
                 elems: [
                     { label: 'Temperature', id: 'temp', unit: '°C', path: 'weather/branna.temp', decimals: 1, format },
                     { label: 'Humidity', id: 'humidity', unit: '%', path: 'weather/branna.humidity', format },
-                    { label: 'Pressure', id: 'pressure', unit: 'hPa', path: 'weather/branna.baromrel', format }
-                ]
+                    { label: 'Pressure', id: 'pressure', unit: 'hPa', path: 'weather/branna.baromrel', format },
+                    { label: 'Wind Speed', id: 'windspeed', unit: 'm/s', path: 'weather/branna.windspeed', decimals: 1, format: formatWindSpeed },
+                    { label: 'Wind Gust', id: 'windgust', unit: 'm/s', path: 'weather/branna.windgust', decimals: 1, format: formatWindSpeed },
+                    { label: 'Wind Direction', id: 'winddir', unit: '', path: 'weather/branna.winddir', format: formatWindDirection },
+                    { label: 'Solar Radiation', id: 'solarrad', unit: 'W/m²', path: 'weather/branna.solarradiation', decimals: 1, format },
+                    { label: 'Solar UVI', id: 'solaruv', unit: '', path: 'weather/branna.uv',  decimals: 1,format: format },
+					{ label: 'Rain Rate', id: 'rainrate', unit: 'mm/hr', path: 'weather/branna.rainrate',  decimals: 1, format: format },
+                    { label: 'Rain Daily', id: 'raindaily', unit: 'mm', path: 'weather/branna.dailyrain',  decimals: 1, format: format }
+				]
             },
             {
-                name: 'Ulrikashus', id: 'ulrikashus',
+                name: 'Lake', id: 'lake',
                 elems: [
-                    { label: 'Temperature', id: 'temp', unit: '°C', path: 'weather/ulrikashus.tempin', decimals: 1, format },
-                    { label: 'Humidity', id: 'humidity', unit: '%', path: 'weather/ulrikashus.humidityin', format },
-                    { label: 'Pressure', id: 'pressure', unit: 'hPa', path: 'weather/ulrikashus.baromrel', format }
+                    { label: 'Surface (-15cm)', id: 'surface', unit: '°C', path: 'weather/branna.tf_ch1', decimals: 1, format },
+                    { label: 'Submerged (-1m)', id: 'submerged', unit: '°C', path: 'weather/branna.tf_ch2', decimals: 1, format }
                 ]
             },
-            {
-                name: 'Mormorshus', id: 'mormorshus',
-                elems: [
-                    { label: 'Temperature', id: 'temp', unit: '°C', path: 'weather/mormorshus.tempin', decimals: 1, format },
-                    { label: 'Humidity', id: 'humidity', unit: '%', path: 'weather/mormorshus.humidityin', format },
-                    { label: 'Pressure', id: 'pressure', unit: 'hPa', path: 'weather/mormorshus.baromrel', format }
-                ]
-	    }
         ];
+		//
         const locate = (data, path) => path.split ('.').reduce ((accm, part) => accm && accm [part], data);
 		const create = (secs, vars) => {
 			const __elem = (sect, elem, vars) => `
@@ -120,7 +158,7 @@
                 	<span class="label">${elem.label}</span>
                 	<span class="value">
                     	<span id="${sect}-${elem.id}">${elem.format (elem, locate (vars, elem.path))}</span>
-                    	<span class="unit">${elem.unit}</span>
+ 						${elem.unit ? `<span class="unit">${elem.unit}</span>` : ''}
                 	</span>
             	</div>`;
 			const __sect = (sect, vars) => `
@@ -128,16 +166,58 @@
                 	<h2>${sect.name}</h2>
                 	${sect.elems.map (elem => __elem (sect.id, elem, vars)).join ('')}
             	</section> `;
-            document.getElementById ('weather-dashboard').innerHTML = secs.map (sect => __sect (sect, vars)).join ('');
+    		const timestamp = locate(vars, config.var_timestamp);
+   			const linkshtml = config.external_links.map(link => {
+            	const [label, url] = Object.entries(link)[0];
+            	return `<a href="${url}" target="_blank"><strong>${label}</strong></a>`;
+        	}).join(' | ');
+    		document.getElementById('weather-dashboard').innerHTML = `
+        		${secs.map(sect => __sect(sect, vars)).join('')}
+    			<section class="section">
+        			<h2>Camera</h2>
+        			<div class="camera-container">
+            			<a href="/snapshot.jpg" target="_blank">
+                			<img src="/snapshot.jpg" alt="Camera View" onload="setTimeout(() => this.src='/snapshot.jpg?'+new Date().getTime(), 30000)" class="weather-camera">
+            			</a>
+            			<div class="camera-hint">Click image to view full size</div>
+        			</div>
+    			</section>
+        		<div class="update-timestamp">
+            		Updated <span id="last-update">${timestamp || 'n/a'}</span>
+            		(<span id="time-ago"></span>)
+        		</div>
+				<div class="external-links">
+					${linkshtml}
+				</div>
+    		`;
+    		updateTimeAgo(timestamp);
 		}
-		const update = (vars) =>
+		const update = (vars) => {
 			secs.forEach (sect =>
 				sect.elems.forEach (elem => {
                     const valu = locate (vars, elem.path), id = `${sect.id}-${elem.id}`;
             		if (valu != null && document.getElementById (id) != null) document.getElementById (id).textContent = elem.format (elem, valu);
 				}
 			));
+    		const timestamp = locate(vars, config.var_timestamp);
+    		const timestampElement = document.getElementById('last-update');
+    		if (timestamp != null && timestampElement != null) {
+    			timestampElement.textContent = timestamp;
+				updateTimeAgo(timestamp);
+			}
+		};
+		let timeagoInterval;
+		const updateTimeAgo = (timestamp) => {
+    		const timeagoElement = document.getElementById('time-ago');
+    		if (timeagoInterval)
+        		clearInterval(timeagoInterval);
+    		const updateCounter = () =>
+        		timeagoElement.textContent = `${Math.max (Math.floor((new Date () - new Date (timestamp.replace(/([+-]\d{2})Z$/, '$1:00'))) / 1000), 0)} secs ago`;
+    		updateCounter();
+    		timeagoInterval = setInterval(updateCounter, 1000);
+		};
         create (secs, <%- JSON.stringify (vars) %>);
+		//
         io ().on ('update', update);
     </script>
 </body>
