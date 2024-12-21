@@ -37,7 +37,7 @@ const subs = [ 'weather/#' ];
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-//const http = require('http');
+const http = require('http');
 const https = require('https');
 
 const letsencrypt = `/etc/letsencrypt/live/${fqdn}`;
@@ -69,10 +69,16 @@ xxx.use (require ('express-minify-html') ({
         }
 }));
 xxx.use (exp.static ('/dev/shm'));
+xxx.use((req, res, next) => {
+    if (req.path === '/' && !req.secure) {
+        return res.redirect(`https://${req.headers.host.split(':')[0]}${req.url}`);
+    }
+    next();
+});
 
-//const server = http.createServer (xxx);
-const server = https.createServer(credentials, xxx);
-const socket = require ('socket.io') (server);
+const httpsServer = https.createServer(credentials, xxx);
+const httpServer = http.createServer (xxx);
+const socket = require ('socket.io') (httpsServer);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -124,7 +130,7 @@ xxx.get ('/', function (req, res) {
 
 xxx.get ('/vars', function (req, res) {
     console.log (`/vars requested from '${req.headers ['x-forwarded-for'] || req.connection.remoteAddress}'`);
-    res.json ({ mqtt_content });
+    res.json ( mqtt_content );
 });
 
 //
@@ -212,10 +218,13 @@ xxx.get ('/sets', (req, res) => {
 xxx.use (function (req, res) {
     res.status (404).send ("not found");
 });
-server.listen (port, function () {
-    const { family, address, port } = server.address ();
-    console.log (`express up for '${name}' ! -> ${family}/${address}:${port} [${data}]`);
+httpServer.listen(80, function() {
+    console.log(`express http up for '${name}' ! -> ${httpServer.address().port}`);
 });
+httpsServer.listen(443, function() {
+    console.log(`express https up for '${name}' ! -> ${httpsServer.address().port}`);
+});
+
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 

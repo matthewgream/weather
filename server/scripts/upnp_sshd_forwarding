@@ -2,11 +2,11 @@
 
 # requires UPNP_SERVICE, UPNP_PORT_EXT, UPNP_PORT_INT, UPNP_PROTOCOL
 
-ADDRESS=`ip address | grep 192 | awk '{ print $2; }' | sed s,/.*$,,`
+ADDRESS=`ip address | grep 192 | grep -v 254 | awk '{ print $2; }' | sed s,/.*$,,`
 CHECK=`/usr/bin/upnpc -l | grep $UPNP_SERVICE`
 if [ -z "$CHECK" ]; then
         /usr/bin/upnpc -e $UPNP_SERVICE -r $UPNP_PORT_INT $UPNP_PORT_EXT $UPNP_PROTOCOL
 elif [[ "$CHECK" != *"$ADDRESS"* ]] || [[ "$CHECK" != *"$UPNP_PORT_EXT"* ]] || [[ "$CHECK" != *"$UPNP_PORT_INT"* ]]; then
         /usr/bin/upnpc -d $UPNP_PORT_EXT $UPNP_PROTOCOL
-        /usr/bin/upnpc -e $UPNP_SERVICE -r $UPNP_PORT_INT $UPNP_PORT_EXT $UPNP_PROTOCOL
+        /usr/bin/upnpc -e $UPNP_SERVICE -a $ADDRESS $UPNP_PORT_INT $UPNP_PORT_EXT $UPNP_PROTOCOL
 fi
