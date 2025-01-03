@@ -161,11 +161,21 @@
  						${elem.unit ? `<span class="unit">${elem.unit}</span>` : ''}
                 	</span>
             	</div>`;
-			const __sect = (sect, vars) => `
-            	<section class="section">
-                	<h2>${sect.name}</h2>
-                	${sect.elems.map (elem => __elem (sect.id, elem, vars)).join ('')}
-            	</section> `;
+			const __sect = (sect, vars) => {
+                const timestamp = locate (vars, config.var_timestamp);
+                const timeDiff = Math.floor ((new Date () - new Date (timestamp.replace (/([+-]\d{2})Z$/, '$1:00'))) / (60 * 1000));
+                const warningBanner = (sect.id === 'outside' && timeDiff > 60) ?
+                    `<div style="background-color: #fee2e2; border: 1px solid #ef4444; padding: 1rem; margin-bottom: 1rem; border-radius: 0.375rem; font-weight: bold;">
+                        Weather data was last received at ${timestamp} (more than ${Math.floor(timeDiff)} minutes ago), thus the local weather station connection is offline.
+						Please use <a href="https://www.wunderground.com/dashboard/pws/IBRUNS40">Weather Underground</a>. The Camera image is up to date.
+                    </div>` : '';
+                return `
+                    <section class="section">
+                        ${warningBanner}
+                        <h2>${sect.name}</h2>
+                        ${sect.elems.map(elem => __elem(sect.id, elem, vars)).join('')}
+                    </section>`;
+            };
     		const timestamp = locate(vars, config.var_timestamp);
    			const linkshtml = config.external_links.map(link => {
             	const [label, url] = Object.entries(link)[0];
