@@ -82,30 +82,43 @@
 		.external-links a:hover {
     		text-decoration: underline;
 		}
-		.camera-container {
-    		text-align: center;
-    		margin: 20px 0;
-		}
-		.weather-camera {
-    		max-width: 100%;
-    		height: auto;
-    		border-radius: 4px;
-    		box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-		}
-		.camera-hint {
-    		font-size: 0.8em;
-    		color: #666;
-    		margin-top: 5px;
-    		text-align: center;
-    		font-style: italic;
-		}
-		.camera-container a {
-    		display: inline-block;
-    		cursor: pointer;
-		}
-		.weather-camera:hover {
-    		opacity: 0.9;
-		}
+        .camera-container {
+            text-align: center;
+            margin: 20px 0;
+            position: relative;
+        }
+        .weather-camera {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: opacity 0.2s ease;
+        }
+        .camera-hint {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+        .camera-container:hover .camera-hint {
+            opacity: 1;
+        }
+        .camera-container:hover .weather-camera {
+            opacity: 0.8;
+        }
+        .camera-container a {
+            display: inline-block;
+            cursor: pointer;
+            position: relative;
+        }
         .mode-switch {
             text-align: left;
             font-size: var(--font-size-sm);
@@ -184,7 +197,7 @@
 
 		const getWeatherInterpretation = (data) => {
 
-    		const { temp, humidity, pressure, windSpeed, solarRad, uv, rainRate, lakeSurface, lakeSubmerged } = data;
+    		const { temp, humidity, pressure, windSpeed, solarRad, uv, rainRate } = data;
 
 			let conditions = [];
 			if (pressure < 980)
@@ -263,17 +276,16 @@
             const solarUvi = locate(vars, outside.elems[7].path);
             const rainRate = locate(vars, outside.elems[8].path);
             const rainDaily = locate(vars, outside.elems[9].path);
-
+			//
             const lakeSurface = locate(vars, lake.elems[0].path);
             const lakeSubmerged = locate(vars, lake.elems[1].path);
-
+			//
 			const weatherData = {
     			temp, humidity, pressure,
     			windSpeed: windSpeed ? windSpeed / 3.6 : 0, // Convert to m/s if needed
     			solarRad: solarRad || 0,
     			uv: solarUvi || 0,
     			rainRate: rainRate || 0,
-    			lakeSurface, lakeSubmerged
 			};
 
             const formattedTemp = outside.elems[0].format(outside.elems[0], temp);
@@ -286,12 +298,11 @@
             const formattedSolarUvi = outside.elems[7].format(outside.elems[7], solarUvi);
             const formattedRainRate = outside.elems[8].format(outside.elems[8], rainRate);
             const formattedRainDaily = outside.elems[9].format(outside.elems[9], rainDaily);
+			//
             const formattedLakeSurface = lake.elems[0].format(lake.elems[0], lakeSurface);
             const formattedLakeSubmerged = lake.elems[1].format(lake.elems[1], lakeSubmerged);
 
-			let summary = "";
-
-    		summary += `<span class="value">${formattedTemp}°C</span> at <span class="value">${formattedHumidity}%</span> and <span class="value">${formattedPressure}</span> hPa.<br>`;
+    		let summary = `<span class="value">${formattedTemp}°C</span> at <span class="value">${formattedHumidity}%</span> and <span class="value">${formattedPressure}</span> hPa.<br>`;
     		if (windSpeed === null || windSpeed === 0)
         		summary += "No wind.<br>";
     		else if (windGust === null || windGust === 0 || windGust <= windSpeed)
@@ -299,7 +310,7 @@
     		else
         		summary += `Wind <span class="value">${formattedWindSpeed}</span> m/s from <span class="value">${formattedWindDir}</span>, gusting <span class="value">${formattedWindGust}</span> m/s</span>.<br>`;
     		if ((solarRad === null || solarRad === 0) && (solarUvi === null || solarUvi === 0))
-        		summary += "No solar radiation.<br>";
+        		summary += "No solar.<br>";
     		else
         		summary += `Solar radiation <span class="value">${formattedSolarRad}</span> W/m² with UVI <span class="value">${formattedSolarUvi}</span>.<br>`;
     		if ((rainRate === null || rainRate === 0) && (rainDaily === null || rainDaily === 0))
@@ -314,7 +325,7 @@
 
             return summary;
         };
-        const getCurrentMode = () => {
+        const getMode = () => {
             return localStorage.getItem('displayMode') || 'table';
         };
         const setMode = (mode) => {
@@ -322,7 +333,7 @@
             create(secs, <%- JSON.stringify(vars) %>);
         };
 		const create = (secs, vars) => {
-			const mode = getCurrentMode();
+			const mode = getMode();
             const __elem = (sect, elem, vars) => `
             	<div class="data-row">
                 	<span class="label">${elem.label}</span>
@@ -369,15 +380,15 @@
 			document.getElementById('weather-dashboard').innerHTML = `
     			${modeSwitch}
     			${secs.map(sect => __sect(sect, vars)).join('')}
-    			<section class="section">
-        			${mode === 'text' ? '' : '<h2>Camera</h2>'}
-        			<div class="camera-container">
-            			<a href="/snapshot.jpg" target="_blank">
-                			<img src="/snapshot.jpg" alt="Camera View" onload="setTimeout(() => this.src='/snapshot.jpg?'+new Date().getTime(), 30000)" class="weather-camera">
-            			</a>
-            			<div class="camera-hint">Click image to view full size</div>
-        			</div>
-    			</section>
+				<section class="section">
+    				${mode === 'text' ? '' : '<h2>Camera</h2>'}
+    				<div class="camera-container">
+        				<a href="/snapshot.jpg" target="_blank">
+            				<img src="/snapshot.jpg" alt="Camera View" onload="setTimeout(() => this.src='/snapshot.jpg?'+new Date().getTime(), 30000)" class="weather-camera">
+            				<div class="camera-hint">Click to view full size</div>
+        				</a>
+    				</div>
+				</section>
     			<div class="update-timestamp">
         			Updated <span id="last-update">${timestamp || 'n/a'}</span>
         			(<span id="time-ago"></span>)
@@ -389,7 +400,7 @@
     		updateTimeAgo(timestamp);
 		}
 		const update = (vars) => {
-            const mode = getCurrentMode();
+            const mode = getMode();
             if (mode === 'text') {
                 create(secs, vars);
                 return;
