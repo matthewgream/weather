@@ -106,6 +106,28 @@
 		.weather-camera:hover {
     		opacity: 0.9;
 		}
+        .mode-switch {
+            text-align: left;
+            font-size: var(--font-size-sm);
+            margin-bottom: 0.95rem;
+            font-style: italic;
+        }
+        .mode-switch a {
+            color: var(--primary-color);
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .mode-switch a:hover {
+            text-decoration: underline;
+        }
+        .text-summary {
+            line-height: 1.3;
+            margin-bottom: var(--spacing-md);
+        }
+        .text-summary .value {
+            color: var(--primary-color);
+            font-weight: bold;
+        }
         @media (max-width: 480px) {
             .dashboard { padding: var(--spacing-md); }
             .data-row {
@@ -152,8 +174,156 @@
         ];
 		//
         const locate = (data, path) => path.split ('.').reduce ((accm, part) => accm && accm [part], data);
+
+		const joinAnd = (items) => {
+    		if (!items || items.length === 0) return "";
+    		if (items.length === 1) return items[0];
+    		if (items.length === 2) return `${items[0]} and ${items[1]}`;
+    		return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+		};
+
+		const getWeatherInterpretation = (data) => {
+
+    		const { temp, humidity, pressure, windSpeed, solarRad, uv, rainRate, lakeSurface, lakeSubmerged } = data;
+
+			let conditions = [];
+			if (pressure < 980)
+        		conditions.push("stormy");
+    		else if (pressure < 1000)
+        		conditions.push("unsettled");
+    		else if (pressure > 1030)
+        		conditions.push("stable");
+    		if (temp < -10)
+        		conditions.push("extremely cold");
+    		else if (temp < 0)
+        		conditions.push("freezing");
+    		else if (temp < 5)
+        		conditions.push("cold");
+    		else if (temp < 10)
+        		conditions.push("chilly");
+    		else if (temp < 18)
+        		conditions.push("cool");
+    		else if (temp < 24)
+        		;	// conditions.push("comfortable");
+    		else if (temp < 30)
+        		conditions.push("warm");
+    		else
+        		conditions.push("hot");
+    		if (humidity > 90)
+        		conditions.push("very humid");
+    		else if (humidity > 70)
+        		conditions.push("humid");
+    		else if (humidity < 30)
+        		conditions.push("dry");
+    		let result_conditions = conditions.length > 0 ? joinAnd (conditions) : "";
+
+    		const dewPoint = temp - ((100 - humidity) / 5);
+    		const hour = new Date().getHours();
+			let interpreted = [];
+    		if (temp < 0 && humidity > 85)
+        		interpreted.push ("likely frost/snow");
+    		else if (temp > 25 && humidity > 80)
+        		interpreted.push ("muggy");
+    		else if (pressure < 1000 && humidity > 80)
+        		interpreted.push ("likely rain");
+    		else if (pressure > 1020 && humidity < 40)
+        		interpreted.push ("clear/dry");
+    		if (temp < 10 && windSpeed > 3 && !result.includes("frost"))
+        		interpreted.push ("feels colder (wind chill)");
+    		if (temp > 20 && humidity > 60 && !result.includes("muggy"))
+        		interpreted.push ("feels warmer (humidity)");
+    		if (solarRad > 500)
+        		interpreted.push ("strong sun");
+    		else if (solarRad > 0 && solarRad < 100 && temp > 0 && !result.includes("rain"))
+        		interpreted.push ("overcast");
+    		if (Math.abs(temp - dewPoint) < 2.5 && temp > 0)
+        		interpreted.push ("possible fog");
+    		if (temp < 3 && temp > -2 && rainRate > 0)
+        		interpreted.push ("possible freezing rain");
+    		if (temp < 5 && hour > 5 && hour < 10)
+        		interpreted.push ("morning chill");
+    		let result_interpreted = interpreted.length > 0 ? joinAnd (interpreted) : "";
+
+			let result = result_conditions + (result_conditions.length > 0 && result_interpreted.length > 0 ? ": " : "") + result_interpreted;
+    		return result.length > 0 ? result.charAt(0).toUpperCase() + result.slice(1) + "." : null;
+		};	
+	
+        const createTextSummary = (vars) => {
+
+            const outside = secs[0];
+            const lake = secs[1];
+
+            const temp = locate(vars, outside.elems[0].path);
+            const humidity = locate(vars, outside.elems[1].path);
+            const pressure = locate(vars, outside.elems[2].path);
+            const windSpeed = locate(vars, outside.elems[3].path);
+            const windGust = locate(vars, outside.elems[4].path);
+            const windDir = locate(vars, outside.elems[5].path);
+            const solarRad = locate(vars, outside.elems[6].path);
+            const solarUvi = locate(vars, outside.elems[7].path);
+            const rainRate = locate(vars, outside.elems[8].path);
+            const rainDaily = locate(vars, outside.elems[9].path);
+
+            const lakeSurface = locate(vars, lake.elems[0].path);
+            const lakeSubmerged = locate(vars, lake.elems[1].path);
+
+			const weatherData = {
+    			temp, humidity, pressure,
+    			windSpeed: windSpeed ? windSpeed / 3.6 : 0, // Convert to m/s if needed
+    			solarRad: solarRad || 0,
+    			uv: solarUvi || 0,
+    			rainRate: rainRate || 0,
+    			lakeSurface, lakeSubmerged
+			};
+
+            const formattedTemp = outside.elems[0].format(outside.elems[0], temp);
+            const formattedHumidity = outside.elems[1].format(outside.elems[1], humidity);
+            const formattedPressure = outside.elems[2].format(outside.elems[2], pressure);
+            const formattedWindSpeed = outside.elems[3].format(outside.elems[3], windSpeed);
+            const formattedWindGust = outside.elems[4].format(outside.elems[4], windGust);
+            const formattedWindDir = outside.elems[5].format(outside.elems[5], windDir).replace('n/a', '');
+            const formattedSolarRad = outside.elems[6].format(outside.elems[6], solarRad);
+            const formattedSolarUvi = outside.elems[7].format(outside.elems[7], solarUvi);
+            const formattedRainRate = outside.elems[8].format(outside.elems[8], rainRate);
+            const formattedRainDaily = outside.elems[9].format(outside.elems[9], rainDaily);
+            const formattedLakeSurface = lake.elems[0].format(lake.elems[0], lakeSurface);
+            const formattedLakeSubmerged = lake.elems[1].format(lake.elems[1], lakeSubmerged);
+
+			let summary = "";
+
+    		summary += `<span class="value">${formattedTemp}°C</span> at <span class="value">${formattedHumidity}%</span> and <span class="value">${formattedPressure}</span> hPa.<br>`;
+    		if (windSpeed === null || windSpeed === 0)
+        		summary += "No wind.<br>";
+    		else if (windGust === null || windGust === 0 || windGust <= windSpeed)
+        		summary += `Wind <span class="value">${formattedWindSpeed}</span> m/s from <span class="value">${formattedWindDir}</span>.<br>`;
+    		else
+        		summary += `Wind <span class="value">${formattedWindSpeed}</span> m/s from <span class="value">${formattedWindDir}</span>, gusting <span class="value">${formattedWindGust}</span> m/s</span>.<br>`;
+    		if ((solarRad === null || solarRad === 0) && (solarUvi === null || solarUvi === 0))
+        		summary += "No solar radiation or UVI.<br>";
+    		else
+        		summary += `Solar radiation <span class="value">${formattedSolarRad}</span> W/m² with UVI <span class="value">${formattedSolarUvi}</span>.<br>`;
+    		if ((rainRate === null || rainRate === 0) && (rainDaily === null || rainDaily === 0))
+        		summary += "No rain.<br>";
+    		else
+        		summary += `Rain <span class="value">${formattedRainRate}</span> mm/hr (<span class="value">${formattedRainDaily}</span>mm today).<br>`;
+    		summary += `Lake <span class="value">${formattedLakeSurface}°C</span> surface and <span class="value">${formattedLakeSubmerged}°C</span> below.`;
+
+			let interpretation = getWeatherInterpretation(weatherData);
+			if (interpretation !== null)
+				summary += `<br><br>${interpretation}`;
+
+            return summary;
+        };
+        const getCurrentMode = () => {
+            return localStorage.getItem('displayMode') || 'table';
+        };
+        const setMode = (mode) => {
+            localStorage.setItem('displayMode', mode);
+            create(secs, <%- JSON.stringify(vars) %>);
+        };
 		const create = (secs, vars) => {
-			const __elem = (sect, elem, vars) => `
+			const mode = getCurrentMode();
+            const __elem = (sect, elem, vars) => `
             	<div class="data-row">
                 	<span class="label">${elem.label}</span>
                 	<span class="value">
@@ -169,22 +339,38 @@
                         Weather data was last received at ${timestamp} (more than ${Math.floor(timeDiff)} minutes ago), thus the local weather station connection is offline.
 						Please use <a href="https://www.wunderground.com/dashboard/pws/IBRUNS40">Weather Underground</a>. The Camera image is up to date.
                     </div>` : '';
-                return `
-                    <section class="section">
-                        ${warningBanner}
-                        <h2>${sect.name}</h2>
-                        ${sect.elems.map(elem => __elem(sect.id, elem, vars)).join('')}
-                    </section>`;
+				if (mode === 'text' && sect.id === 'outside') {
+    				return `
+        				<section class="section">
+            				${warningBanner}
+            				<div class="text-summary">${createTextSummary(vars)}</div>
+        				</section>`;
+				} else if (mode === 'text' && sect.id === 'lake') {
+    				return ''; // Skip lake section in text mode as it's included in the summary
+				} else {
+    				return `
+        				<section class="section">
+            				${warningBanner}
+            				<h2>${sect.name}</h2>
+            				${sect.elems.map(elem => __elem(sect.id, elem, vars)).join('')}
+        				</section>`;
+				}
             };
     		const timestamp = locate(vars, config.var_timestamp);
    			const linkshtml = config.external_links.map(link => {
             	const [label, url] = Object.entries(link)[0];
             	return `<a href="${url}" target="_blank"><strong>${label}</strong></a>`;
         	}).join(' | ');
-    		document.getElementById('weather-dashboard').innerHTML = `
-        		${secs.map(sect => __sect(sect, vars)).join('')}
+            const modeSwitch = `
+                <div class="mode-switch">
+                    <a onclick="setMode('${mode === 'table' ? 'text' : 'table'}')">[${mode === 'table' ? 'table' : 'text'} mode: switch to ${mode === 'table' ? 'text' : 'table'} mode]</a>
+                </div>
+            `;
+			document.getElementById('weather-dashboard').innerHTML = `
+    			${modeSwitch}
+    			${secs.map(sect => __sect(sect, vars)).join('')}
     			<section class="section">
-        			<h2>Camera</h2>
+        			${mode === 'text' ? '' : '<h2>Camera</h2>'}
         			<div class="camera-container">
             			<a href="/snapshot.jpg" target="_blank">
                 			<img src="/snapshot.jpg" alt="Camera View" onload="setTimeout(() => this.src='/snapshot.jpg?'+new Date().getTime(), 30000)" class="weather-camera">
@@ -192,17 +378,22 @@
             			<div class="camera-hint">Click image to view full size</div>
         			</div>
     			</section>
-        		<div class="update-timestamp">
-            		Updated <span id="last-update">${timestamp || 'n/a'}</span>
-            		(<span id="time-ago"></span>)
-        		</div>
-				<div class="external-links">
-					${linkshtml}
-				</div>
-    		`;
+    			<div class="update-timestamp">
+        			Updated <span id="last-update">${timestamp || 'n/a'}</span>
+        			(<span id="time-ago"></span>)
+    			</div>
+    			<div class="external-links">
+        			${linkshtml}
+    			</div>
+			`;
     		updateTimeAgo(timestamp);
 		}
 		const update = (vars) => {
+            const mode = getCurrentMode();
+            if (mode === 'text') {
+                create(secs, vars);
+                return;
+            }
 			secs.forEach (sect =>
 				sect.elems.forEach (elem => {
                     const valu = locate (vars, elem.path), id = `${sect.id}-${elem.id}`;
