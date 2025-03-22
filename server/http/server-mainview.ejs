@@ -13,22 +13,21 @@
     <div class="dashboard" id="weather-dashboard"></div>
     <script src="/socket.io/socket.io.js"></script>
     <%- include('secrets.ejs') %>
-    <script src="/static/js/mainview.js"></script>
+        <script src="/static/js/mainview.js"></script>
         <script>
-			const start = () => {
-            	create(secs, <%- JSON.stringify(vars) %>);
-			};
+            const start = () => {
+                create(secs, <%- JSON.stringify(vars) %>);
+            };
             const getMode = () => {
                 return localStorage.getItem('displayMode') || 'table';
             };
             const setMode = (mode) => {
                 localStorage.setItem('displayMode', mode);
-				start ();
+                start();
             };
-			start ();
+            start();
             io().on('update', update);
         </script>
 </body>
 
 </html>
-

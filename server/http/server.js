@@ -89,7 +89,7 @@ const socket = require('socket.io')(httpsServer);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const snapshotsTime = (24*2 + 2) * 60 * 60; // 2 days + 2 hours, in seconds
+const snapshotsTime = (24 * 2 + 2) * 60 * 60; // 2 days + 2 hours, in seconds
 const snapshotsDir__ = '/opt/snapshots';
 let snapshotsList__ = [];
 
@@ -113,7 +113,7 @@ async function snapshotLoad() {
         snapshotsList__ = files
             .filter(file => file.match(/snapshot_\d{14}\.jpg/))
             .sort((a, b) => (snapshotTimestampParser(b) || 0) - (snapshotTimestampParser(a) || 0));
-        console.log(`Loaded snapshot list with ${snapshotsList__.length} existing files (with expiration of ${snapshotsTime/60/60} hours)`);
+        console.log(`Loaded snapshot list with ${snapshotsList__.length} existing files (with expiration of ${snapshotsTime / 60 / 60} hours)`);
 
     } catch (error) {
         console.error('Error loading snapshot list:', error);

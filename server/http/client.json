@@ -1,22 +1,32 @@
 {
   "C8F09E072534": {
     "house": {
-      "__runtime": "weather/ulrikashus/runtime", "__checks": ["weather/ulrikashus/tempin", "weather/ulrikashus/humidityin", "weather/ulrikashus/baromrel"]
+      "__runtime": "weather/ulrikashus/runtime",
+      "__checks": [
+        "weather/ulrikashus/tempin",
+        "weather/ulrikashus/humidityin",
+        "weather/ulrikashus/baromrel"
+      ],
       "temp": "weather/ulrikashus/tempin",
       "humidity": "weather/ulrikashus/humidityin",
-      "barom": "weather/ulrikashus/baromrel",
+      "barom": "weather/ulrikashus/baromrel"
     },
     "outside": {
-      "__runtime": "weather/branna/runtime", "__checks": ["weather/branna/temp", "weather/branna/humidity", "weather/branna/baromrel"]
+      "__runtime": "weather/branna/runtime",
+      "__checks": [
+        "weather/branna/temp",
+        "weather/branna/humidity",
+        "weather/branna/baromrel"
+      ],
       "temp": "weather/branna/temp",
       "humidity": "weather/branna/humidity",
-      "barom": "weather/branna/baromrel",
+      "barom": "weather/branna/baromrel"
     },
-	"lake": {
+    "lake": {
       "surface_temp": "weather/branna/tf_ch1",
       "submerged_temp": "weather/branna/tf_ch2",
       "surface_batt": "weather/branna/tf_batt1",
       "submerged_batt": "weather/branna/tf_batt2"
-	}
+    }
   }
 }
