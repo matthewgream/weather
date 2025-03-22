@@ -34,6 +34,7 @@ const port = conf.PORT;
 const data = conf.DATA;
 const data_views = data + '/http';
 const data_images = data + '/images';
+const data_assets = data + '/assets';
 
 const subs = ['weather/#'];
 
@@ -57,6 +58,7 @@ const exp = require('express');
 const xxx = exp();
 xxx.set('view engine', 'ejs');
 xxx.set('views', data_views);
+/*
 xxx.use(require('express-minify-html')({
     override: true,
     exception_url: false,
@@ -71,6 +73,7 @@ xxx.use(require('express-minify-html')({
         minifyURLs: true
     }
 }));
+*/
 xxx.use(exp.static('/dev/shm'));
 xxx.use((req, res, next) => {
     if (req.path === '/' && !req.secure) {
@@ -251,6 +254,7 @@ mqtt_client.on('message', (topic, message) => {
 xxx.get('/', function (req, res) {
     res.render('server-mainview', { vars: { 'weather/branna': mqtt_content['weather/branna'] } });
 });
+xxx.use('/static', exp.static(data_assets));
 
 xxx.get('/vars', function (req, res) {
     console.log(`/vars requested from '${req.headers['x-forwarded-for'] || req.connection.remoteAddress}'`);
@@ -417,8 +421,14 @@ xxx.get('/sets', (req, res) => {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 xxx.use(function (req, res) {
+    const clientIP = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+    console.error(`[${new Date().toISOString()}] 404 Not Found: ${req.method} ${req.url} from ${clientIP}`);
+    console.error(`  User-Agent: ${req.headers['user-agent']}`);
+    console.error(`  Referrer: ${req.headers['referer'] || 'none'}`);
+    console.error(`  Route path: ${req.path}`);
     res.status(404).send("not found");
 });
+
 httpServer.listen(80, function () {
     console.log(`express http up for '${name}' ! -> ${httpServer.address().port}`);
 });
