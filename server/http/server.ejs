@@ -228,7 +228,7 @@
         		conditions.push("humid");
     		else if (humidity < 30)
         		conditions.push("dry");
-    		let result_conditions = conditions.length > 0 ? joinAnd (conditions) : "";
+    		let result = conditions.length > 0 ? joinAnd (conditions) : "";
 
     		const dewPoint = temp - ((100 - humidity) / 5);
     		const hour = new Date().getHours();
@@ -241,9 +241,9 @@
         		interpreted.push ("likely rain");
     		else if (pressure > 1020 && humidity < 40)
         		interpreted.push ("clear/dry");
-    		if (temp < 10 && windSpeed > 3 && !result.includes("frost"))
+    		if (temp < 10 && windSpeed > 3 && !interpreted.includes("frost"))
         		interpreted.push ("feels colder (wind chill)");
-    		if (temp > 20 && humidity > 60 && !result.includes("muggy"))
+    		if (temp > 20 && humidity > 60 && !interpreted.includes("muggy"))
         		interpreted.push ("feels warmer (humidity)");
     		if (solarRad > 500)
         		interpreted.push ("strong sun");
@@ -257,7 +257,7 @@
         		interpreted.push ("morning chill");
     		let result_interpreted = interpreted.length > 0 ? joinAnd (interpreted) : "";
 
-			let result = result_conditions + (result_conditions.length > 0 && result_interpreted.length > 0 ? ": " : "") + result_interpreted;
+			result += (result.length > 0 && result_interpreted.length > 0 ? ": " : "") + result_interpreted;
     		return result.length > 0 ? result.charAt(0).toUpperCase() + result.slice(1) + "." : null;
 		};	
 	
@@ -302,22 +302,33 @@
             const formattedLakeSurface = lake.elems[0].format(lake.elems[0], lakeSurface);
             const formattedLakeSubmerged = lake.elems[1].format(lake.elems[1], lakeSubmerged);
 
-    		let summary = `<span class="value">${formattedTemp}°C</span> at <span class="value">${formattedHumidity}%</span> and <span class="value">${formattedPressure}</span> hPa.<br>`;
-    		if (windSpeed === null || windSpeed === 0)
+    		let summary = `Temp <span class="value">${formattedTemp}°C</span> at <span class="value">${formattedHumidity}%</span> and <span class="value">${formattedPressure}</span> hPa.<br>`;
+    		if (!windSpeed)
         		summary += "No wind.<br>";
-    		else if (windGust === null || windGust === 0 || windGust <= windSpeed)
-        		summary += `Wind <span class="value">${formattedWindSpeed}</span> m/s from <span class="value">${formattedWindDir}</span>.<br>`;
-    		else
-        		summary += `Wind <span class="value">${formattedWindSpeed}</span> m/s from <span class="value">${formattedWindDir}</span>, gusting <span class="value">${formattedWindGust}</span> m/s</span>.<br>`;
-    		if ((solarRad === null || solarRad === 0) && (solarUvi === null || solarUvi === 0))
-        		summary += "No solar.<br>";
-    		else
-        		summary += `Solar radiation <span class="value">${formattedSolarRad}</span> W/m² with UVI <span class="value">${formattedSolarUvi}</span>.<br>`;
-    		if ((rainRate === null || rainRate === 0) && (rainDaily === null || rainDaily === 0))
+    		else { 
+        		summary += `Wind <span class="value">${formattedWindSpeed}</span> m/s <span class="value">${formattedWindDir}</span>`;
+				if (windGust && windGust > windSpeed)
+        			summary += `, gusting <span class="value">${formattedWindGust}</span> m/s</span>`;
+        		summary += `.<br>`;
+			}
+    		if (!rainRate && !rainDaily)
         		summary += "No rain.<br>";
-    		else
-        		summary += `Rain <span class="value">${formattedRainRate}</span> mm/hr (<span class="value">${formattedRainDaily}</span>mm today).<br>`;
-    		summary += `Lake <span class="value">${formattedLakeSurface}°C</span> surface and <span class="value">${formattedLakeSubmerged}°C</span> below.`;
+    		else {
+				if (!rainRate && rainDaily)
+        			summary += `No rain`;
+				else
+        			summary += `Rain <span class="value">${formattedRainRate}</span> mm/hr`;
+        		summary += ` (<span class="value">${formattedRainDaily}</span>mm today).<br>`;
+			}
+    		if (!solarRad && !solarUvi)
+        		summary += "No solar.<br>";
+    		else {
+        		summary += `Solar <span class="value">${formattedSolarRad}</span> W/m²</span>`;
+				if (solarUvi)
+        			summary += ` with UVI <span class="value">${formattedSolarUvi}</span>`;
+        		summary += `.<br>`;
+			}
+    		summary += `Lake <span class="value">${formattedLakeSurface}°C</span> above and <span class="value">${formattedLakeSubmerged}°C</span> below.`;
 
 			let interpretation = getWeatherInterpretation(weatherData);
 			if (interpretation !== null)

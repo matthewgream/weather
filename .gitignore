@@ -1,6 +1,6 @@
 third_party
 node_modules
 build
-[sS]ecrets.*
+[sS]ecrets*
 package-lock.json
 .theia
