@@ -247,21 +247,19 @@ const thumbnails = [
     { file: 'snapshot_M45.jpg', label: 'T-45mins' },
     { file: 'snapshot_M60.jpg', label: 'T-60mins' }
 ];
-const clientThumbnailCache = {};
+const thumbnailsCache = {};
 
 const createSectionThumbs = () => {
     const now = new Date();
     const dayFormat = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-    
     let thumbnailsHtml = '';
     for (const thumbnail of thumbnails) {
-        const cacheKey = thumbnail.file;
-        const thumbSrc = clientThumbnailCache[cacheKey] || 
+        const thumbnailSrc = thumbnailsCache[thumbnail.file] ||
             'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Crect width="100" height="100" fill="%23eaeaea"/%3E%3C/svg%3E';
         thumbnailsHtml += `
             <div class="thumbnail-container">
                 <a href="/${thumbnail.file}" target="_blank">
-                    <img src="${thumbSrc}" alt="${thumbnail.label}" 
+                    <img src="${thumbnailSrc}" alt="${thumbnail.label}" 
                          class="thumbnail-image"
                          data-thumbnail="${thumbnail.file}">
                     <div class="thumbnail-label">${thumbnail.label}</div>
@@ -269,7 +267,7 @@ const createSectionThumbs = () => {
             </div>
         `;
     }
-    const snapsNavHtml = `
+    const thumbnailsLinks = `
         <div class="thumbnails-placeholder">
             <div class="snaps-nav-box">
                 <div class="snaps-nav-item">
@@ -283,7 +281,7 @@ const createSectionThumbs = () => {
             </div>
         </div>
     `;
-    return thumbnailsHtml + snapsNavHtml;
+    return thumbnailsHtml + thumbnailsLinks;
 };
 
 const loadSectionThumbs = () => {
@@ -291,35 +289,33 @@ const loadSectionThumbs = () => {
     const thumbnailImages = document.querySelectorAll('.thumbnail-image[data-thumbnail]');
     thumbnailImages.forEach(img => {
         const thumbnailFile = img.getAttribute('data-thumbnail');
-        const cacheKey = thumbnailFile;
-        if (clientThumbnailCache[cacheKey]) {
-            return;
+        if (thumbnailsCache[thumbnailFile]) {
+            const thumbnailUrl = `/snapshot/thumb/${thumbnailFile}?width=200`;
+            fetch(thumbnailUrl)
+                .then(response => response.blob())
+                .then(blob => {
+                    const url = URL.createObjectURL(blob);
+                    thumbnailsCache[thumbnailFile] = url;
+                    img.src = url;
+                })
+                .catch(error => {
+                    console.error(`Error loading thumbnail ${thumbnailFile}:`, error);
+                    img.src = thumbnailUrl;
+                });
         }
-        const thumbnailUrl = `/snapshot/thumb/${thumbnailFile}?width=200`;
-        fetch(thumbnailUrl)
-            .then(response => response.blob())
-            .then(blob => {
-                const url = URL.createObjectURL(blob);
-                clientThumbnailCache[cacheKey] = url;
-                img.src = url;
-            })
-            .catch(error => {
-                console.error(`Error loading thumbnail ${thumbnailFile}:`, error);
-                img.src = thumbnailUrl; // Fallback to direct loading
-            });
     });
 };
 
 const updateSectionThumbs = () => {
     const cacheAge = localStorage.getItem('thumbnailCacheTimestamp');
     if (!cacheAge || (Date.now() - parseInt(cacheAge)) > 1 * 60 * 1000) {
-        Object.values(clientThumbnailCache).forEach(url => {
+        Object.values(thumbnailsCache).forEach(url => {
             try {
                 URL.revokeObjectURL(url);
             } catch (e) { }
         });
-        for (const key in clientThumbnailCache)
-            delete clientThumbnailCache[key];
+        for (const thumbnailFile in thumbnailsCache)
+            delete thumbnailsCache[thumbnailFile];
         const thumbnailsRow = document.getElementById('thumbnails-row');
         if (thumbnailsRow) {
             thumbnailsRow.innerHTML = createSectionThumbs();
@@ -449,7 +445,7 @@ const create = (vars) => {
         ${createSectionLinks(mode)}
 	`;
 
-	loadSectionThumbs();
+    loadSectionThumbs();
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
