@@ -82,93 +82,169 @@ const socket = require ('socket.io') (httpsServer);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const snapshotsDir = '/opt/snapshots';
-let snapshotsList = [];
+const snapshotsDir__ = '/opt/snapshots';
 
-async function initializeSnapshotsList() {
+let snapshotsList__ = [];
+function snapshotList() {
+    return snapshotsList__;
+}
+async function snapshotListInitialise() {
     const fs_async = require('fs').promises;
     const path = require('path');
     try {
-        await fs_async.mkdir(snapshotsDir, { recursive: true });
-        const files = await fs_async.readdir(snapshotsDir);
-        snapshotsList = files
-            .filter(file => file.startsWith('snapshot_') && file.endsWith('.jpg'))
-            .sort((a, b) => b.localeCompare(a));
-        console.log(`Initialized snapshots list with ${snapshotsList.length} existing files`);
+
+        await fs_async.mkdir(snapshotsDir__, { recursive: true });
+        const files = await fs_async.readdir(snapshotsDir__);
+        snapshotsList__ = files
+            .filter(file => file.match(/snapshot_\d{14}\.jpg/))
+            .sort((a, b) => {
+                const timeA = snapshotTimestamp(a) || 0;
+                const timeB = snapshotTimestamp(b) || 0;
+                return timeB - timeA;
+            });
+        console.log(`Initialized snapshots list with ${snapshotsList__.length} existing files`);
+
+        if (snapshotsList__.length > 0) {
+            const currentTime = new Date();
+            const intervals = [15, 30, 45, 60];
+            for (const minutes of intervals) {
+                const targetTime = new Date(currentTime.getTime() - minutes * 60 * 1000);
+                const targetPath = `/dev/shm/snapshot_M${minutes}.jpg`;
+                let closest = null;
+                let closestDiff = Infinity;
+                for (const file of snapshotsList__) {
+					try {
+                    	const fileTime = snapshotTimestamp(file);
+                    	if (fileTime) {
+                        	const diff = Math.abs(targetTime - fileTime);
+                        	if (diff < closestDiff) {
+                            	closestDiff = diff;
+                            	closest = file;
+                        	}
+                    	}
+                	} catch (err) {
+                    	console.error(`Error comparing file ${file}:`, err);
+                	}
+				}
+                if (closest) {
+                    try {
+                        await fs_async.copyFile(path.join(snapshotsDir__, closest), targetPath);
+                        console.log(`Created initial M${minutes} snapshot from ${closest}`);
+                    } catch (err) {
+                        console.error(`Error creating snapshot for M${minutes}:`, err);
+                    }
+                }
+            }
+        }
+
     } catch (error) {
         console.error('Error initializing snapshots list:', error);
         throw error;
     }
 }
 
-async function updateSnapshot() {
-    const exec = require('child_process').exec;
-    const fs_async = require('fs').promises;
-    const path = require('path');
-    const currentPath = '/dev/shm/snapshot.jpg';
-    const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', ''); 
-    const filename = `snapshot_${timestamp}.jpg`;
-    const snapshotPath = path.join(snapshotsDir, filename);
+async function snapshotInitialise() {
     try {
-        await new Promise((resolve, reject) => {
-            exec(`ffmpeg -y -rtsp_transport tcp -i '${conf.RTSP}' -vframes 1 -q:v 7.5 "${snapshotPath}"`,
-                (error) => {
-                    if (error) reject(error);
-                    else resolve();
-                });
-        });
-        await fs_async.copyFile(snapshotPath, currentPath);
-        snapshotsList.unshift(filename);
-        console.log(`Snapshot saved: ${filename}`);
-    } catch (error) {
-        console.error('Error updating snapshot:', error);
-        try {
-            await fs_async.unlink(snapshotPath);
-        } catch (e) {
-        }
-    }
-}
-
-function getSnapshotsList() {
-    return snapshotsList;
-}
-
-async function startSnapshotProcess() {
-    try {
-        await initializeSnapshotsList();
-        await updateSnapshot();
-        setInterval(updateSnapshot, 30000);
+        await snapshotListInitialise();
+        await snapshotUpdate();
+        setInterval(snapshotUpdate, 30000);
     } catch (error) {
         console.error('Failed to start snapshot process:', error);
         throw error;
     }
 }
 
-async function updateSnapshotX() {
-	const exec = require('child_process').exec;
-	const fs_async = require('fs').promises;
-    const tempPath = '/dev/shm/snapshot_temp.jpg';
-    const finalPath = '/dev/shm/snapshot.jpg';
+async function snapshotUpdate() {
+    const exec = require('child_process').exec;
+    const fs_async = require('fs').promises;
+    const path = require('path');
     
     try {
+        const currentTime = new Date();
+        const timestamp = currentTime.toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', ''); 
+        const filename = `snapshot_${timestamp}.jpg`;
+        const snapshotPath = path.join(snapshotsDir__, filename);
+        const currentPath = '/dev/shm/snapshot.jpg';
+        
         await new Promise((resolve, reject) => {
-            exec(`ffmpeg -y -rtsp_transport tcp -i '${conf.RTSP}' -vframes 1 -q:v 7.5 ${tempPath}`,
+            exec(`ffmpeg -y -rtsp_transport tcp -i '${conf.RTSP}' -vframes 1 -q:v 7.5 -compression_level 9 "${snapshotPath}"`,
                 (error) => {
                     if (error) reject(error);
                     else resolve();
                 });
         });
-        await fs_async.rename(tempPath, finalPath);
+        await fs_async.copyFile(snapshotPath, currentPath);
+        snapshotsList__.unshift(filename);
+
+        const cleanupTime = new Date(currentTime.getTime() - 26 * 60 * 60 * 1000);
+        const files = await fs_async.readdir(snapshotsDir__);
+        for (const file of files) {
+            if (file.startsWith('snapshot_')) {
+                try {
+                    const fileTime = snapshotTimestamp(file);
+                    if (fileTime && fileTime < cleanupTime) {
+                        const filePath = path.join(snapshotsDir__, file);
+                        await fs_async.unlink(filePath);
+                        const index = snapshotsList__.indexOf(file);
+                        if (index !== -1) {
+	    					console.log(`Snapshot removed: ${file}`);
+                            snapshotsList__.splice(index, 1);
+						}
+                    }
+                } catch (err) {
+                    console.error(`Error processing file ${file}:`, err);
+                }
+            }
+        }
+        
+        const intervals = [15, 30, 45, 60];
+        for (const minutes of intervals) {
+            const targetTime = new Date(currentTime.getTime() - minutes * 60 * 1000);
+            const targetPath = `/dev/shm/snapshot_M${minutes}.jpg`;
+            let closest = null;
+            let closestDiff = Infinity;
+            for (const file of snapshotsList__) {
+                try {
+                    const fileTime = snapshotTimestamp(file);
+                    if (fileTime) {
+                        const diff = Math.abs(targetTime - fileTime);
+                        if (diff < closestDiff) {
+                            closestDiff = diff;
+                            closest = file;
+                        }
+                    }
+                } catch (err) {
+                    console.error(`Error comparing file ${file}:`, err);
+                }
+            }
+            if (closest) {
+                try {
+                    await fs_async.copyFile(path.join(snapshotsDir__, closest), targetPath);
+                } catch (err) {
+                    console.error(`Error copying snapshot for M${minutes}:`, err);
+                }
+            }
+        }
+
+	    console.log(`Snapshot updated: ${filename}`);
+
     } catch (error) {
         console.error('Error updating snapshot:', error);
-        try {
-            await fs_async.unlink(tempPath);
-        } catch (e) {
-        }
     }
 }
-updateSnapshotX();
-setInterval(updateSnapshotX, 30000);
+
+function snapshotTimestamp(filename) {
+    const match = filename.match(/snapshot_(\d{14})\.jpg/);
+    if (match && match[1]) {
+        const timestampStr = match[1];
+        const isoString = `${timestampStr.substring(0, 4)}-${timestampStr.substring(4, 6)}-${timestampStr.substring(6, 8)}T` +
+            `${timestampStr.substring(8, 10)}:${timestampStr.substring(10, 12)}:${timestampStr.substring(12, 14)}.000Z`;
+        return new Date(isoString);
+    }
+    return null;
+}
+
+snapshotInitialise();
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -197,25 +273,217 @@ xxx.get ('/vars', function (req, res) {
 
 //
 
-xxx.get ('/snapshot/list', function (req, res) {
-    const dates = [ ...new Set (snapshotsList.map (file => file.slice (9, 17)))].sort ((a, b) => b.localeCompare (a));
-    let html = '<html><body>';
-    html += dates.map (date => `<div><a href="/snapshot/list/${date}">${date}</a></div>`).join ('\n');
-    html += '</body></html>';
-    res.send (html);
+const sharp = require('sharp');
+const crypto = require('crypto');
+const thumbnailCache = {};
+
+xxx.get('/snapshot/list', function (req, res) {
+    const dates = [...new Set(snapshotsList__.map(file => file.slice(9, 17)))].sort((a, b) => b.localeCompare(a));
+    const formattedDates = dates.map(dateStr => {
+        const year = dateStr.substring(0, 4);
+        const month = parseInt(dateStr.substring(4, 6));
+        const day = parseInt(dateStr.substring(6, 8));
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        const monthName = monthNames[month - 1]; // Convert 1-based month to 0-based index
+        return {
+            dateCode: dateStr,
+            formatted: `${year} ${monthName} ${day}`
+        };
+    });
+    let html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Snapshots</title>
+        <style>
+            body {
+                font-family: 'Inter', sans-serif;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 20px;
+                background-color: #f0f4f8;
+                color: #2d3748;
+            }
+            h1 {
+                color: #4299e1;
+                margin-bottom: 20px;
+            }
+            .date-list {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+            .date-item {
+                background-color: white;
+                padding: 12px 16px;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .date-item a {
+                color: #4299e1;
+                text-decoration: none;
+                font-weight: 500;
+                display: block;
+            }
+            .date-item a:hover {
+                text-decoration: underline;
+            }
+            .back-link {
+                margin-top: 20px;
+                display: inline-block;
+                color: #4299e1;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Snapshots</h1>
+        <div class="date-list">
+    `;
+    formattedDates.forEach(date => {
+        html += `<div class="date-item"><a href="/snapshot/list/${date.dateCode}">${date.formatted}</a></div>`;
+    });
+    html += `
+        </div>
+    </body>
+    </html>
+    `;
+    res.send(html);
 });
-xxx.get ('/snapshot/list/:date', function (req, res) {
-	const files = snapshotsList.filter (file => file.slice (9, 17) === req.params.date).sort ((a, b) => b.localeCompare (a));
-    let html = '<html><body>';
-    html += files.map (file => `<div><a href="/snapshot/file/${file}">${file}</a></div>`).join ('\n');
-    html += '</body></html>';
-    res.send (html);
+xxx.get('/snapshot/list/:date', function (req, res) {
+    const dateCode = req.params.date;
+    const year = dateCode.substring(0, 4);
+    const month = parseInt(dateCode.substring(4, 6));
+    const day = parseInt(dateCode.substring(6, 8));
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const formattedDate = `${year} ${monthNames[month - 1]} ${day}`;
+    const files = snapshotsList__
+        .filter(file => file.slice(9, 17) === dateCode)
+        .sort((a, b) => b.localeCompare(a));
+    const snapshots = files.map(file => {
+        const timeStr = file.slice(17, 23);
+        const hour = parseInt(timeStr.substring(0, 2));
+        const minute = parseInt(timeStr.substring(2, 4));
+        const second = parseInt(timeStr.substring(4, 6));
+        const formattedTime = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:${second.toString().padStart(2, '0')}`;
+        return {
+            filename: file,
+            formattedTime: formattedTime
+        };
+    });
+    let html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Snapshots: ${formattedDate}</title>
+        <style>
+            body {
+                font-family: 'Inter', sans-serif;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 20px;
+                background-color: #f0f4f8;
+                color: #2d3748;
+            }
+            h1 {
+                color: #4299e1;
+                margin-bottom: 20px;
+            }
+			.snapshot-container {
+    			background-color: white;
+    			padding: 16px;
+    			border-radius: 8px;
+    			box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+			}
+			.snapshot-row {
+    			padding: 3px 0;
+    			display: flex;
+    			align-items: center;
+			}
+            .snapshot-row:last-child {
+                border-bottom: none;
+            }
+			.snapshot-time {
+    			font-weight: 500;
+    			min-width: 80px;
+			}
+            .snapshot-row a {
+                color: #4299e1;
+                text-decoration: none;
+                margin-left: 16px;
+            }
+            .snapshot-row a:hover {
+                text-decoration: underline;
+            }
+            .back-link {
+                margin-top: 20px;
+                display: inline-block;
+                color: #4299e1;
+                margin-right: 15px;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Snapshots: ${formattedDate}</h1>
+        <div class="snapshot-container">
+    `;
+    snapshots.forEach(snapshot => {
+        html += `
+            <div class="snapshot-row">
+                <span class="snapshot-time">${snapshot.formattedTime}</span>
+                <a href="/snapshot/file/${snapshot.filename}" target="_blank">View Image</a>
+            </div>
+        `;
+    });
+    html += `
+        </div>
+    </body>
+    </html>
+    `;
+    res.send(html);
 });
 xxx.get ('/snapshot/file/:file', function (req, res) {
-    if (snapshotsList.includes (req.params.file))
+    if (snapshotsList__.includes (req.params.file))
         res.sendFile (`/opt/snapshots/${req.params.file}`);
     else
         res.status (404).send ('Snapshot not found');
+});
+xxx.get('/snapshot/thumb/:filename', async (req, res) => {
+    try {
+        const filename = req.params.filename;
+        const width = parseInt(req.query.width) || 200;
+        const sourcePath = `/dev/shm/${filename}`;
+        if (!fs.existsSync(sourcePath))
+            return res.status(404).send('Image not found');
+        const stats = fs.statSync(sourcePath);
+        const mtime = stats.mtime.getTime();
+        const cacheKey = crypto.createHash('md5').update(`${filename}-${width}-${mtime}`).digest('hex');
+        if (thumbnailCache[cacheKey]) {
+            res.set('Content-Type', 'image/jpeg');
+            res.set('Cache-Control', 'public, max-age=300');
+            return res.send(thumbnailCache[cacheKey]);
+        }
+        const thumbnail = await sharp(sourcePath)
+            .resize(width)
+            .jpeg({ quality: 70 })
+            .toBuffer();
+        thumbnailCache[cacheKey] = thumbnail;
+        const MAX_CACHE_ENTRIES = 50;
+        const cacheKeys = Object.keys(thumbnailCache);
+        if (cacheKeys.length > MAX_CACHE_ENTRIES) {
+            const keysToRemove = cacheKeys.slice(0, cacheKeys.length - MAX_CACHE_ENTRIES);
+            keysToRemove.forEach(key => delete thumbnailCache[key]);
+        }
+        res.set('Content-Type', 'image/jpeg');
+        res.set('Cache-Control', 'public, max-age=300');
+        res.send(thumbnail);
+    } catch (error) {
+        console.error('Error generating thumbnail:', error);
+        res.status(500).send('Error generating thumbnail');
+    }
 });
 
 //
