@@ -82,7 +82,69 @@ const socket = require ('socket.io') (httpsServer);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+const snapshotsDir = '/opt/snapshots';
+let snapshotsList = [];
+
+async function initializeSnapshotsList() {
+    const fs_async = require('fs').promises;
+    const path = require('path');
+    try {
+        await fs_async.mkdir(snapshotsDir, { recursive: true });
+        const files = await fs_async.readdir(snapshotsDir);
+        snapshotsList = files
+            .filter(file => file.startsWith('snapshot_') && file.endsWith('.jpg'))
+            .sort((a, b) => b.localeCompare(a));
+        console.log(`Initialized snapshots list with ${snapshotsList.length} existing files`);
+    } catch (error) {
+        console.error('Error initializing snapshots list:', error);
+        throw error;
+    }
+}
+
 async function updateSnapshot() {
+    const exec = require('child_process').exec;
+    const fs_async = require('fs').promises;
+    const path = require('path');
+    const currentPath = '/dev/shm/snapshot.jpg';
+    const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', ''); 
+    const filename = `snapshot_${timestamp}.jpg`;
+    const snapshotPath = path.join(snapshotsDir, filename);
+    try {
+        await new Promise((resolve, reject) => {
+            exec(`ffmpeg -y -rtsp_transport tcp -i '${conf.RTSP}' -vframes 1 -q:v 7.5 "${snapshotPath}"`,
+                (error) => {
+                    if (error) reject(error);
+                    else resolve();
+                });
+        });
+        await fs_async.copyFile(snapshotPath, currentPath);
+        snapshotsList.unshift(filename);
+        console.log(`Snapshot saved: ${filename}`);
+    } catch (error) {
+        console.error('Error updating snapshot:', error);
+        try {
+            await fs_async.unlink(snapshotPath);
+        } catch (e) {
+        }
+    }
+}
+
+function getSnapshotsList() {
+    return snapshotsList;
+}
+
+async function startSnapshotProcess() {
+    try {
+        await initializeSnapshotsList();
+        await updateSnapshot();
+        setInterval(updateSnapshot, 30000);
+    } catch (error) {
+        console.error('Failed to start snapshot process:', error);
+        throw error;
+    }
+}
+
+async function updateSnapshotX() {
 	const exec = require('child_process').exec;
 	const fs_async = require('fs').promises;
     const tempPath = '/dev/shm/snapshot_temp.jpg';
@@ -90,7 +152,7 @@ async function updateSnapshot() {
     
     try {
         await new Promise((resolve, reject) => {
-            exec(`ffmpeg -y -rtsp_transport tcp -i '${conf.RTSP}' -vframes 1 ${tempPath}`,
+            exec(`ffmpeg -y -rtsp_transport tcp -i '${conf.RTSP}' -vframes 1 -q:v 7.5 ${tempPath}`,
                 (error) => {
                     if (error) reject(error);
                     else resolve();
@@ -105,8 +167,8 @@ async function updateSnapshot() {
         }
     }
 }
-updateSnapshot();
-setInterval(updateSnapshot, 30000);
+updateSnapshotX();
+setInterval(updateSnapshotX, 30000);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -131,6 +193,29 @@ xxx.get ('/', function (req, res) {
 xxx.get ('/vars', function (req, res) {
     console.log (`/vars requested from '${req.headers ['x-forwarded-for'] || req.connection.remoteAddress}'`);
     res.json ( mqtt_content );
+});
+
+//
+
+xxx.get ('/snapshot/list', function (req, res) {
+    const dates = [ ...new Set (snapshotsList.map (file => file.slice (9, 17)))].sort ((a, b) => b.localeCompare (a));
+    let html = '<html><body>';
+    html += dates.map (date => `<div><a href="/snapshot/list/${date}">${date}</a></div>`).join ('\n');
+    html += '</body></html>';
+    res.send (html);
+});
+xxx.get ('/snapshot/list/:date', function (req, res) {
+	const files = snapshotsList.filter (file => file.slice (9, 17) === req.params.date).sort ((a, b) => b.localeCompare (a));
+    let html = '<html><body>';
+    html += files.map (file => `<div><a href="/snapshot/file/${file}">${file}</a></div>`).join ('\n');
+    html += '</body></html>';
+    res.send (html);
+});
+xxx.get ('/snapshot/file/:file', function (req, res) {
+    if (snapshotsList.includes (req.params.file))
+        res.sendFile (`/opt/snapshots/${req.params.file}`);
+    else
+        res.status (404).send ('Snapshot not found');
 });
 
 //
