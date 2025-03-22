@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,30 +14,36 @@
             background-color: #f0f4f8;
             color: #2d3748;
         }
+
         h1 {
             color: #4299e1;
             margin-bottom: 20px;
         }
+
         .date-list {
             display: flex;
             flex-direction: column;
             gap: 8px;
         }
+
         .date-item {
             background-color: white;
             padding: 12px 16px;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
+
         .date-item a {
             color: #4299e1;
             text-decoration: none;
             font-weight: 500;
             display: block;
         }
+
         .date-item a:hover {
             text-decoration: underline;
         }
+
         .back-link {
             margin-top: 20px;
             display: inline-block;
@@ -44,14 +51,18 @@
         }
     </style>
 </head>
+
 <body>
     <h1>Snapshots</h1>
     <div class="date-list">
         <% formattedDates.forEach(function(date) { %>
             <div class="date-item">
-                <a href="/snapshot/list/<%= date.dateCode %>"><%= date.formatted %></a>
+                <a href="/snapshot/list/<%= date.dateCode %>">
+                    <%= date.formattedDate %>
+                </a>
             </div>
-        <% }); %>
+            <% }); %>
     </div>
 </body>
+
 </html>

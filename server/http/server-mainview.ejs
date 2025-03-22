@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -20,6 +21,7 @@
             --font-size-lg: 1.125rem;
             --font-size-xl: 1.25rem;
         }
+
         body {
             font-family: 'Inter', sans-serif;
             font-size: var(--font-size-base);
@@ -32,6 +34,7 @@
             color: var(--text-color);
             padding: var(--spacing-md);
         }
+
         .dashboard {
             background-color: var(--card-bg);
             border-radius: 12px;
@@ -40,60 +43,77 @@
             width: 100%;
             max-width: 600px;
         }
+
         h2 {
             margin-top: 0;
             margin-bottom: var(--spacing-md);
             color: var(--primary-color);
             font-size: var(--font-size-xl);
         }
-        .section { margin-bottom: var(--spacing-lg); }
+
+        .section {
+            margin-bottom: var(--spacing-lg);
+        }
+
         .data-row {
             display: flex;
             justify-content: space-between;
             align-items: baseline;
             margin-bottom: var(--spacing-sm);
         }
-        .label { font-weight: bold; }
+
+        .label {
+            font-weight: bold;
+        }
+
         .value {
             color: var(--primary-color);
             font-size: var(--font-size-lg);
             font-weight: bold;
         }
+
         .unit {
             font-size: var(--font-size-sm);
             color: var(--text-color);
             margin-left: 0.25rem;
         }
-		.update-timestamp {
-    		text-align: center;
-    		margin-top: 20px;
-    		color: #666;
-    		font-size: 0.9em;
-		}
-		.external-links {
-    		text-align: center;
-    		margin-top: 10px;
-    		color: #666;
-		}
-		.external-links a {
-    		text-decoration: none;
-    		color: #0066cc;
-		}
-		.external-links a:hover {
-    		text-decoration: underline;
-		}
+
+        .update-timestamp {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .external-links {
+            text-align: center;
+            margin-top: 10px;
+            color: #666;
+        }
+
+        .external-links a {
+            text-decoration: none;
+            color: #0066cc;
+        }
+
+        .external-links a:hover {
+            text-decoration: underline;
+        }
+
         .camera-container {
             text-align: center;
             margin: 20px 0;
             position: relative;
         }
+
         .weather-camera {
             max-width: 100%;
             height: auto;
             border-radius: 4px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             transition: opacity 0.2s ease;
         }
+
         .camera-hint {
             position: absolute;
             top: 50%;
@@ -108,360 +128,386 @@
             transition: opacity 0.3s ease;
             pointer-events: none;
         }
-        .camera-container > a:hover .camera-hint {
+
+        .camera-container>a:hover .camera-hint {
             opacity: 1;
         }
-        .camera-container > a:hover .weather-camera {
+
+        .camera-container>a:hover .weather-camera {
             opacity: 0.8;
         }
+
         .camera-container a {
             display: inline-block;
             cursor: pointer;
             position: relative;
         }
+
         .mode-switch {
             text-align: left;
             font-size: var(--font-size-sm);
             margin-bottom: 0.95rem;
             font-style: italic;
         }
+
         .mode-switch a {
             color: var(--primary-color);
             text-decoration: none;
             cursor: pointer;
         }
+
         .mode-switch a:hover {
             text-decoration: underline;
         }
+
         .text-summary {
             line-height: 1.3;
             margin-bottom: var(--spacing-md);
         }
+
         .text-summary .value {
             color: var(--primary-color);
             font-weight: bold;
         }
-.thumbnails-row {
-    display: flex;
-    justify-content: flex-start;
-    margin-top: 10px;
-    gap: 10px;
-    overflow-x: auto;
-}
-.thumbnail-container {
-    position: relative;
-    flex: 0 0 auto;
-    width: 19%;
-    cursor: pointer;
-}
-.thumbnail-image {
-    width: 100%;
-    height: auto;
-    border-radius: 4px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    transition: opacity 0.2s ease;
-}
-.thumbnail-container:hover .thumbnail-image {
-    opacity: 0.8;
-}
-.thumbnail-label {
-    position: absolute;
-    bottom: 5px;
-    left: 0;
-    right: 0;
-    background-color: rgba(0, 0, 0, 0.7);
-    color: white;
-    padding: 3px 5px;
-    font-size: 12px;
-    text-align: center;
-    border-radius: 0 0 4px 4px;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}
-.thumbnails-row .thumbnail-container:hover .thumbnail-label {
-    opacity: 1;
-}
-.thumbnails-placeholder {
-    flex: 0 0 auto;
-    width: 9.5%;
-}
-.snaps-nav-box {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    height: 100%;
-    font-size: 0.9rem;
-    text-align: left;
-}
-.snaps-nav-item {
-    display: block;
-    margin-bottom: 3px;
-    padding-left: 5px;
-    font-size: 0.9rem;
-    text-align: left;
-}
-.snaps-nav-label {
-    font-weight: bold;
-}
-.snaps-nav-arrow {
-    color: var(--text-color);
-}
-.snaps-nav-link {
-    color: var(--primary-color);
-    text-decoration: none;
-}
-.snaps-nav-link:hover {
-    text-decoration: underline;
-}
+
+        .thumbnails-row {
+            display: flex;
+            justify-content: flex-start;
+            margin-top: 10px;
+            gap: 10px;
+            overflow-x: auto;
+        }
+
+        .thumbnail-container {
+            position: relative;
+            flex: 0 0 auto;
+            width: 19%;
+            cursor: pointer;
+        }
+
+        .thumbnail-image {
+            width: 100%;
+            height: auto;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            transition: opacity 0.2s ease;
+        }
+
+        .thumbnail-container:hover .thumbnail-image {
+            opacity: 0.8;
+        }
+
+        .thumbnail-label {
+            position: absolute;
+            bottom: 5px;
+            left: 0;
+            right: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 3px 5px;
+            font-size: 12px;
+            text-align: center;
+            border-radius: 0 0 4px 4px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .thumbnails-row .thumbnail-container:hover .thumbnail-label {
+            opacity: 1;
+        }
+
+        .thumbnails-placeholder {
+            flex: 0 0 auto;
+            width: 9.5%;
+        }
+
+        .snaps-nav-box {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            height: 100%;
+            font-size: 0.9rem;
+            text-align: left;
+        }
+
+        .snaps-nav-item {
+            display: block;
+            margin-bottom: 3px;
+            padding-left: 5px;
+            font-size: 0.9rem;
+            text-align: left;
+        }
+
+        .snaps-nav-label {
+            font-weight: bold;
+        }
+
+        .snaps-nav-arrow {
+            color: var(--text-color);
+        }
+
+        .snaps-nav-link {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .snaps-nav-link:hover {
+            text-decoration: underline;
+        }
 
         @media (max-width: 480px) {
-            .dashboard { padding: var(--spacing-md); }
+            .dashboard {
+                padding: var(--spacing-md);
+            }
+
             .data-row {
                 flex-direction: row;
                 justify-content: space-between;
                 align-items: center;
             }
-            .value { text-align: right; }
+
+            .value {
+                text-align: right;
+            }
         }
     </style>
 </head>
+
 <body>
     <div class="dashboard" id="weather-dashboard"></div>
     <script src="/socket.io/socket.io.js"></script>
-	<%- include('secrets.ejs') %>
-    <script>
-		//
-        const format = (elem, valu) => (valu != null) ? valu.toFixed (elem.decimals ?? 0) : 'n/a';
-        const formatWindSpeed = (elem, valu) => (valu != null) ? (valu / 3.6).toFixed (elem.decimals ?? 0) : 'n/a';
-		const formatWindDirection = (elem, valu) => (valu == null) ? 'n/a' : `${valu.toFixed(elem.decimals ?? 0)}° ${['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'] [ Math.floor(((valu + 11.25) % 360) / 22.5) ]}`;
-        const secs = [
-            {
-                name: 'Outside', id: 'outside',
-                elems: [
-                    { label: 'Temperature', id: 'temp', unit: '°C', path: 'weather/branna.temp', decimals: 1, format },
-                    { label: 'Humidity', id: 'humidity', unit: '%', path: 'weather/branna.humidity', format },
-                    { label: 'Pressure', id: 'pressure', unit: 'hPa', path: 'weather/branna.baromrel', format },
-                    { label: 'Wind Speed', id: 'windspeed', unit: 'm/s', path: 'weather/branna.windspeed', decimals: 1, format: formatWindSpeed },
-                    { label: 'Wind Gust', id: 'windgust', unit: 'm/s', path: 'weather/branna.windgust', decimals: 1, format: formatWindSpeed },
-                    { label: 'Wind Direction', id: 'winddir', unit: '', path: 'weather/branna.winddir', format: formatWindDirection },
-                    { label: 'Solar Radiation', id: 'solarrad', unit: 'W/m²', path: 'weather/branna.solarradiation', decimals: 1, format },
-                    { label: 'Solar UVI', id: 'solaruv', unit: '', path: 'weather/branna.uv',  decimals: 1,format: format },
-					{ label: 'Rain Rate', id: 'rainrate', unit: 'mm/hr', path: 'weather/branna.rainrate',  decimals: 1, format: format },
-                    { label: 'Rain Daily', id: 'raindaily', unit: 'mm', path: 'weather/branna.dailyrain',  decimals: 1, format: format }
-				]
-            },
-            {
-                name: 'Lake', id: 'lake',
-                elems: [
-                    { label: 'Surface (-15cm)', id: 'surface', unit: '°C', path: 'weather/branna.tf_ch1', decimals: 1, format },
-                    { label: 'Submerged (-1m)', id: 'submerged', unit: '°C', path: 'weather/branna.tf_ch2', decimals: 1, format }
-                ]
-            },
-        ];
-		//
-        const locate = (data, path) => path.split ('.').reduce ((accm, part) => accm && accm [part], data);
+    <%- include('secrets.ejs') %>
+        <script>
+            //
+            const format = (elem, valu) => (valu != null) ? valu.toFixed(elem.decimals ?? 0) : 'n/a';
+            const formatWindSpeed = (elem, valu) => (valu != null) ? (valu / 3.6).toFixed(elem.decimals ?? 0) : 'n/a';
+            const formatWindDirection = (elem, valu) => (valu == null) ? 'n/a' : `${valu.toFixed(elem.decimals ?? 0)}° ${['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][Math.floor(((valu + 11.25) % 360) / 22.5)]}`;
+            const secs = [
+                {
+                    name: 'Outside', id: 'outside',
+                    elems: [
+                        { label: 'Temperature', id: 'temp', unit: '°C', path: 'weather/branna.temp', decimals: 1, format },
+                        { label: 'Humidity', id: 'humidity', unit: '%', path: 'weather/branna.humidity', format },
+                        { label: 'Pressure', id: 'pressure', unit: 'hPa', path: 'weather/branna.baromrel', format },
+                        { label: 'Wind Speed', id: 'windspeed', unit: 'm/s', path: 'weather/branna.windspeed', decimals: 1, format: formatWindSpeed },
+                        { label: 'Wind Gust', id: 'windgust', unit: 'm/s', path: 'weather/branna.windgust', decimals: 1, format: formatWindSpeed },
+                        { label: 'Wind Direction', id: 'winddir', unit: '', path: 'weather/branna.winddir', format: formatWindDirection },
+                        { label: 'Solar Radiation', id: 'solarrad', unit: 'W/m²', path: 'weather/branna.solarradiation', decimals: 1, format },
+                        { label: 'Solar UVI', id: 'solaruv', unit: '', path: 'weather/branna.uv', decimals: 1, format: format },
+                        { label: 'Rain Rate', id: 'rainrate', unit: 'mm/hr', path: 'weather/branna.rainrate', decimals: 1, format: format },
+                        { label: 'Rain Daily', id: 'raindaily', unit: 'mm', path: 'weather/branna.dailyrain', decimals: 1, format: format }
+                    ]
+                },
+                {
+                    name: 'Lake', id: 'lake',
+                    elems: [
+                        { label: 'Surface (-15cm)', id: 'surface', unit: '°C', path: 'weather/branna.tf_ch1', decimals: 1, format },
+                        { label: 'Submerged (-1m)', id: 'submerged', unit: '°C', path: 'weather/branna.tf_ch2', decimals: 1, format }
+                    ]
+                },
+            ];
+            //
+            const locate = (data, path) => path.split('.').reduce((accm, part) => accm && accm[part], data);
 
-		const joinAnd = (items) => {
-    		if (!items || items.length === 0) return "";
-    		if (items.length === 1) return items[0];
-    		if (items.length === 2) return `${items[0]} and ${items[1]}`;
-    		return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
-		};
+            const joinAnd = (items) => {
+                if (!items || items.length === 0) return "";
+                if (items.length === 1) return items[0];
+                if (items.length === 2) return `${items[0]} and ${items[1]}`;
+                return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+            };
 
-		const getWeatherInterpretation = (data) => {
+            const getWeatherInterpretation = (data) => {
 
-    		const { temp, humidity, pressure, windSpeed, solarRad, uv, rainRate } = data;
+                const { temp, humidity, pressure, windSpeed, solarRad, uv, rainRate } = data;
 
-			let conditions = [];
-			if (pressure < 980)
-        		conditions.push("stormy");
-    		else if (pressure < 1000)
-        		conditions.push("unsettled");
-    		else if (pressure > 1030)
-        		conditions.push("stable");
-    		if (temp < -10)
-        		conditions.push("extremely cold");
-    		else if (temp < 0)
-        		conditions.push("freezing");
-    		else if (temp < 5)
-        		conditions.push("cold");
-    		else if (temp < 10)
-        		conditions.push("chilly");
-    		else if (temp < 18)
-        		conditions.push("cool");
-    		else if (temp < 24)
-        		;	// conditions.push("comfortable");
-    		else if (temp < 30)
-        		conditions.push("warm");
-    		else
-        		conditions.push("hot");
-    		if (humidity > 90)
-        		conditions.push("very humid");
-    		else if (humidity > 70)
-        		conditions.push("humid");
-    		else if (humidity < 30)
-        		conditions.push("dry");
-    		let result = conditions.length > 0 ? joinAnd (conditions) : "";
+                let conditions = [];
+                if (pressure < 980)
+                    conditions.push("stormy");
+                else if (pressure < 1000)
+                    conditions.push("unsettled");
+                else if (pressure > 1030)
+                    conditions.push("stable");
+                if (temp < -10)
+                    conditions.push("extremely cold");
+                else if (temp < 0)
+                    conditions.push("freezing");
+                else if (temp < 5)
+                    conditions.push("cold");
+                else if (temp < 10)
+                    conditions.push("chilly");
+                else if (temp < 18)
+                    conditions.push("cool");
+                else if (temp < 24)
+                    ;	// conditions.push("comfortable");
+                else if (temp < 30)
+                    conditions.push("warm");
+                else
+                    conditions.push("hot");
+                if (humidity > 90)
+                    conditions.push("very humid");
+                else if (humidity > 70)
+                    conditions.push("humid");
+                else if (humidity < 30)
+                    conditions.push("dry");
+                let result = conditions.length > 0 ? joinAnd(conditions) : "";
 
-    		const dewPoint = temp - ((100 - humidity) / 5);
-    		const hour = new Date().getHours();
-			let interpreted = [];
-    		if (temp < 0 && humidity > 85)
-        		interpreted.push ("likely frost/snow");
-    		else if (temp > 25 && humidity > 80)
-        		interpreted.push ("muggy");
-    		else if (pressure < 1000 && humidity > 80)
-        		interpreted.push ("likely rain");
-    		else if (pressure > 1020 && humidity < 40)
-        		interpreted.push ("clear/dry");
-    		if (temp < 10 && windSpeed > 3 && !interpreted.includes("frost"))
-        		interpreted.push ("feels colder (wind chill)");
-    		if (temp > 20 && humidity > 60 && !interpreted.includes("muggy"))
-        		interpreted.push ("feels warmer (humidity)");
-    		if (solarRad > 500)
-        		interpreted.push ("strong sun");
-    		else if (solarRad > 0 && solarRad < 100 && temp > 0 && !result.includes("rain"))
-        		interpreted.push ("overcast");
-    		if (Math.abs(temp - dewPoint) < 2.5 && temp > 0)
-        		interpreted.push ("possible fog");
-    		if (temp < 3 && temp > -2 && rainRate > 0)
-        		interpreted.push ("possible freezing rain");
-    		if (temp < 5 && hour > 5 && hour < 10)
-        		interpreted.push ("morning chill");
-    		let result_interpreted = interpreted.length > 0 ? joinAnd (interpreted) : "";
+                const dewPoint = temp - ((100 - humidity) / 5);
+                const hour = new Date().getHours();
+                let interpreted = [];
+                if (temp < 0 && humidity > 85)
+                    interpreted.push("likely frost/snow");
+                else if (temp > 25 && humidity > 80)
+                    interpreted.push("muggy");
+                else if (pressure < 1000 && humidity > 80)
+                    interpreted.push("likely rain");
+                else if (pressure > 1020 && humidity < 40)
+                    interpreted.push("clear/dry");
+                if (temp < 10 && windSpeed > 3 && !interpreted.includes("frost"))
+                    interpreted.push("feels colder (wind chill)");
+                if (temp > 20 && humidity > 60 && !interpreted.includes("muggy"))
+                    interpreted.push("feels warmer (humidity)");
+                if (solarRad > 500)
+                    interpreted.push("strong sun");
+                else if (solarRad > 0 && solarRad < 100 && temp > 0 && !result.includes("rain"))
+                    interpreted.push("overcast");
+                if (Math.abs(temp - dewPoint) < 2.5 && temp > 0)
+                    interpreted.push("possible fog");
+                if (temp < 3 && temp > -2 && rainRate > 0)
+                    interpreted.push("possible freezing rain");
+                if (temp < 5 && hour > 5 && hour < 10)
+                    interpreted.push("morning chill");
+                let result_interpreted = interpreted.length > 0 ? joinAnd(interpreted) : "";
 
-			result += (result.length > 0 && result_interpreted.length > 0 ? ": " : "") + result_interpreted;
-    		return result.length > 0 ? result.charAt(0).toUpperCase() + result.slice(1) + "." : null;
-		};	
-	
-        const createTextSummary = (vars) => {
+                result += (result.length > 0 && result_interpreted.length > 0 ? ": " : "") + result_interpreted;
+                return result.length > 0 ? result.charAt(0).toUpperCase() + result.slice(1) + "." : null;
+            };
 
-            const outside = secs[0];
-            const lake = secs[1];
+            const createTextSummary = (vars) => {
 
-            const temp = locate(vars, outside.elems[0].path);
-            const humidity = locate(vars, outside.elems[1].path);
-            const pressure = locate(vars, outside.elems[2].path);
-            const windSpeed = locate(vars, outside.elems[3].path);
-            const windGust = locate(vars, outside.elems[4].path);
-            const windDir = locate(vars, outside.elems[5].path);
-            const solarRad = locate(vars, outside.elems[6].path);
-            const solarUvi = locate(vars, outside.elems[7].path);
-            const rainRate = locate(vars, outside.elems[8].path);
-            const rainDaily = locate(vars, outside.elems[9].path);
-			//
-            const lakeSurface = locate(vars, lake.elems[0].path);
-            const lakeSubmerged = locate(vars, lake.elems[1].path);
-			//
-			const weatherData = {
-    			temp, humidity, pressure,
-    			windSpeed: windSpeed ? windSpeed / 3.6 : 0, // Convert to m/s if needed
-    			solarRad: solarRad || 0,
-    			uv: solarUvi || 0,
-    			rainRate: rainRate || 0,
-			};
+                const outside = secs[0];
+                const lake = secs[1];
 
-            const formattedTemp = outside.elems[0].format(outside.elems[0], temp);
-            const formattedHumidity = outside.elems[1].format(outside.elems[1], humidity);
-            const formattedPressure = outside.elems[2].format(outside.elems[2], pressure);
-            const formattedWindSpeed = outside.elems[3].format(outside.elems[3], windSpeed);
-            const formattedWindGust = outside.elems[4].format(outside.elems[4], windGust);
-            const formattedWindDir = outside.elems[5].format(outside.elems[5], windDir).replace('n/a', '');
-            const formattedSolarRad = outside.elems[6].format(outside.elems[6], solarRad);
-            const formattedSolarUvi = outside.elems[7].format(outside.elems[7], solarUvi);
-            const formattedRainRate = outside.elems[8].format(outside.elems[8], rainRate);
-            const formattedRainDaily = outside.elems[9].format(outside.elems[9], rainDaily);
-			//
-            const formattedLakeSurface = lake.elems[0].format(lake.elems[0], lakeSurface);
-            const formattedLakeSubmerged = lake.elems[1].format(lake.elems[1], lakeSubmerged);
+                const temp = locate(vars, outside.elems[0].path);
+                const humidity = locate(vars, outside.elems[1].path);
+                const pressure = locate(vars, outside.elems[2].path);
+                const windSpeed = locate(vars, outside.elems[3].path);
+                const windGust = locate(vars, outside.elems[4].path);
+                const windDir = locate(vars, outside.elems[5].path);
+                const solarRad = locate(vars, outside.elems[6].path);
+                const solarUvi = locate(vars, outside.elems[7].path);
+                const rainRate = locate(vars, outside.elems[8].path);
+                const rainDaily = locate(vars, outside.elems[9].path);
+                const lakeSurface = locate(vars, lake.elems[0].path);
+                const lakeSubmerged = locate(vars, lake.elems[1].path);
+                const weatherData = {
+                    temp, humidity, pressure,
+                    windSpeed: windSpeed || 0,
+                    solarRad: solarRad || 0,
+                    uv: solarUvi || 0,
+                    rainRate: rainRate || 0,
+                };
 
-    		let summary = `Temp <span class="value">${formattedTemp}°C</span> at <span class="value">${formattedHumidity}%</span> and <span class="value">${formattedPressure}</span> hPa.<br>`;
-    		if (!windSpeed)
-        		summary += "No wind.<br>";
-    		else { 
-        		summary += `Wind <span class="value">${formattedWindSpeed}</span> m/s <span class="value">${formattedWindDir}</span>`;
-				if (windGust && windGust > windSpeed)
-        			summary += `, gusting <span class="value">${formattedWindGust}</span> m/s</span>`;
-        		summary += `.<br>`;
-			}
-    		if (!rainRate && !rainDaily)
-        		summary += "No rain.<br>";
-    		else {
-				if (!rainRate && rainDaily)
-        			summary += `No rain`;
-				else
-        			summary += `Rain <span class="value">${formattedRainRate}</span> mm/hr`;
-        		summary += ` (<span class="value">${formattedRainDaily}</span>mm today).<br>`;
-			}
-    		if (!solarRad && !solarUvi)
-        		summary += "No solar.<br>";
-    		else {
-        		summary += `Solar <span class="value">${formattedSolarRad}</span> W/m²</span>`;
-				if (solarUvi)
-        			summary += `, UVI <span class="value">${formattedSolarUvi}</span>`;
-        		summary += `.<br>`;
-			}
-    		summary += `Lake <span class="value">${formattedLakeSurface}°C</span> above and <span class="value">${formattedLakeSubmerged}°C</span> below.`;
+                const formattedTemp = outside.elems[0].format(outside.elems[0], temp);
+                const formattedHumidity = outside.elems[1].format(outside.elems[1], humidity);
+                const formattedPressure = outside.elems[2].format(outside.elems[2], pressure);
+                const formattedWindSpeed = outside.elems[3].format(outside.elems[3], windSpeed);
+                const formattedWindGust = outside.elems[4].format(outside.elems[4], windGust);
+                const formattedWindDir = outside.elems[5].format(outside.elems[5], windDir).replace('n/a', '');
+                const formattedSolarRad = outside.elems[6].format(outside.elems[6], solarRad);
+                const formattedSolarUvi = outside.elems[7].format(outside.elems[7], solarUvi);
+                const formattedRainRate = outside.elems[8].format(outside.elems[8], rainRate);
+                const formattedRainDaily = outside.elems[9].format(outside.elems[9], rainDaily);
+                //
+                const formattedLakeSurface = lake.elems[0].format(lake.elems[0], lakeSurface);
+                const formattedLakeSubmerged = lake.elems[1].format(lake.elems[1], lakeSubmerged);
 
-			let interpretation = getWeatherInterpretation(weatherData);
-			if (interpretation !== null)
-				summary += `<br><br>${interpretation}`;
+                let summary = `Temp <span class="value">${formattedTemp}°C</span> at <span class="value">${formattedHumidity}%</span> and <span class="value">${formattedPressure}</span> hPa.<br>`;
+                if (!windSpeed)
+                    summary += "No wind.<br>";
+                else {
+                    summary += `Wind <span class="value">${formattedWindSpeed}</span> m/s <span class="value">${formattedWindDir}</span>`;
+                    if (windGust && windGust > windSpeed)
+                        summary += `, gusting <span class="value">${formattedWindGust}</span> m/s</span>`;
+                    summary += `.<br>`;
+                }
+                if (!rainRate && !rainDaily)
+                    summary += "No rain.<br>";
+                else {
+                    if (!rainRate && rainDaily)
+                        summary += `No rain`;
+                    else
+                        summary += `Rain <span class="value">${formattedRainRate}</span> mm/hr`;
+                    summary += ` (<span class="value">${formattedRainDaily}</span>mm today).<br>`;
+                }
+                if (!solarRad && !solarUvi)
+                    summary += "No solar.<br>";
+                else {
+                    summary += `Solar <span class="value">${formattedSolarRad}</span> W/m²</span>`;
+                    if (solarUvi)
+                        summary += `, UVI <span class="value">${formattedSolarUvi}</span>`;
+                    summary += `.<br>`;
+                }
+                summary += `Lake <span class="value">${formattedLakeSurface}°C</span> above and <span class="value">${formattedLakeSubmerged}°C</span> below.`;
 
-            return summary;
-        };
-        const getMode = () => {
-            return localStorage.getItem('displayMode') || 'table';
-        };
-        const setMode = (mode) => {
-            localStorage.setItem('displayMode', mode);
-            create(secs, <%- JSON.stringify(vars) %>);
-        };
-		const create = (secs, vars) => {
-			const mode = getMode();
-            const __elem = (sect, elem, vars) => `
+                let interpretation = getWeatherInterpretation(weatherData);
+                if (interpretation !== null)
+                    summary += `<br><br>${interpretation}`;
+
+                return summary;
+            };
+            const getMode = () => {
+                return localStorage.getItem('displayMode') || 'table';
+            };
+            const setMode = (mode) => {
+                localStorage.setItem('displayMode', mode);
+                create(secs, <% - JSON.stringify(vars) %>);
+            };
+            const create = (secs, vars) => {
+                const mode = getMode();
+                const __elem = (sect, elem, vars) => `
             	<div class="data-row">
                 	<span class="label">${elem.label}</span>
                 	<span class="value">
-                    	<span id="${sect}-${elem.id}">${elem.format (elem, locate (vars, elem.path))}</span>
+                    	<span id="${sect}-${elem.id}">${elem.format(elem, locate(vars, elem.path))}</span>
  						${elem.unit ? `<span class="unit">${elem.unit}</span>` : ''}
                 	</span>
             	</div>`;
-			const __sect = (sect, vars) => {
-                const timestamp = locate (vars, config.var_timestamp);
-                const timeDiff = Math.floor ((new Date () - new Date (timestamp.replace (/([+-]\d{2})Z$/, '$1:00'))) / (60 * 1000));
-                const warningBanner = (sect.id === 'outside' && timeDiff > 60) ?
-                    `<div style="background-color: #fee2e2; border: 1px solid #ef4444; padding: 1rem; margin-bottom: 1rem; border-radius: 0.375rem; font-weight: bold;">
+                const __sect = (sect, vars) => {
+                    const timestamp = locate(vars, config.var_timestamp);
+                    const timeDiff = Math.floor((new Date() - new Date(timestamp.replace(/([+-]\d{2})Z$/, '$1:00'))) / (60 * 1000));
+                    const warningBanner = (sect.id === 'outside' && timeDiff > 60) ?
+                        `<div style="background-color: #fee2e2; border: 1px solid #ef4444; padding: 1rem; margin-bottom: 1rem; border-radius: 0.375rem; font-weight: bold;">
                         Weather data was last received at ${timestamp} (more than ${Math.floor(timeDiff)} minutes ago), thus the local weather station connection is offline.
 						Please use <a href="https://www.wunderground.com/dashboard/pws/IBRUNS40">Weather Underground</a>. The Camera image is up to date.
                     </div>` : '';
-				if (mode === 'text' && sect.id === 'outside') {
-    				return `
+                    if (mode === 'text' && sect.id === 'outside') {
+                        return `
         				<section class="section">
             				${warningBanner}
             				<div class="text-summary">${createTextSummary(vars)}</div>
         				</section>`;
-				} else if (mode === 'text' && sect.id === 'lake') {
-    				return ''; // Skip lake section in text mode as it's included in the summary
-				} else {
-    				return `
+                    } else if (mode === 'text' && sect.id === 'lake') {
+                        return ''; // Skip lake section in text mode as it's included in the summary
+                    } else {
+                        return `
         				<section class="section">
             				${warningBanner}
             				<h2>${sect.name}</h2>
             				${sect.elems.map(elem => __elem(sect.id, elem, vars)).join('')}
         				</section>`;
-				}
-            };
-    		const timestamp = locate(vars, config.var_timestamp);
-   			const linkshtml = config.external_links.map(link => {
-            	const [label, url] = Object.entries(link)[0];
-            	return `<a href="${url}" target="_blank"><strong>${label}</strong></a>`;
-        	}).join(' | ');
-            const modeSwitch = `
+                    }
+                };
+                const timestamp = locate(vars, config.var_timestamp);
+                const linkshtml = config.external_links.map(link => {
+                    const [label, url] = Object.entries(link)[0];
+                    return `<a href="${url}" target="_blank"><strong>${label}</strong></a>`;
+                }).join(' | ');
+                const modeSwitch = `
                 <div class="mode-switch">
                     <a onclick="setMode('${mode === 'table' ? 'text' : 'table'}')">[${mode === 'table' ? 'table' : 'text'} mode: switch to ${mode === 'table' ? 'text' : 'table'} mode]</a>
                 </div>
             `;
-			document.getElementById('weather-dashboard').innerHTML = `
+                document.getElementById('weather-dashboard').innerHTML = `
     			${modeSwitch}
     			${secs.map(sect => __sect(sect, vars)).join('')}
 				<section class="section">
@@ -483,161 +529,162 @@
         			${linkshtml}
     			</div>
 			`;
-    		updateTimeAgo(timestamp);
-			initThumbnails();
-		}
-		const update = (vars) => {
-            const mode = getMode();
-            if (mode === 'text') {
-                create(secs, vars);
-                return;
+                updateTimeAgo(timestamp);
+                initThumbnails();
             }
-			secs.forEach (sect =>
-				sect.elems.forEach (elem => {
-                    const valu = locate (vars, elem.path), id = `${sect.id}-${elem.id}`;
-            		if (valu != null && document.getElementById (id) != null) document.getElementById (id).textContent = elem.format (elem, valu);
-				}
-			));
-    		const timestamp = locate(vars, config.var_timestamp);
-    		const timestampElement = document.getElementById('last-update');
-    		if (timestamp != null && timestampElement != null) {
-    			timestampElement.textContent = timestamp;
-				updateTimeAgo(timestamp);
-			}
-		};
-		let timeagoInterval;
-		const updateTimeAgo = (timestamp) => {
-    		const timeagoElement = document.getElementById('time-ago');
-    		if (timeagoInterval)
-        		clearInterval(timeagoInterval);
-    		const updateCounter = () =>
-        		timeagoElement.textContent = `${Math.max (Math.floor((new Date () - new Date (timestamp.replace(/([+-]\d{2})Z$/, '$1:00'))) / 1000), 0)} secs ago`;
-    		updateCounter();
-    		timeagoInterval = setInterval(updateCounter, 1000);
-		};
+            const update = (vars) => {
+                const mode = getMode();
+                if (mode === 'text') {
+                    create(secs, vars);
+                    return;
+                }
+                secs.forEach(sect =>
+                    sect.elems.forEach(elem => {
+                        const valu = locate(vars, elem.path), id = `${sect.id}-${elem.id}`;
+                        if (valu != null && document.getElementById(id) != null) document.getElementById(id).textContent = elem.format(elem, valu);
+                    }
+                    ));
+                const timestamp = locate(vars, config.var_timestamp);
+                const timestampElement = document.getElementById('last-update');
+                if (timestamp != null && timestampElement != null) {
+                    timestampElement.textContent = timestamp;
+                    updateTimeAgo(timestamp);
+                }
+            };
+            let timeagoInterval;
+            const updateTimeAgo = (timestamp) => {
+                const timeagoElement = document.getElementById('time-ago');
+                if (timeagoInterval)
+                    clearInterval(timeagoInterval);
+                const updateCounter = () =>
+                    timeagoElement.textContent = `${Math.max(Math.floor((new Date() - new Date(timestamp.replace(/([+-]\d{2})Z$/, '$1:00'))) / 1000), 0)} secs ago`;
+                updateCounter();
+                timeagoInterval = setInterval(updateCounter, 1000);
+            };
 
-const thumbnails = [
-    { file: 'snapshot_M15.jpg', label: 'T-15mins' },
-    { file: 'snapshot_M30.jpg', label: 'T-30mins' },
-    { file: 'snapshot_M45.jpg', label: 'T-45mins' },
-    { file: 'snapshot_M60.jpg', label: 'T-60mins' }
-];
-const clientThumbnailCache = {};
-const initThumbnails = () => {
-    const container = document.getElementById('thumbnails-row');
-    if (!container) return;
-    let needsUpdate = container.children.length === 0;
-    if (!needsUpdate) {
-        const cacheAge = localStorage.getItem('thumbnailCacheTimestamp');
-        if (!cacheAge || (Date.now() - parseInt(cacheAge)) > 1 * 60 * 1000)
-            needsUpdate = true;
-    }
-    if (needsUpdate) {
-        container.innerHTML = '';
-        for (const thumbnail of thumbnails) {
-            const thumbContainer = document.createElement('div');
-            thumbContainer.className = 'thumbnail-container';
-            const thumbLink = document.createElement('a');
-            thumbLink.href = '/' + thumbnail.file;
-            thumbLink.target = '_blank';
-            const thumbImg = document.createElement('img');
-            thumbImg.className = 'thumbnail-image';
-            const cacheKey = thumbnail.file;
-            const thumbnailUrl = `/snapshot/thumb/${thumbnail.file}?width=200`;
-            if (clientThumbnailCache[cacheKey]) {
-                thumbImg.src = clientThumbnailCache[cacheKey];
-            } else {
-                thumbImg.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Crect width="100" height="100" fill="%23eaeaea"/%3E%3C/svg%3E';
-                fetch(thumbnailUrl)
-                    .then(response => response.blob())
-                    .then(blob => {
-                        const url = URL.createObjectURL(blob);
-                        clientThumbnailCache[cacheKey] = url;
-                        thumbImg.src = url;
-                    })
-                    .catch(error => {
-                        console.error(`Error loading thumbnail ${thumbnail.file}:`, error);
-                        thumbImg.src = thumbnailUrl; // Fallback to direct loading
-                    });
-            }
-            thumbImg.alt = thumbnail.label;
-            const thumbLabel = document.createElement('div');
-            thumbLabel.className = 'thumbnail-label';
-            thumbLabel.textContent = thumbnail.label;
-            thumbLink.appendChild(thumbImg);
-            thumbContainer.appendChild(thumbLink);
-            thumbContainer.appendChild(thumbLabel);
-            container.appendChild(thumbContainer);
-        }
+            const thumbnails = [
+                { file: 'snapshot_M15.jpg', label: 'T-15mins' },
+                { file: 'snapshot_M30.jpg', label: 'T-30mins' },
+                { file: 'snapshot_M45.jpg', label: 'T-45mins' },
+                { file: 'snapshot_M60.jpg', label: 'T-60mins' }
+            ];
+            const clientThumbnailCache = {};
+            const initThumbnails = () => {
+                const container = document.getElementById('thumbnails-row');
+                if (!container) return;
+                let needsUpdate = container.children.length === 0;
+                if (!needsUpdate) {
+                    const cacheAge = localStorage.getItem('thumbnailCacheTimestamp');
+                    if (!cacheAge || (Date.now() - parseInt(cacheAge)) > 1 * 60 * 1000)
+                        needsUpdate = true;
+                }
+                if (needsUpdate) {
+                    container.innerHTML = '';
+                    for (const thumbnail of thumbnails) {
+                        const thumbContainer = document.createElement('div');
+                        thumbContainer.className = 'thumbnail-container';
+                        const thumbLink = document.createElement('a');
+                        thumbLink.href = '/' + thumbnail.file;
+                        thumbLink.target = '_blank';
+                        const thumbImg = document.createElement('img');
+                        thumbImg.className = 'thumbnail-image';
+                        const cacheKey = thumbnail.file;
+                        const thumbnailUrl = `/snapshot/thumb/${thumbnail.file}?width=200`;
+                        if (clientThumbnailCache[cacheKey]) {
+                            thumbImg.src = clientThumbnailCache[cacheKey];
+                        } else {
+                            thumbImg.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Crect width="100" height="100" fill="%23eaeaea"/%3E%3C/svg%3E';
+                            fetch(thumbnailUrl)
+                                .then(response => response.blob())
+                                .then(blob => {
+                                    const url = URL.createObjectURL(blob);
+                                    clientThumbnailCache[cacheKey] = url;
+                                    thumbImg.src = url;
+                                })
+                                .catch(error => {
+                                    console.error(`Error loading thumbnail ${thumbnail.file}:`, error);
+                                    thumbImg.src = thumbnailUrl; // Fallback to direct loading
+                                });
+                        }
+                        thumbImg.alt = thumbnail.label;
+                        const thumbLabel = document.createElement('div');
+                        thumbLabel.className = 'thumbnail-label';
+                        thumbLabel.textContent = thumbnail.label;
+                        thumbLink.appendChild(thumbImg);
+                        thumbContainer.appendChild(thumbLink);
+                        thumbContainer.appendChild(thumbLabel);
+                        container.appendChild(thumbContainer);
+                    }
 
-		const placeholder = document.createElement('div');
-		placeholder.className = 'thumbnails-placeholder';
-		const snapsNavBox = document.createElement('div');
-		snapsNavBox.className = 'snaps-nav-box';
-		const now = new Date();
-		const dayFormat = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-/*
-		const snapsLabel = document.createElement('div');
-		snapsLabel.textContent = 'schnapps';
-		snapsLabel.className = 'snaps-nav-item snaps-nav-label';
-		snapsNavBox.appendChild(snapsLabel);
-*/
-		const dayItem = document.createElement('div');
-		dayItem.className = 'snaps-nav-item';
-		const dayArrow = document.createElement('span');
-		//dayArrow.textContent = '-> ';
-		dayArrow.textContent = '';
-		dayArrow.className = 'snaps-nav-arrow';
-		dayItem.appendChild(dayArrow);
-		const dayLink = document.createElement('a');
-		dayLink.href = `/snapshot/list/${dayFormat}`;
-		dayLink.textContent = 'day';
-		dayLink.className = 'snaps-nav-link';
-		dayItem.appendChild(dayLink);
-		snapsNavBox.appendChild(dayItem);
-		const allItem = document.createElement('div');
-		allItem.className = 'snaps-nav-item';
-		const allArrow = document.createElement('span');
-		//allArrow.textContent = '-> ';
-		allArrow.textContent = '';
-		allArrow.className = 'snaps-nav-arrow';
-		allItem.appendChild(allArrow);
-		const allLink = document.createElement('a');
-		allLink.href = '/snapshot/list';
-		allLink.textContent = 'all';
-		allLink.className = 'snaps-nav-link';
-		allItem.appendChild(allLink);
-		snapsNavBox.appendChild(allItem);
-		placeholder.appendChild(snapsNavBox);
-		container.appendChild(placeholder);
+                    const placeholder = document.createElement('div');
+                    placeholder.className = 'thumbnails-placeholder';
+                    const snapsNavBox = document.createElement('div');
+                    snapsNavBox.className = 'snaps-nav-box';
+                    const now = new Date();
+                    const dayFormat = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+                    /*
+                            const snapsLabel = document.createElement('div');
+                            snapsLabel.textContent = 'schnapps';
+                            snapsLabel.className = 'snaps-nav-item snaps-nav-label';
+                            snapsNavBox.appendChild(snapsLabel);
+                    */
+                    const dayItem = document.createElement('div');
+                    dayItem.className = 'snaps-nav-item';
+                    const dayArrow = document.createElement('span');
+                    // dayArrow.textContent = '-> ';
+                    dayArrow.textContent = '';
+                    dayArrow.className = 'snaps-nav-arrow';
+                    dayItem.appendChild(dayArrow);
+                    const dayLink = document.createElement('a');
+                    dayLink.href = `/snapshot/list/${dayFormat}`;
+                    dayLink.textContent = 'day';
+                    dayLink.className = 'snaps-nav-link';
+                    dayItem.appendChild(dayLink);
+                    snapsNavBox.appendChild(dayItem);
+                    const allItem = document.createElement('div');
+                    allItem.className = 'snaps-nav-item';
+                    const allArrow = document.createElement('span');
+                    // allArrow.textContent = '-> ';
+                    allArrow.textContent = '';
+                    allArrow.className = 'snaps-nav-arrow';
+                    allItem.appendChild(allArrow);
+                    const allLink = document.createElement('a');
+                    allLink.href = '/snapshot/list';
+                    allLink.textContent = 'all';
+                    allLink.className = 'snaps-nav-link';
+                    allItem.appendChild(allLink);
+                    snapsNavBox.appendChild(allItem);
+                    placeholder.appendChild(snapsNavBox);
+                    container.appendChild(placeholder);
 
-        localStorage.setItem('thumbnailCacheTimestamp', Date.now().toString());
-    }
-};
+                    localStorage.setItem('thumbnailCacheTimestamp', Date.now().toString());
+                }
+            };
 
-const updateMainCamera = () => {
-    const mainCamera = document.getElementById('main-camera');
-    if (mainCamera) {
-        const timestamp = Date.now();
-        mainCamera.src = '/snapshot.jpg?t=' + timestamp;
-        setTimeout(() => updateMainCamera(), 30000);
-        const cacheAge = localStorage.getItem('thumbnailCacheTimestamp');
-        if (!cacheAge || (Date.now() - parseInt(cacheAge)) > 1 * 60 * 1000) {
-            Object.values(clientThumbnailCache).forEach(url => {
-                try {
-                    URL.revokeObjectURL(url);
-                } catch (e) {}
-            });
-            for (const key in clientThumbnailCache)
-                delete clientThumbnailCache[key];
-            initThumbnails();
-        }
-    }
-};
+            const updateMainCamera = () => {
+                const mainCamera = document.getElementById('main-camera');
+                if (mainCamera) {
+                    const timestamp = Date.now();
+                    mainCamera.src = '/snapshot.jpg?t=' + timestamp;
+                    setTimeout(() => updateMainCamera(), 30000);
+                    const cacheAge = localStorage.getItem('thumbnailCacheTimestamp');
+                    if (!cacheAge || (Date.now() - parseInt(cacheAge)) > 1 * 60 * 1000) {
+                        Object.values(clientThumbnailCache).forEach(url => {
+                            try {
+                                URL.revokeObjectURL(url);
+                            } catch (e) { }
+                        });
+                        for (const key in clientThumbnailCache)
+                            delete clientThumbnailCache[key];
+                        initThumbnails();
+                    }
+                }
+            };
 
-        create (secs, <%- JSON.stringify (vars) %>);
-		//
-        io ().on ('update', update);
-    </script>
+            create(secs, <% - JSON.stringify(vars) %>);
+            //
+            io().on('update', update);
+        </script>
 </body>
+
 </html>
