@@ -226,8 +226,8 @@ const updateSectionData = (mode, vars) => {
 
     if (mode === 'text') {
         const textElement = document.getElementById('text-summary-details');
-		if (textElement)
-			textElement.innerHTML = createViewDataText (vars);
+        if (textElement)
+            textElement.innerHTML = createViewDataText(vars);
     } else {
         secs.forEach(sect =>
             sect.elems.forEach(elem => {
@@ -250,104 +250,83 @@ const thumbnails = [
 const clientThumbnailCache = {};
 
 const createSectionThumbs = () => {
+    const now = new Date();
+    const dayFormat = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+    
+    let thumbnailsHtml = '';
+    for (const thumbnail of thumbnails) {
+        const cacheKey = thumbnail.file;
+        const thumbSrc = clientThumbnailCache[cacheKey] || 
+            'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Crect width="100" height="100" fill="%23eaeaea"/%3E%3C/svg%3E';
+        thumbnailsHtml += `
+            <div class="thumbnail-container">
+                <a href="/${thumbnail.file}" target="_blank">
+                    <img src="${thumbSrc}" alt="${thumbnail.label}" 
+                         class="thumbnail-image"
+                         data-thumbnail="${thumbnail.file}">
+                    <div class="thumbnail-label">${thumbnail.label}</div>
+                </a>
+            </div>
+        `;
+    }
+    const snapsNavHtml = `
+        <div class="thumbnails-placeholder">
+            <div class="snaps-nav-box">
+                <div class="snaps-nav-item">
+                    <span class="snaps-nav-arrow"></span>
+                    <a href="/snapshot/list/${dayFormat}" class="snaps-nav-link">day</a>
+                </div>
+                <div class="snaps-nav-item">
+                    <span class="snaps-nav-arrow"></span>
+                    <a href="/snapshot/list" class="snaps-nav-link">all</a>
+                </div>
+            </div>
+        </div>
+    `;
+    return thumbnailsHtml + snapsNavHtml;
+};
 
-    const container = document.getElementById('thumbnails-row');
-    if (!container) return;
-
-        container.innerHTML = '';
-        for (const thumbnail of thumbnails) {
-            const thumbContainer = document.createElement('div');
-            thumbContainer.className = 'thumbnail-container';
-            const thumbLink = document.createElement('a');
-            thumbLink.href = '/' + thumbnail.file;
-            thumbLink.target = '_blank';
-            const thumbImg = document.createElement('img');
-            thumbImg.className = 'thumbnail-image';
-            const cacheKey = thumbnail.file;
-            const thumbnailUrl = `/snapshot/thumb/${thumbnail.file}?width=200`;
-            if (clientThumbnailCache[cacheKey]) {
-                thumbImg.src = clientThumbnailCache[cacheKey];
-            } else {
-                thumbImg.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Crect width="100" height="100" fill="%23eaeaea"/%3E%3C/svg%3E';
-                fetch(thumbnailUrl)
-                    .then(response => response.blob())
-                    .then(blob => {
-                        const url = URL.createObjectURL(blob);
-                        clientThumbnailCache[cacheKey] = url;
-                        thumbImg.src = url;
-                    })
-                    .catch(error => {
-                        console.error(`Error loading thumbnail ${thumbnail.file}:`, error);
-                        thumbImg.src = thumbnailUrl; // Fallback to direct loading
-                    });
-            }
-            thumbImg.alt = thumbnail.label;
-            const thumbLabel = document.createElement('div');
-            thumbLabel.className = 'thumbnail-label';
-            thumbLabel.textContent = thumbnail.label;
-            thumbLink.appendChild(thumbImg);
-            thumbContainer.appendChild(thumbLink);
-            thumbContainer.appendChild(thumbLabel);
-            container.appendChild(thumbContainer);
+const loadSectionThumbs = () => {
+    localStorage.setItem('thumbnailCacheTimestamp', Date.now().toString());
+    const thumbnailImages = document.querySelectorAll('.thumbnail-image[data-thumbnail]');
+    thumbnailImages.forEach(img => {
+        const thumbnailFile = img.getAttribute('data-thumbnail');
+        const cacheKey = thumbnailFile;
+        if (clientThumbnailCache[cacheKey]) {
+            return;
         }
-
-        const placeholder = document.createElement('div');
-        placeholder.className = 'thumbnails-placeholder';
-        const snapsNavBox = document.createElement('div');
-        snapsNavBox.className = 'snaps-nav-box';
-        const now = new Date();
-        const dayFormat = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-        /*
-                const snapsLabel = document.createElement('div');
-                snapsLabel.textContent = 'schnapps';
-                snapsLabel.className = 'snaps-nav-item snaps-nav-label';
-                snapsNavBox.appendChild(snapsLabel);
-        */
-        const dayItem = document.createElement('div');
-        dayItem.className = 'snaps-nav-item';
-        const dayArrow = document.createElement('span');
-        // dayArrow.textContent = '-> ';
-        dayArrow.textContent = '';
-        dayArrow.className = 'snaps-nav-arrow';
-        dayItem.appendChild(dayArrow);
-        const dayLink = document.createElement('a');
-        dayLink.href = `/snapshot/list/${dayFormat}`;
-        dayLink.textContent = 'day';
-        dayLink.className = 'snaps-nav-link';
-        dayItem.appendChild(dayLink);
-        snapsNavBox.appendChild(dayItem);
-        const allItem = document.createElement('div');
-        allItem.className = 'snaps-nav-item';
-        const allArrow = document.createElement('span');
-        // allArrow.textContent = '-> ';
-        allArrow.textContent = '';
-        allArrow.className = 'snaps-nav-arrow';
-        allItem.appendChild(allArrow);
-        const allLink = document.createElement('a');
-        allLink.href = '/snapshot/list';
-        allLink.textContent = 'all';
-        allLink.className = 'snaps-nav-link';
-        allItem.appendChild(allLink);
-        snapsNavBox.appendChild(allItem);
-        placeholder.appendChild(snapsNavBox);
-        container.appendChild(placeholder);
-
-        localStorage.setItem('thumbnailCacheTimestamp', Date.now().toString());
+        const thumbnailUrl = `/snapshot/thumb/${thumbnailFile}?width=200`;
+        fetch(thumbnailUrl)
+            .then(response => response.blob())
+            .then(blob => {
+                const url = URL.createObjectURL(blob);
+                clientThumbnailCache[cacheKey] = url;
+                img.src = url;
+            })
+            .catch(error => {
+                console.error(`Error loading thumbnail ${thumbnailFile}:`, error);
+                img.src = thumbnailUrl; // Fallback to direct loading
+            });
+    });
 };
 
 const updateSectionThumbs = () => {
-        const cacheAge = localStorage.getItem('thumbnailCacheTimestamp');
-        if (!cacheAge || (Date.now() - parseInt(cacheAge)) > 1 * 60 * 1000) {
-            Object.values(clientThumbnailCache).forEach(url => {
-                try {
-                    URL.revokeObjectURL(url);
-                } catch (e) { }
-            });
-            for (const key in clientThumbnailCache)
-                delete clientThumbnailCache[key];
-    		createSectionThumbs();
+    const cacheAge = localStorage.getItem('thumbnailCacheTimestamp');
+    if (!cacheAge || (Date.now() - parseInt(cacheAge)) > 1 * 60 * 1000) {
+        Object.values(clientThumbnailCache).forEach(url => {
+            try {
+                URL.revokeObjectURL(url);
+            } catch (e) { }
+        });
+        for (const key in clientThumbnailCache)
+            delete clientThumbnailCache[key];
+        const thumbnailsRow = document.getElementById('thumbnails-row');
+        if (thumbnailsRow) {
+            thumbnailsRow.innerHTML = createSectionThumbs();
+            loadSectionThumbs();
         }
-}
+    }
+};
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -357,7 +336,7 @@ const updateSectionCamera = () => {
     if (camera) {
         camera.src = '/snapshot.jpg?t=' + Date.now();
         setTimeout(() => updateSectionCamera(), 30000);
-		updateSectionThumbs();
+        updateSectionThumbs();
     }
 };
 
@@ -371,6 +350,7 @@ const createSectionCamera = (mode) => {
                 <div class="camera-hint">Click to view full size</div>
             </a>
             <div class="thumbnails-row" id="thumbnails-row">
+                ${createSectionThumbs()}
             </div>
         </div>
         </section>
@@ -408,10 +388,10 @@ const updateSectionTime = (mode, vars) => {
             timestampElement.textContent = time;
 
         const updateTimecount = () => {
-        	const timecountElement = document.getElementById('time-ago');
-			if (timecountElement)
-           		timecountElement.textContent = `${Math.max(Math.floor((new Date() - new Date(time.replace(/([+-]\d{2})Z$/, '$1:00'))) / 1000), 0)} secs ago`;
-		}
+            const timecountElement = document.getElementById('time-ago');
+            if (timecountElement)
+                timecountElement.textContent = `${Math.max(Math.floor((new Date() - new Date(time.replace(/([+-]\d{2})Z$/, '$1:00'))) / 1000), 0)} secs ago`;
+        }
         if (timecountInterval)
             clearInterval(timecountInterval);
         timecountInterval = setInterval(updateTimecount, 1000);
@@ -425,10 +405,10 @@ const createSectionTime = (mode, vars) => {
     const ago = time ? `${Math.max(Math.floor((new Date() - new Date(time.replace(/([+-]\d{2})Z$/, '$1:00'))) / 1000), 0)} secs ago` : '';
 
     const updateTimecount = () => {
-    	const timecountElement = document.getElementById('time-ago');
-		if (timecountElement)
-       		timecountElement.textContent = `${Math.max(Math.floor((new Date() - new Date(time.replace(/([+-]\d{2})Z$/, '$1:00'))) / 1000), 0)} secs ago`;
-	}
+        const timecountElement = document.getElementById('time-ago');
+        if (timecountElement)
+            timecountElement.textContent = `${Math.max(Math.floor((new Date() - new Date(time.replace(/([+-]\d{2})Z$/, '$1:00'))) / 1000), 0)} secs ago`;
+    }
     if (timecountInterval)
         clearInterval(timecountInterval);
     timecountInterval = setInterval(updateTimecount, 1000);
@@ -445,7 +425,7 @@ const createSectionTime = (mode, vars) => {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const update = (vars) => {
-    
+
     const mode = getMode();
 
     updateSectionData(mode, vars);
@@ -469,7 +449,7 @@ const create = (vars) => {
         ${createSectionLinks(mode)}
 	`;
 
-    createSectionThumbs();
+	loadSectionThumbs();
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
