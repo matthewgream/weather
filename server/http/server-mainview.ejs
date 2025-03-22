@@ -16,7 +16,7 @@
         <script src="/static/js/mainview.js"></script>
         <script>
             const start = () => {
-                create(secs, <%- JSON.stringify(vars) %>);
+                create(<%- JSON.stringify(vars) %>);
             };
             const getMode = () => {
                 return localStorage.getItem('displayMode') || 'table';
