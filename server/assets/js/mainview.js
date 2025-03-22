@@ -4,79 +4,8 @@
 
 const locate = (data, path) => path.split('.').reduce((accm, part) => accm && accm[part], data);
 
-const joinand = (items) => {
-    if (!items || items.length === 0) return "";
-    if (items.length === 1) return items[0];
-    if (items.length === 2) return `${items[0]} and ${items[1]}`;
-    return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
-};
-
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
-
-const getWeatherInterpretation = (data) => {
-
-    const { temp, humidity, pressure, windSpeed, solarRad, solarUvi, rainRate } = data;
-
-    let conditions = [];
-    if (pressure < 980)
-        conditions.push("stormy");
-    else if (pressure < 1000)
-        conditions.push("unsettled");
-    else if (pressure > 1030)
-        conditions.push("stable");
-    if (temp < -10)
-        conditions.push("extremely cold");
-    else if (temp < 0)
-        conditions.push("freezing");
-    else if (temp < 5)
-        conditions.push("cold");
-    else if (temp < 10)
-        conditions.push("chilly");
-    else if (temp < 18)
-        conditions.push("cool");
-    else if (temp < 24)
-        ;	// conditions.push("comfortable");
-    else if (temp < 30)
-        conditions.push("warm");
-    else
-        conditions.push("hot");
-    if (humidity > 90)
-        conditions.push("very humid");
-    else if (humidity > 70)
-        conditions.push("humid");
-    else if (humidity < 30)
-        conditions.push("dry");
-    let result = conditions.length > 0 ? joinand(conditions) : "";
-
-    const dewPoint = temp - ((100 - humidity) / 5);
-    const hour = new Date().getHours();
-    let interpreted = [];
-    if (temp < 0 && humidity > 85)
-        interpreted.push("likely frost/snow");
-    else if (temp > 25 && humidity > 80)
-        interpreted.push("muggy");
-    else if (pressure < 1000 && humidity > 80)
-        interpreted.push("likely rain");
-    else if (pressure > 1020 && humidity < 40)
-        interpreted.push("clear/dry");
-    if (temp < 10 && windSpeed > 3 && !interpreted.includes("frost"))
-        interpreted.push("feels colder (wind chill)");
-    if (temp > 20 && humidity > 60 && !interpreted.includes("muggy"))
-        interpreted.push("feels warmer (humidity)");
-    if (solarRad > 500)
-        interpreted.push("strong sun");
-    if (Math.abs(temp - dewPoint) < 2.5 && temp > 0)
-        interpreted.push("possible fog");
-    if (temp < 3 && temp > -2 && rainRate > 0)
-        interpreted.push("possible freezing rain");
-    if (temp < 5 && hour > 5 && hour < 10)
-        interpreted.push("morning chill");
-    let result_interpreted = interpreted.length > 0 ? joinand(interpreted) : "";
-
-    result += (result.length > 0 && result_interpreted.length > 0 ? ": " : "") + result_interpreted;
-    return result.length > 0 ? result.charAt(0).toUpperCase() + result.slice(1) + "." : null;
-};
 
 const createViewDataText = (vars) => {
 
@@ -138,8 +67,13 @@ const createViewDataText = (vars) => {
     summary += `Lake <span class="value">${formattedLakeSurface}°C</span> above and <span class="value">${formattedLakeSubmerged}°C</span> below.`;
 
     let interpretation = getWeatherInterpretation({ temp, humidity, pressure, windSpeed, solarRad, solarUvi, rainRate });
-    if (interpretation !== null)
-        summary += `<br><br>${interpretation}`;
+    if (interpretation !== null) {
+        summary += `<br><br>${interpretation.description}`;
+		if (interpretation.isDaytime && interpretation.daylight.sunset)
+			summary += ` Sunset at ${interpretation.daylight.sunset}.`;
+		else if (!interpretation.isDaytime && interpretation.daylight.sunrise)
+			summary += ` Sunrise at ${interpretation.daylight.sunrise}.`;
+	}
 
     return summary;
 };
