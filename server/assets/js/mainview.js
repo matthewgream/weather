@@ -16,7 +16,7 @@ const joinand = (items) => {
 
 const getWeatherInterpretation = (data) => {
 
-    const { temp, humidity, pressure, windSpeed, solarRad, uv, rainRate } = data;
+    const { temp, humidity, pressure, windSpeed, solarRad, solarUvi, rainRate } = data;
 
     let conditions = [];
     if (pressure < 980)
@@ -86,22 +86,15 @@ const createViewDataText = (vars) => {
     const temp = locate(vars, outside.elems[0].path);
     const humidity = locate(vars, outside.elems[1].path);
     const pressure = locate(vars, outside.elems[2].path);
-    const windSpeed = locate(vars, outside.elems[3].path);
+    const windSpeed = locate(vars, outside.elems[3].path) || 0;
     const windGust = locate(vars, outside.elems[4].path);
     const windDir = locate(vars, outside.elems[5].path);
-    const solarRad = locate(vars, outside.elems[6].path);
-    const solarUvi = locate(vars, outside.elems[7].path);
-    const rainRate = locate(vars, outside.elems[8].path);
+    const solarRad = locate(vars, outside.elems[6].path) || 0;
+    const solarUvi = locate(vars, outside.elems[7].path) || 0;
+    const rainRate = locate(vars, outside.elems[8].path) || 0;
     const rainDaily = locate(vars, outside.elems[9].path);
     const lakeSurface = locate(vars, lake.elems[0].path);
     const lakeSubmerged = locate(vars, lake.elems[1].path);
-    const weatherData = {
-        temp, humidity, pressure,
-        windSpeed: windSpeed || 0,
-        solarRad: solarRad || 0,
-        uv: solarUvi || 0,
-        rainRate: rainRate || 0,
-    };
 
     const formattedTemp = outside.elems[0].format(outside.elems[0], temp);
     const formattedHumidity = outside.elems[1].format(outside.elems[1], humidity);
@@ -113,7 +106,6 @@ const createViewDataText = (vars) => {
     const formattedSolarUvi = outside.elems[7].format(outside.elems[7], solarUvi);
     const formattedRainRate = outside.elems[8].format(outside.elems[8], rainRate);
     const formattedRainDaily = outside.elems[9].format(outside.elems[9], rainDaily);
-    //
     const formattedLakeSurface = lake.elems[0].format(lake.elems[0], lakeSurface);
     const formattedLakeSubmerged = lake.elems[1].format(lake.elems[1], lakeSubmerged);
 
@@ -145,7 +137,7 @@ const createViewDataText = (vars) => {
     }
     summary += `Lake <span class="value">${formattedLakeSurface}°C</span> above and <span class="value">${formattedLakeSubmerged}°C</span> below.`;
 
-    let interpretation = getWeatherInterpretation(weatherData);
+    let interpretation = getWeatherInterpretation({ temp, humidity, pressure, windSpeed, solarRad, solarUvi, rainRate });
     if (interpretation !== null)
         summary += `<br><br>${interpretation}`;
 
@@ -247,21 +239,20 @@ const thumbnails = [
     { file: 'snapshot_M45.jpg', label: 'T-45mins' },
     { file: 'snapshot_M60.jpg', label: 'T-60mins' }
 ];
-const clientThumbnailCache = {};
+const thumbnailsCache = {};
 
 const createSectionThumbs = () => {
     const now = new Date();
-    const dayFormat = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+    const day = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
 
     let thumbnailsHtml = '';
     for (const thumbnail of thumbnails) {
-        const cacheKey = thumbnail.file;
-        const thumbSrc = clientThumbnailCache[cacheKey] ||
+        const thumbnailSrc = thumbnailsCache[thumbnail.file] ||
             'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Crect width="100" height="100" fill="%23eaeaea"/%3E%3C/svg%3E';
         thumbnailsHtml += `
             <div class="thumbnail-container">
                 <a href="/${thumbnail.file}" target="_blank">
-                    <img src="${thumbSrc}" alt="${thumbnail.label}" 
+                    <img src="${thumbnailSrc}" alt="${thumbnail.label}" 
                          class="thumbnail-image"
                          data-thumbnail="${thumbnail.file}">
                     <div class="thumbnail-label">${thumbnail.label}</div>
@@ -269,57 +260,55 @@ const createSectionThumbs = () => {
             </div>
         `;
     }
-    const snapsNavHtml = `
+    const thumbnailsLinks = `
         <div class="thumbnails-placeholder">
             <div class="snaps-nav-box">
                 <div class="snaps-nav-item">
-                    <span class="snaps-nav-arrow"></span>
-                    <a href="/snapshot/list/${dayFormat}" class="snaps-nav-link">day</a>
+                    <a href="/snapshot/list/${day}" class="snaps-nav-link">day</a>
                 </div>
                 <div class="snaps-nav-item">
-                    <span class="snaps-nav-arrow"></span>
                     <a href="/snapshot/list" class="snaps-nav-link">all</a>
                 </div>
             </div>
         </div>
     `;
-    return thumbnailsHtml + snapsNavHtml;
+    return thumbnailsHtml + thumbnailsLinks;
 };
 
+let lastThumbnailUpdate = 0;
+
 const loadSectionThumbs = () => {
-    localStorage.setItem('thumbnailCacheTimestamp', Date.now().toString());
+    lastThumbnailUpdate = Date.now();
     const thumbnailImages = document.querySelectorAll('.thumbnail-image[data-thumbnail]');
     thumbnailImages.forEach(img => {
         const thumbnailFile = img.getAttribute('data-thumbnail');
-        const cacheKey = thumbnailFile;
-        if (clientThumbnailCache[cacheKey]) {
+        if (thumbnailsCache[thumbnailFile])
             return;
-        }
         const thumbnailUrl = `/snapshot/thumb/${thumbnailFile}?width=200`;
         fetch(thumbnailUrl)
             .then(response => response.blob())
             .then(blob => {
                 const url = URL.createObjectURL(blob);
-                clientThumbnailCache[cacheKey] = url;
+                thumbnailsCache[thumbnailFile] = url;
                 img.src = url;
             })
             .catch(error => {
                 console.error(`Error loading thumbnail ${thumbnailFile}:`, error);
-                img.src = thumbnailUrl; // Fallback to direct loading
+                img.src = thumbnailUrl;
             });
     });
 };
 
 const updateSectionThumbs = () => {
-    const cacheAge = localStorage.getItem('thumbnailCacheTimestamp');
-    if (!cacheAge || (Date.now() - parseInt(cacheAge)) > 1 * 60 * 1000) {
-        Object.values(clientThumbnailCache).forEach(url => {
+    const difference = Date.now() - lastThumbnailUpdate;
+    if (lastThumbnailUpdate === 0 || difference > 60 * 1 * 1000) {
+        Object.values(thumbnailsCache).forEach(url => {
             try {
                 URL.revokeObjectURL(url);
             } catch (e) { }
         });
-        for (const key in clientThumbnailCache)
-            delete clientThumbnailCache[key];
+        for (const thumbnailFile in thumbnailsCache)
+            delete thumbnailsCache[thumbnailFile];
         const thumbnailsRow = document.getElementById('thumbnails-row');
         if (thumbnailsRow) {
             thumbnailsRow.innerHTML = createSectionThumbs();
