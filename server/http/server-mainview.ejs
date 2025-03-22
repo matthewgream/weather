@@ -15,17 +15,14 @@
     <%- include('secrets.ejs') %>
         <script src="/static/js/mainview.js"></script>
         <script>
-            const start = () => {
-                create(<%- JSON.stringify(vars) %>);
-            };
             const getMode = () => {
                 return localStorage.getItem('displayMode') || 'table';
             };
             const setMode = (mode) => {
                 localStorage.setItem('displayMode', mode);
-                start();
+                reload();
             };
-            start();
+            create(<%- JSON.stringify(vars) %>);
             io().on('update', update);
         </script>
 </body>

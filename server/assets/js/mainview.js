@@ -324,27 +324,17 @@ const updateSectionThumbs = () => {
         Promise.all(preloadPromises).then(() => {
             thumbnails.forEach(thumbnail => {
                 const img = document.querySelector(`.thumbnail-image[data-thumbnail="${thumbnail.file}"]`);
-                if (img && thumbnailsCachePending[thumbnail.file]) {
-                    img.style.transition = 'opacity 0.3s ease';
-                    img.style.opacity = '0';
-                    setTimeout(() => {
-                        img.src = thumbnailsCachePending[thumbnail.file];
-                        img.onload = () => {
-                            img.style.opacity = '1';
-                        };
-                    }, 300);
-                }
+                if (img && thumbnailsCachePending[thumbnail.file])
+                    img.src = thumbnailsCachePending[thumbnail.file];
             });
-            setTimeout(() => {
-                Object.values(thumbnailsCacheCurrent).forEach(url => {
-                    try {
-                        URL.revokeObjectURL(url);
-                    } catch (e) { }
-                });
-                thumbnailsCacheCurrent = {...thumbnailsCachePending};
-                thumbnailsCachePending = {};
-                thumbnailsLastUpdate = currentTime;
-            }, 1000);
+            Object.values(thumbnailsCacheCurrent).forEach(url => {
+                try {
+                    URL.revokeObjectURL(url);
+                } catch (e) { }
+            });
+            thumbnailsCacheCurrent = {...thumbnailsCachePending};
+            thumbnailsCachePending = {};
+            thumbnailsLastUpdate = currentTime;
         });
     }
 };
@@ -445,24 +435,23 @@ const createSectionTime = (mode, vars) => {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const update = (vars) => {
+let varsLast;
 
+const update = (vars) => {
+	varsLast = vars;
     const mode = getMode();
 
     updateSectionData(mode, vars);
     updateSectionTime(mode, vars);
 };
 
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
 const create = (vars) => {
-
+	varsLast = vars;
     const mode = getMode();
 
     document.getElementById('weather-dashboard').innerHTML = `
         <div class="mode-switch">
-            <a onclick="setMode('${mode === 'table' ? 'text' : 'table'}')">[${mode === 'table' ? 'table' : 'text'} mode: switch to ${mode === 'table' ? 'text' : 'table'} mode]</a>
+            <a onclick="setMode('${mode === 'table' ? 'text' : 'table'}')">[${mode === 'table' ? 'table' : 'text'} mode: click for ${mode === 'table' ? 'text' : 'table'} mode]</a>
         </div>
         ${createSectionData(mode, vars)}
         ${createSectionCamera(mode)}
@@ -472,6 +461,10 @@ const create = (vars) => {
 
     loadSectionThumbs();
 }
+
+const reload = () => {
+	create (varsLast);
+};
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
