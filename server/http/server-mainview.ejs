@@ -460,7 +460,7 @@
             };
             const setMode = (mode) => {
                 localStorage.setItem('displayMode', mode);
-                create(secs, <% - JSON.stringify(vars) %>);
+                create(secs, <%- JSON.stringify(vars) %>);
             };
             const create = (secs, vars) => {
                 const mode = getMode();
@@ -681,10 +681,11 @@
                 }
             };
 
-            create(secs, <% - JSON.stringify(vars) %>);
+            create(secs, <%- JSON.stringify(vars) %>);
             //
             io().on('update', update);
         </script>
 </body>
 
 </html>
+
