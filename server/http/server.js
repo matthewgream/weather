@@ -263,7 +263,7 @@ mqtt_client.on ('message', (topic, message) => {
 //
 
 xxx.get ('/', function (req, res) {
-    res.render ('server', { vars: { 'weather/branna': mqtt_content ['weather/branna'] } });
+    res.render ('server-mainview', { vars: { 'weather/branna': mqtt_content ['weather/branna'] } });
 });
 
 xxx.get ('/vars', function (req, res) {
@@ -290,66 +290,7 @@ xxx.get('/snapshot/list', function (req, res) {
             formatted: `${year} ${monthName} ${day}`
         };
     });
-    let html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Snapshots</title>
-        <style>
-            body {
-                font-family: 'Inter', sans-serif;
-                max-width: 800px;
-                margin: 0 auto;
-                padding: 20px;
-                background-color: #f0f4f8;
-                color: #2d3748;
-            }
-            h1 {
-                color: #4299e1;
-                margin-bottom: 20px;
-            }
-            .date-list {
-                display: flex;
-                flex-direction: column;
-                gap: 8px;
-            }
-            .date-item {
-                background-color: white;
-                padding: 12px 16px;
-                border-radius: 8px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }
-            .date-item a {
-                color: #4299e1;
-                text-decoration: none;
-                font-weight: 500;
-                display: block;
-            }
-            .date-item a:hover {
-                text-decoration: underline;
-            }
-            .back-link {
-                margin-top: 20px;
-                display: inline-block;
-                color: #4299e1;
-            }
-        </style>
-    </head>
-    <body>
-        <h1>Snapshots</h1>
-        <div class="date-list">
-    `;
-    formattedDates.forEach(date => {
-        html += `<div class="date-item"><a href="/snapshot/list/${date.dateCode}">${date.formatted}</a></div>`;
-    });
-    html += `
-        </div>
-    </body>
-    </html>
-    `;
-    res.send(html);
+    res.render('server-snapshot-list', { formattedDates });
 });
 xxx.get('/snapshot/list/:date', function (req, res) {
     const dateCode = req.params.date;
@@ -372,78 +313,7 @@ xxx.get('/snapshot/list/:date', function (req, res) {
             formattedTime: formattedTime
         };
     });
-    let html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Snapshots: ${formattedDate}</title>
-        <style>
-            body {
-                font-family: 'Inter', sans-serif;
-                max-width: 800px;
-                margin: 0 auto;
-                padding: 20px;
-                background-color: #f0f4f8;
-                color: #2d3748;
-            }
-            h1 {
-                color: #4299e1;
-                margin-bottom: 20px;
-            }
-			.snapshot-container {
-    			background-color: white;
-    			padding: 16px;
-    			border-radius: 8px;
-    			box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-			}
-			.snapshot-row {
-    			padding: 3px 0;
-    			display: flex;
-    			align-items: center;
-			}
-            .snapshot-row:last-child {
-                border-bottom: none;
-            }
-			.snapshot-time {
-    			font-weight: 500;
-    			min-width: 80px;
-			}
-            .snapshot-row a {
-                color: #4299e1;
-                text-decoration: none;
-                margin-left: 16px;
-            }
-            .snapshot-row a:hover {
-                text-decoration: underline;
-            }
-            .back-link {
-                margin-top: 20px;
-                display: inline-block;
-                color: #4299e1;
-                margin-right: 15px;
-            }
-        </style>
-    </head>
-    <body>
-        <h1>Snapshots: ${formattedDate}</h1>
-        <div class="snapshot-container">
-    `;
-    snapshots.forEach(snapshot => {
-        html += `
-            <div class="snapshot-row">
-                <span class="snapshot-time">${snapshot.formattedTime}</span>
-                <a href="/snapshot/file/${snapshot.filename}" target="_blank">View Image</a>
-            </div>
-        `;
-    });
-    html += `
-        </div>
-    </body>
-    </html>
-    `;
-    res.send(html);
+    res.render('server-snapshot-date', { formattedDate, snapshots });
 });
 xxx.get ('/snapshot/file/:file', function (req, res) {
     if (snapshotsList__.includes (req.params.file))
