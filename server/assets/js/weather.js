@@ -21,21 +21,21 @@
  */
 
 const getWeatherInterpretation = (data) => {
-    // Destructure with defaults for optional parameters
-    const { 
-        temp, 
-        humidity, 
-        pressure, 
-        windSpeed, 
-        solarRad, 
-        solarUvi, 
+
+    const {
+        temp,
+        humidity,
+        pressure,
+        windSpeed,
+        solarRad,
+        solarUvi,
         rainRate,
         cloudCover = null,
         visibility = null,
         location = "Central Sweden",
         season = getCurrentSeason("northern")
     } = data;
-    
+
     // Location-specific constants for Central Sweden (59°39'43.5"N 12°59'43.8"E)
     const LOCATION_DATA = {
         elevation: 145,
@@ -59,15 +59,15 @@ const getWeatherInterpretation = (data) => {
     const date = new Date();
     const month = date.getMonth(); // 0-11 (Jan-Dec)
     const day = date.getDate();
-    
+
     // Calculate precise daylight hours for Nordic location
     const daylight = calculateDaylightHours(
-        LOCATION_DATA.latitude, 
-        LOCATION_DATA.longitude, 
-        month, 
+        LOCATION_DATA.latitude,
+        LOCATION_DATA.longitude,
+        month,
         day
     );
-    
+
     const isDaytime = hour >= daylight.sunriseHour && hour <= daylight.sunsetHour;
 
     // Results object
@@ -78,7 +78,8 @@ const getWeatherInterpretation = (data) => {
         alerts: [],
         description: null,
         feelsLike,
-		daylight, isDaytime
+        daylight,
+        isDaytime
     };
 
     // Atmospheric pressure conditions - Nordic context
@@ -86,7 +87,7 @@ const getWeatherInterpretation = (data) => {
         // Adjust pressure for elevation (approximately 150m)
         const elevationAdjustment = Math.exp(LOCATION_DATA.elevation / (29.3 * (temp + 273)));
         const adjustedPressure = pressure * elevationAdjustment;
-        
+
         if (adjustedPressure < 970) {
             results.conditions.push("severe storm conditions");
             results.alerts.push("Dangerously low pressure system");
@@ -101,7 +102,7 @@ const getWeatherInterpretation = (data) => {
         } else if (adjustedPressure > 1025) {
             results.conditions.push("stable high pressure");
         }
-        
+
         // Nordic-specific pressure context
         if (month >= 9 && month <= 3) { // Fall through early spring
             if (adjustedPressure > 1020) {
@@ -142,7 +143,7 @@ const getWeatherInterpretation = (data) => {
                 results.alerts.push("Unusual heat for this region");
             }
         }
-        
+
         // Season-specific temperature context for Sweden
         if (month >= 11 || month <= 2) { // Winter months
             if (temp > 5) {
@@ -294,7 +295,7 @@ const getWeatherInterpretation = (data) => {
                 results.phenomena.push("frost likely");
             }
         }
-        
+
         // Forest-specific snow conditions
         if (temp < 0 && cloudCover > 70 && month >= 10 && month <= 3) {
             results.phenomena.push("snow accumulation on trees possible");
@@ -302,18 +303,18 @@ const getWeatherInterpretation = (data) => {
                 results.alerts.push("Risk of snow-laden tree branches");
             }
         }
-        
+
         // Freezing rain conditions
         if (temp < 2 && temp > -8 && rainRate > 0) {
             results.phenomena.push("freezing rain possible");
             results.alerts.push("Ice hazard in forest conditions");
         }
-        
+
         // Nordic summer humidity feels different - adjust muggy threshold
         if (temp > 20 && humidity > 75) {
             results.phenomena.push("humid for Nordic climate");
         }
-        
+
         // Fog conditions - common in forested areas near lakes
         if (Math.abs(temp - dewPoint) < 3 && temp > 0) {
             if (visibility === null || visibility < 1) {
@@ -324,7 +325,7 @@ const getWeatherInterpretation = (data) => {
                 }
             }
         }
-        
+
         // Forest-specific fire risk in dry conditions (rare but possible in summer)
         if (month >= 5 && month <= 8 && temp > 22 && humidity < 40 && rainRate === 0) {
             results.phenomena.push("dry forest conditions");
@@ -333,7 +334,7 @@ const getWeatherInterpretation = (data) => {
             }
         }
     }
-    
+
     // Precipitation predictions based on pressure and humidity
     if (pressure !== null && humidity !== null) {
         if (pressure < 1000 && humidity > 75) {
@@ -342,7 +343,7 @@ const getWeatherInterpretation = (data) => {
             results.phenomena.push("clear and dry");
         }
     }
-    
+
     // Wind chill effect
     if (temp !== null && windSpeed !== null) {
         if (temp < 10 && windSpeed > 3) {
@@ -352,7 +353,7 @@ const getWeatherInterpretation = (data) => {
             }
         }
     }
-    
+
     // Heat index effect
     if (temp !== null && humidity !== null) {
         if (temp > 20 && humidity > 60) {
@@ -362,7 +363,7 @@ const getWeatherInterpretation = (data) => {
             }
         }
     }
-    
+
     // Time of day specific phenomena - adjusted for Swedish daylight patterns
     if (temp !== null) {
         // Nordic daylight considerations with precise calculations
@@ -370,17 +371,17 @@ const getWeatherInterpretation = (data) => {
             if (isDaytime && hour > 20) {
                 results.phenomena.push("extended Nordic summer evening light");
             }
-            
+
             // Show precise sunrise time for very early summer mornings
             if (daylight.sunriseDecimal < 4.5 && hour < 7) {
                 results.phenomena.push(`early sunrise`);
             }
-            
+
             // Add twilight information when relevant
             if (!isDaytime && hour > daylight.sunsetHour && hour < daylight.sunsetHour + 2) {
                 results.phenomena.push("lingering twilight");
             }
-            
+
             // For near-solstice days
             if (month === 6 && daylight.daylightHours > 18) {
                 results.phenomena.push("peak summer daylight period");
@@ -390,29 +391,29 @@ const getWeatherInterpretation = (data) => {
             if (!isDaytime && hour >= 15 && hour < 17) {
                 results.phenomena.push(`early winter darkness`);
             }
-            
+
             // Very short day warning
             if (daylight.daylightHours < 7) {
                 results.phenomena.push(`short winter day (${Math.round(daylight.daylightHours)} hours of daylight)`);
             }
-            
+
             // Cold daylight
             if (isDaytime && temp < -5) {
                 results.phenomena.push("cold winter daylight");
             }
-            
+
             // Near-solstice days
             if (month === 11 && day > 15) {
                 results.phenomena.push("approaching winter solstice");
             }
         }
-        
+
         // Civil twilight phenomena
         const currentHourDecimal = hour + new Date().getMinutes() / 60;
         if (!isDaytime && currentHourDecimal >= daylight.sunsetDecimal && currentHourDecimal <= daylight.civilDuskLocal) {
             results.phenomena.push("civil twilight");
         }
-        
+
         // Standard time patterns adjusted for Nordic climate
         if (temp < 3 && hour > daylight.sunriseHour && hour < (daylight.sunriseHour + 3)) {
             results.phenomena.push("morning chill");
@@ -420,16 +421,16 @@ const getWeatherInterpretation = (data) => {
         if (temp > 22 && hour > 12 && hour < 16) {
             results.phenomena.push("afternoon warmth");
         }
-        
+
         // Forest-specific phenomena
         if (windSpeed > 5 && LOCATION_DATA.forestCoverage === "high") {
             results.phenomena.push("forest wind effect");
         }
     }
-    
+
     // Season-specific interpretations for Nordic region
     if (season && temp !== null) {
-        switch(season.toLowerCase()) {
+        switch (season.toLowerCase()) {
             case "winter":
                 if (temp > 5) {
                     results.phenomena.push("unusually mild winter day");
@@ -474,7 +475,7 @@ const getWeatherInterpretation = (data) => {
     }
 
     // Determine comfort level
-    // results.comfort = determineComfortLevel(temp, humidity, windSpeed, solarRad);
+    results.comfort = determineComfortLevel(temp, humidity, windSpeed, solarRad);
 
     // Generate human-readable description
     results.description = generateDescription(results);
@@ -505,26 +506,26 @@ const calculateDewPoint = (temp, humidity) => {
 const calculateHeatIndex = (temp, humidity) => {
     // Only applicable for temps > 20°C
     if (temp < 20) return temp;
-    
+
     // Convert to Fahrenheit for the standard formula
-    const tempF = (temp * 9/5) + 32;
+    const tempF = (temp * 9 / 5) + 32;
     const rh = humidity;
-    
+
     // Simplified heat index formula
     let heatIndexF = 0.5 * (tempF + 61.0 + ((tempF - 68.0) * 1.2) + (rh * 0.094));
-    
+
     // Use more precise formula if hot enough
     if (tempF >= 80) {
-        heatIndexF = -42.379 + 
-                     2.04901523 * tempF + 
-                     10.14333127 * rh - 
-                     0.22475541 * tempF * rh - 
-                     6.83783e-3 * tempF * tempF - 
-                     5.481717e-2 * rh * rh + 
-                     1.22874e-3 * tempF * tempF * rh + 
-                     8.5282e-4 * tempF * rh * rh - 
-                     1.99e-6 * tempF * tempF * rh * rh;
-        
+        heatIndexF = -42.379 +
+            2.04901523 * tempF +
+            10.14333127 * rh -
+            0.22475541 * tempF * rh -
+            6.83783e-3 * tempF * tempF -
+            5.481717e-2 * rh * rh +
+            1.22874e-3 * tempF * tempF * rh +
+            8.5282e-4 * tempF * rh * rh -
+            1.99e-6 * tempF * tempF * rh * rh;
+
         // Apply adjustment for low humidity or cool temps
         if (rh < 13 && tempF >= 80 && tempF <= 112) {
             heatIndexF -= ((13 - rh) / 4) * Math.sqrt((17 - Math.abs(tempF - 95)) / 17);
@@ -532,9 +533,9 @@ const calculateHeatIndex = (temp, humidity) => {
             heatIndexF += ((rh - 85) / 10) * ((87 - tempF) / 5);
         }
     }
-    
+
     // Convert back to Celsius
-    return (heatIndexF - 32) * 5/9;
+    return (heatIndexF - 32) * 5 / 9;
 };
 
 /**
@@ -546,10 +547,10 @@ const calculateHeatIndex = (temp, humidity) => {
 const calculateWindChill = (temp, windSpeed) => {
     // Only applicable for temps <= 10°C and wind > 1.3 m/s
     if (temp > 10 || windSpeed <= 1.3) return temp;
-    
+
     // Convert wind speed to km/h
     const windSpeedKmh = windSpeed * 3.6;
-    
+
     // Calculate wind chill using Environment Canada formula
     return 13.12 + 0.6215 * temp - 11.37 * Math.pow(windSpeedKmh, 0.16) + 0.3965 * temp * Math.pow(windSpeedKmh, 0.16);
 };
@@ -587,42 +588,42 @@ const determineFeelsLike = (temp, humidity, windSpeed) => {
 const determineComfortLevel = (temp, humidity, windSpeed, solarRad) => {
     // Calculate "feels like" temperature
     const feelsLike = determineFeelsLike(temp, humidity, windSpeed);
-    
+
     // Very uncomfortable conditions
     if (feelsLike < -10 || feelsLike > 35) {
         return "very uncomfortable";
     }
-    
+
     // Uncomfortable conditions
     if (feelsLike < 0 || feelsLike > 30) {
         return "uncomfortable";
     }
-    
+
     // Check humidity discomfort
     if ((temp > 20 && humidity > 80) || humidity < 20) {
         return "somewhat uncomfortable";
     }
-    
+
     // Check strong wind discomfort
     if (windSpeed > 8) {
         return "somewhat uncomfortable";
     }
-    
+
     // Check intense sun discomfort
     if (solarRad > 700) {
         return "somewhat uncomfortable";
     }
-    
+
     // Ideal comfort range
     if (feelsLike >= 18 && feelsLike <= 24 && humidity >= 30 && humidity <= 60) {
         return "very comfortable";
     }
-    
+
     // Generally comfortable range
     if (feelsLike >= 15 && feelsLike <= 28) {
         return "comfortable";
     }
-    
+
     // Default
     return "moderately comfortable";
 };
@@ -635,7 +636,7 @@ const determineComfortLevel = (temp, humidity, windSpeed, solarRad) => {
  */
 const getCurrentSeason = (hemisphere = 'northern') => {
     const month = new Date().getMonth();
-    
+
     if (hemisphere.toLowerCase() === 'northern') {
         // Nordic season adjustment - spring comes later, winter comes earlier
         if (month >= 3 && month <= 5) return 'spring';
@@ -661,11 +662,11 @@ const getCurrentSeason = (hemisphere = 'northern') => {
 const isDateInDST = (date) => {
     const year = date.getFullYear();
     const month = date.getMonth(); // 0-11 for Jan-Dec
-    
+
     // Early return for months definitely in or out of DST
     if (month > 10 || month < 2) return false; // November to February
     if (month > 3 && month < 9) return true;   // April to September
-    
+
     // Calculate last Sunday of March
     const lastDayOfMarch = new Date(year, 2, 31);
     while (lastDayOfMarch.getMonth() > 2)
@@ -674,7 +675,7 @@ const isDateInDST = (date) => {
     while (lastSundayOfMarch.getDay() !== 0)
         lastSundayOfMarch.setDate(lastSundayOfMarch.getDate() - 1);
     lastSundayOfMarch.setHours(2, 0, 0, 0); // 02:00 CET
-    
+
     // Calculate last Sunday of October
     const lastDayOfOctober = new Date(year, 9, 31);
     while (lastDayOfOctober.getMonth() > 9)
@@ -683,7 +684,7 @@ const isDateInDST = (date) => {
     while (lastSundayOfOctober.getDay() !== 0)
         lastSundayOfOctober.setDate(lastSundayOfOctober.getDate() - 1);
     lastSundayOfOctober.setHours(3, 0, 0, 0); // 03:00 CEST
-    
+
     // Check if date is between these two times
     return date >= lastSundayOfMarch && date < lastSundayOfOctober;
 };
@@ -703,7 +704,7 @@ const calculateDaylightHours = (latitude, longitude, month = new Date().getMonth
     const date = new Date();
     date.setMonth(month);
     date.setDate(day);
-    
+
     // Calculate day of year (accounting for leap years)
     const isLeapYear = (date.getFullYear() % 4 === 0 && date.getFullYear() % 100 !== 0) || (date.getFullYear() % 400 === 0);
     const daysInFebruary = isLeapYear ? 29 : 28;
@@ -711,27 +712,27 @@ const calculateDaylightHours = (latitude, longitude, month = new Date().getMonth
     let dayOfYear = day;
     for (let i = 0; i < month; i++)
         dayOfYear += daysInMonth[i];
-    
+
     // Convert to radians for calculations
     const latRad = latitude * Math.PI / 180;
-    
+
     // Calculate solar declination (more accurate formula)
     const fracYear = 2 * Math.PI / (isLeapYear ? 366 : 365) * (dayOfYear - 1 + (date.getHours() - 12) / 24);
-    let declination = 0.006918 - 0.399912 * Math.cos(fracYear) + 0.070257 * Math.sin(fracYear) - 
-                      0.006758 * Math.cos(2 * fracYear) + 0.000907 * Math.sin(2 * fracYear) - 
-                      0.002697 * Math.cos(3 * fracYear) + 0.00148 * Math.sin(3 * fracYear);
-    
+    let declination = 0.006918 - 0.399912 * Math.cos(fracYear) + 0.070257 * Math.sin(fracYear) -
+        0.006758 * Math.cos(2 * fracYear) + 0.000907 * Math.sin(2 * fracYear) -
+        0.002697 * Math.cos(3 * fracYear) + 0.00148 * Math.sin(3 * fracYear);
+
     // Calculate equation of time (in minutes)
     const eqTime = 229.18 * (0.000075 + 0.001868 * Math.cos(fracYear) - 0.032077 * Math.sin(fracYear) - 0.014615 * Math.cos(2 * fracYear) - 0.040849 * Math.sin(2 * fracYear));
-    
+
     // Calculate solar noon (in hours, UTC)
     const solarNoon = 12 - eqTime / 60 - longitude / 15;
-    
+
     // Calculate sunrise/sunset hour angle
     // Standard zenith: 90.8333 degrees (sun diameter + atmospheric refraction)
     const zenith = 90.8333 * Math.PI / 180;
     const cosHourAngle = (Math.cos(zenith) - Math.sin(latRad) * Math.sin(declination)) / (Math.cos(latRad) * Math.cos(declination));
-    
+
     // Check for polar day/night
     let polarDay = false;
     let polarNight = false;
@@ -740,7 +741,7 @@ const calculateDaylightHours = (latitude, longitude, month = new Date().getMonth
     } else if (cosHourAngle > 1) {
         polarNight = true;
     }
-    
+
     // Calculate sunrise and sunset times (in UTC hours)
     let hourAngle = 0;
     if (!polarDay && !polarNight) {
@@ -756,7 +757,7 @@ const calculateDaylightHours = (latitude, longitude, month = new Date().getMonth
     const utcOffset = isDST ? 2 : 1;
     const sunriseLocal = sunriseUTC + utcOffset;
     const sunsetLocal = sunsetUTC + utcOffset;
-    
+
     // Calculate civil twilight (sun is 6 degrees below horizon)
     const civilZenith = 96 * Math.PI / 180; // 90 + 6 degrees
     const cosCivilHourAngle = (Math.cos(civilZenith) - Math.sin(latRad) * Math.sin(declination)) / (Math.cos(latRad) * Math.cos(declination));
@@ -774,7 +775,7 @@ const calculateDaylightHours = (latitude, longitude, month = new Date().getMonth
     const civilDuskUTC = solarNoon + civilHourAngle;
     const civilDawnLocal = civilDawnUTC + utcOffset;
     const civilDuskLocal = civilDuskUTC + utcOffset;
-    
+
     // Normalize times (handle wrapping around midnight)
     const normalizeTime = (time) => {
         if (time < 0) return time + 24;
@@ -785,14 +786,14 @@ const calculateDaylightHours = (latitude, longitude, month = new Date().getMonth
     const finalSunset = normalizeTime(sunsetLocal);
     const finalCivilDawn = normalizeTime(civilDawnLocal);
     const finalCivilDusk = normalizeTime(civilDuskLocal);
-    
+
     // Format to HH:MM
     const formatTime = (timeInHours) => {
         const hours = Math.floor(timeInHours);
         const minutes = Math.floor((timeInHours - hours) * 60);
         return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
     };
-    
+
     return {
         daylightHours: polarDay ? 24 : polarNight ? 0 : 2 * hourAngle,
         sunriseDecimal: finalSunrise,
@@ -818,17 +819,17 @@ const getJulianDate = (date) => {
     const year = date.getFullYear();
     const month = date.getMonth() + 1;
     const day = date.getDate();
-    
+
     // Calculate Julian date
     let jd = 367 * year - Math.floor(7 * (year + Math.floor((month + 9) / 12)) / 4);
     jd += Math.floor(275 * month / 9) + day + 1721013.5;
-    
+
     // Add time of day
     const hours = date.getUTCHours();
     const minutes = date.getUTCMinutes();
     const seconds = date.getUTCSeconds();
     jd += (hours + minutes / 60 + seconds / 3600) / 24;
-    
+
     return jd;
 };
 
@@ -841,7 +842,6 @@ const joinAnd = (items) => {
     if (!items || items.length === 0) return '';
     if (items.length === 1) return items[0];
     if (items.length === 2) return `${items[0]} and ${items[1]}`;
-    
     const lastItem = items.pop();
     return `${items.join(', ')}, and ${lastItem}`;
 };
@@ -853,36 +853,32 @@ const joinAnd = (items) => {
  */
 const generateDescription = (results) => {
     let description = '';
-    
+
     // Add main conditions
     if (results.conditions.length > 0) {
-        const uniqueConditions = [...new Set(results.conditions)];
-        description = joinAnd(uniqueConditions);
+        description = joinAnd([...new Set(results.conditions)]);
         description = description.charAt(0).toUpperCase() + description.slice(1);
     }
-    
+
     // Add weather phenomena
     if (results.phenomena.length > 0) {
-        const uniquePhenomena = [...new Set(results.phenomena)];
-        const phenomenaText = joinAnd(uniquePhenomena);
-        
+        const phenomenaText = joinAnd([...new Set(results.phenomena)]);
         if (description) {
             description += ` with ${phenomenaText}`;
         } else {
             description = phenomenaText.charAt(0).toUpperCase() + phenomenaText.slice(1);
         }
     }
-    
+
     // Add comfort level if available
     if (results.comfort && !description.includes(results.comfort)) {
         description += `. Conditions are ${results.comfort}`;
     }
-    
+
     // Add period at the end if not already present
     if (description && !description.endsWith('.')) {
         description += '.';
     }
-    
+
     return description || null;
 };
-

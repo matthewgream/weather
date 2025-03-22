@@ -69,11 +69,11 @@ const createViewDataText = (vars) => {
     let interpretation = getWeatherInterpretation({ temp, humidity, pressure, windSpeed, solarRad, solarUvi, rainRate });
     if (interpretation !== null) {
         summary += `<br><br>${interpretation.description}`;
-		if (interpretation.isDaytime && interpretation.daylight.sunset)
-			summary += ` Sunset at ${interpretation.daylight.sunset}.`;
-		else if (!interpretation.isDaytime && interpretation.daylight.sunrise)
-			summary += ` Sunrise at ${interpretation.daylight.sunrise}.`;
-	}
+        if (interpretation.isDaytime && interpretation.daylight.sunset)
+            summary += ` Sunset at ${interpretation.daylight.sunset}.`;
+        else if (!interpretation.isDaytime && interpretation.daylight.sunrise)
+            summary += ` Sunrise at ${interpretation.daylight.sunrise}.`;
+    }
 
     return summary;
 };
@@ -266,7 +266,7 @@ const updateSectionThumbs = () => {
                     URL.revokeObjectURL(url);
                 } catch (e) { }
             });
-            thumbnailsCacheCurrent = {...thumbnailsCachePending};
+            thumbnailsCacheCurrent = { ...thumbnailsCachePending };
             thumbnailsCachePending = {};
             thumbnailsLastUpdate = currentTime;
         });
@@ -372,7 +372,7 @@ const createSectionTime = (mode, vars) => {
 let varsLast;
 
 const update = (vars) => {
-	varsLast = vars;
+    varsLast = vars;
     const mode = getMode();
 
     updateSectionData(mode, vars);
@@ -380,7 +380,7 @@ const update = (vars) => {
 };
 
 const create = (vars) => {
-	varsLast = vars;
+    varsLast = vars;
     const mode = getMode();
 
     document.getElementById('weather-dashboard').innerHTML = `
@@ -397,7 +397,7 @@ const create = (vars) => {
 }
 
 const reload = () => {
-	create (varsLast);
+    create(varsLast);
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
