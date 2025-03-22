@@ -368,8 +368,6 @@
                     interpreted.push("feels warmer (humidity)");
                 if (solarRad > 500)
                     interpreted.push("strong sun");
-                else if (solarRad > 0 && solarRad < 100 && temp > 0 && !result.includes("rain"))
-                    interpreted.push("overcast");
                 if (Math.abs(temp - dewPoint) < 2.5 && temp > 0)
                     interpreted.push("possible fog");
                 if (temp < 3 && temp > -2 && rainRate > 0)

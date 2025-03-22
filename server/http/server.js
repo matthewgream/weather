@@ -86,6 +86,7 @@ const socket = require('socket.io')(httpsServer);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+const snapshotsTime = (24*2 + 2) * 60 * 60; // 2 days + 2 hours, in seconds
 const snapshotsDir__ = '/opt/snapshots';
 let snapshotsList__ = [];
 
@@ -109,7 +110,7 @@ async function snapshotLoad() {
         snapshotsList__ = files
             .filter(file => file.match(/snapshot_\d{14}\.jpg/))
             .sort((a, b) => (snapshotTimestampParser(b) || 0) - (snapshotTimestampParser(a) || 0));
-        console.log(`Loaded snapshot list with ${snapshotsList__.length} existing files`);
+        console.log(`Loaded snapshot list with ${snapshotsList__.length} existing files (with expiration of ${snapshotsTime/60/60} hours)`);
 
     } catch (error) {
         console.error('Error loading snapshot list:', error);
@@ -172,7 +173,7 @@ async function snapshotRebuild() {
         if (closest) {
             try {
                 await fs_async.copyFile(path.join(snapshotsDir__, closest), targetPath);
-                console.log(`Created snapshot M${minutes} from ${closest}`);
+                // console.log(`Created snapshot M${minutes} from ${closest}`);
             } catch (err) {
                 console.error(`Error creating snapshot for M${minutes}:`, err);
             }
@@ -185,7 +186,7 @@ async function snapshotCleanup() {
     const path = require('path');
 
     try {
-        const cleanupTime = new Date((new Date()).getTime() - 26 * 60 * 60 * 1000);
+        const cleanupTime = new Date((new Date()).getTime() - snapshotsTime * 1000);
         const files = await fs_async.readdir(snapshotsDir__);
         for (const file of files) {
             if (file.startsWith('snapshot_')) {
