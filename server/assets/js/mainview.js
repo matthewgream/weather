@@ -239,15 +239,17 @@ const thumbnails = [
     { file: 'snapshot_M45.jpg', label: 'T-45mins' },
     { file: 'snapshot_M60.jpg', label: 'T-60mins' }
 ];
-const thumbnailsCache = {};
+
+let thumbnailsLastUpdate = 0;
+let thumbnailsCacheCurrent = {};
+let thumbnailsCachePending = {};
 
 const createSectionThumbs = () => {
     const now = new Date();
     const day = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-
     let thumbnailsHtml = '';
     for (const thumbnail of thumbnails) {
-        const thumbnailSrc = thumbnailsCache[thumbnail.file] ||
+        const thumbnailSrc = thumbnailsCacheCurrent[thumbnail.file] ||
             'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Crect width="100" height="100" fill="%23eaeaea"/%3E%3C/svg%3E';
         thumbnailsHtml += `
             <div class="thumbnail-container">
@@ -275,21 +277,21 @@ const createSectionThumbs = () => {
     return thumbnailsHtml + thumbnailsLinks;
 };
 
-let lastThumbnailUpdate = 0;
-
 const loadSectionThumbs = () => {
-    lastThumbnailUpdate = Date.now();
+    thumbnailsLastUpdate = Date.now();
     const thumbnailImages = document.querySelectorAll('.thumbnail-image[data-thumbnail]');
     thumbnailImages.forEach(img => {
         const thumbnailFile = img.getAttribute('data-thumbnail');
-        if (thumbnailsCache[thumbnailFile])
+        if (thumbnailsCacheCurrent[thumbnailFile]) {
+            img.src = thumbnailsCacheCurrent[thumbnailFile];
             return;
+        }
         const thumbnailUrl = `/snapshot/thumb/${thumbnailFile}?width=200`;
         fetch(thumbnailUrl)
             .then(response => response.blob())
             .then(blob => {
                 const url = URL.createObjectURL(blob);
-                thumbnailsCache[thumbnailFile] = url;
+                thumbnailsCacheCurrent[thumbnailFile] = url;
                 img.src = url;
             })
             .catch(error => {
@@ -300,20 +302,50 @@ const loadSectionThumbs = () => {
 };
 
 const updateSectionThumbs = () => {
-    const difference = Date.now() - lastThumbnailUpdate;
-    if (lastThumbnailUpdate === 0 || difference > 60 * 1 * 1000) {
-        Object.values(thumbnailsCache).forEach(url => {
-            try {
-                URL.revokeObjectURL(url);
-            } catch (e) { }
+    const currentTime = Date.now();
+    const difference = currentTime - thumbnailsLastUpdate;
+    const threshold = 60000;
+    if (thumbnailsLastUpdate === 0 || difference > threshold) {
+        thumbnailsCachePending = {};
+        const preloadPromises = thumbnails.map(thumbnail => {
+            const thumbnailUrl = `/snapshot/thumb/${thumbnail.file}?width=200&t=${currentTime}`;
+            return fetch(thumbnailUrl)
+                .then(response => response.blob())
+                .then(blob => {
+                    const url = URL.createObjectURL(blob);
+                    thumbnailsCachePending[thumbnail.file] = url;
+                    return thumbnail.file;
+                })
+                .catch(error => {
+                    console.error(`Error pre-loading thumbnail ${thumbnail.file}:`, error);
+                    return null;
+                });
         });
-        for (const thumbnailFile in thumbnailsCache)
-            delete thumbnailsCache[thumbnailFile];
-        const thumbnailsRow = document.getElementById('thumbnails-row');
-        if (thumbnailsRow) {
-            thumbnailsRow.innerHTML = createSectionThumbs();
-            loadSectionThumbs();
-        }
+        Promise.all(preloadPromises).then(() => {
+            thumbnails.forEach(thumbnail => {
+                const img = document.querySelector(`.thumbnail-image[data-thumbnail="${thumbnail.file}"]`);
+                if (img && thumbnailsCachePending[thumbnail.file]) {
+                    img.style.transition = 'opacity 0.3s ease';
+                    img.style.opacity = '0';
+                    setTimeout(() => {
+                        img.src = thumbnailsCachePending[thumbnail.file];
+                        img.onload = () => {
+                            img.style.opacity = '1';
+                        };
+                    }, 300);
+                }
+            });
+            setTimeout(() => {
+                Object.values(thumbnailsCacheCurrent).forEach(url => {
+                    try {
+                        URL.revokeObjectURL(url);
+                    } catch (e) { }
+                });
+                thumbnailsCacheCurrent = {...thumbnailsCachePending};
+                thumbnailsCachePending = {};
+                thumbnailsLastUpdate = currentTime;
+            }, 1000);
+        });
     }
 };
 
