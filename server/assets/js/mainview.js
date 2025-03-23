@@ -37,7 +37,7 @@ const locate = (data, path) => path.split('.').reduce((accm, part) => accm && ac
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const formatWarningBanner = (timestamp, timeDiff) => {
-	return `Weather data was last received at ${timestamp} (more than ${Math.floor(timeDiff)} minutes ago), thus the local weather station connection is offline.
+    return `Weather data was last received at ${timestamp} (more than ${Math.floor(timeDiff)} minutes ago), thus the local weather station connection is offline.
         	Please use <a href="https://www.wunderground.com/dashboard/pws/IBRUNS40">Weather Underground</a>. The Camera image is up to date.`;
 };
 
@@ -57,8 +57,8 @@ const updateWarningBanner = (vars) => {
     const timestamp = locate(vars, config.var_timestamp);
     const timeDiff = Math.floor((new Date() - new Date(timestamp.replace(/([+-]\d{2})Z$/, '$1:00'))) / (60 * 1000));
     const element = document.getElementById('warning-banner');
-	if (element)
-		element.innerHTML = (timeDiff > 60) ? formatWarningBanner(timestamp, timeDiff) : '';
+    if (element)
+        element.innerHTML = (timeDiff > 60) ? formatWarningBanner(timestamp, timeDiff) : '';
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -83,83 +83,83 @@ const createViewTextSummary = (vars) => {
     const lakeSubmerged = locate(vars, lake.elems[1].path);
 
     let details = '';
-	if (temp !== null && humidity !== null && pressure !== null) {
-		if (temp === null || humidity === null || pressure === null)
-			details += "No data.<br>";
-		else {
-    		const formattedTemp = outside.elems[0].format(outside.elems[0], temp);
-    		const formattedHumidity = outside.elems[1].format(outside.elems[1], humidity);
-    		const formattedPressure = outside.elems[2].format(outside.elems[2], pressure);
-			details += `Temp <span class="value">${formattedTemp}°C</span> at <span class="value">${formattedHumidity}%</span> and <span class="value">${formattedPressure}</span> hPa.<br>`;
-		}
-    	if (!windSpeed)
-        	details += "No wind.<br>";
-    	else {
-    		const formattedWindSpeed = outside.elems[3].format(outside.elems[3], windSpeed);
-    		const formattedWindDir = outside.elems[5].format(outside.elems[5], windDir).replace('n/a', '');
-        	details += `Wind <span class="value">${formattedWindSpeed}</span> m/s <span class="value">${formattedWindDir}</span>`;
-        	if (windGust && windGust > windSpeed) {
-    			const formattedWindGust = outside.elems[4].format(outside.elems[4], windGust);
-            	details += `, gusting <span class="value">${formattedWindGust}</span> m/s</span>`;
-			}
-        	details += `.<br>`;
-    	}
-    	if (!rainRate && !rainDaily)
-        	details += "No rain.<br>";
-    	else {
-    		const formattedRainRate = outside.elems[8].format(outside.elems[8], rainRate);
-        	details += `Rain <span class="value">${formattedRainRate}</span> mm/hr`;
-			if (rainDaily) {
-    			const formattedRainDaily = outside.elems[9].format(outside.elems[9], rainDaily);
-        		details += ` (<span class="value">${formattedRainDaily}</span>mm today)`;
-			}
-        	details += `.<br>`;
-    	}
-    	if (!solarRad)
-        	details += "No solar.<br>";
-    	else {
-    		const formattedSolarRad = outside.elems[6].format(outside.elems[6], solarRad);
-        	details += `Solar <span class="value">${formattedSolarRad}</span> W/m²</span>`;
-        	if (solarUvi) {
-    			const formattedSolarUvi = outside.elems[7].format(outside.elems[7], solarUvi);
-            	details += `, UVI <span class="value">${formattedSolarUvi}</span>`;
-			}
-        	details += `.<br>`;
-    	}
-		if (lakeSurface === null && lakeSubmerged === null)
-			details += "No lake.<br>";
-		else {
-    		const formattedLakeSurface = lake.elems[0].format(lake.elems[0], lakeSurface);
-    		const formattedLakeSubmerged = lake.elems[1].format(lake.elems[1], lakeSubmerged);
-    		details += `Lake <span class="value">${formattedLakeSurface}°C</span> above and <span class="value">${formattedLakeSubmerged}°C</span> below.`;
-		}
-	}
+    if (temp !== null && humidity !== null && pressure !== null) {
+        if (temp === null || humidity === null || pressure === null)
+            details += "No data.<br>";
+        else {
+            const formattedTemp = outside.elems[0].format(outside.elems[0], temp);
+            const formattedHumidity = outside.elems[1].format(outside.elems[1], humidity);
+            const formattedPressure = outside.elems[2].format(outside.elems[2], pressure);
+            details += `Temp <span class="value">${formattedTemp}°C</span> at <span class="value">${formattedHumidity}%</span> and <span class="value">${formattedPressure}</span> hPa.<br>`;
+        }
+        if (!windSpeed)
+            details += "No wind.<br>";
+        else {
+            const formattedWindSpeed = outside.elems[3].format(outside.elems[3], windSpeed);
+            const formattedWindDir = outside.elems[5].format(outside.elems[5], windDir).replace('n/a', '');
+            details += `Wind <span class="value">${formattedWindSpeed}</span> m/s <span class="value">${formattedWindDir}</span>`;
+            if (windGust && windGust > windSpeed) {
+                const formattedWindGust = outside.elems[4].format(outside.elems[4], windGust);
+                details += `, gusting <span class="value">${formattedWindGust}</span> m/s</span>`;
+            }
+            details += `.<br>`;
+        }
+        if (!rainRate && !rainDaily)
+            details += "No rain.<br>";
+        else {
+            const formattedRainRate = outside.elems[8].format(outside.elems[8], rainRate);
+            details += `Rain <span class="value">${formattedRainRate}</span> mm/hr`;
+            if (rainDaily) {
+                const formattedRainDaily = outside.elems[9].format(outside.elems[9], rainDaily);
+                details += ` (<span class="value">${formattedRainDaily}</span>mm today)`;
+            }
+            details += `.<br>`;
+        }
+        if (!solarRad)
+            details += "No solar.<br>";
+        else {
+            const formattedSolarRad = outside.elems[6].format(outside.elems[6], solarRad);
+            details += `Solar <span class="value">${formattedSolarRad}</span> W/m²</span>`;
+            if (solarUvi) {
+                const formattedSolarUvi = outside.elems[7].format(outside.elems[7], solarUvi);
+                details += `, UVI <span class="value">${formattedSolarUvi}</span>`;
+            }
+            details += `.<br>`;
+        }
+        if (lakeSurface === null && lakeSubmerged === null)
+            details += "No lake.<br>";
+        else {
+            const formattedLakeSurface = lake.elems[0].format(lake.elems[0], lakeSurface);
+            const formattedLakeSubmerged = lake.elems[1].format(lake.elems[1], lakeSubmerged);
+            details += `Lake <span class="value">${formattedLakeSurface}°C</span> above and <span class="value">${formattedLakeSubmerged}°C</span> below.`;
+        }
+    }
 
-	let analysis = '';
-	if (temp !== null && humidity !== null && pressure !== null) {
-    	let w = getWeatherInterpretation({ temp, humidity, pressure, windSpeed, solarRad, solarUvi, rainRate });
-    	if (w) {
-        	analysis += `<br><br>${w.description}`;
-			if (w.daylight) {
-        		if (w.daylight.isDaytime && w.daylight.sunset)
-            		analysis += ` Sunset at ${w.daylight.sunset}.`;
-        		else if (!w.daylight.isDaytime && w.daylight.sunrise)
-            		analysis += ` Sunrise at ${w.daylight.sunrise}.`;
-			}
-			if (w.alerts && w.alerts.length > 0)
-				analysis += `<br><br>WARNING: ${joinand (w.alerts)}.`;
-		}
-	}
+    let analysis = '';
+    if (temp !== null && humidity !== null && pressure !== null) {
+        let w = getWeatherInterpretation({ temp, humidity, pressure, windSpeed, solarRad, solarUvi, rainRate });
+        if (w) {
+            analysis += `<br><br>${w.description}`;
+            if (w.daylight) {
+                if (w.daylight.isDaytime && w.daylight.sunset)
+                    analysis += ` Sunset at ${w.daylight.sunset}.`;
+                else if (!w.daylight.isDaytime && w.daylight.sunrise)
+                    analysis += ` Sunrise at ${w.daylight.sunrise}.`;
+            }
+            if (w.alerts && w.alerts.length > 0)
+                analysis += `<br><br>WARNING: ${joinand(w.alerts)}.`;
+        }
+    }
 
-	let result = details + analysis;
-	if (!result)
-		result = "No data: likely technical fault.<br>";
+    let result = details + analysis;
+    if (!result)
+        result = "No data: likely technical fault.<br>";
 
-	return result;
+    return result;
 };
 
 const createViewText = (vars) => {
-	return `
+    return `
     	<section class="section">
         	<div class="text-summary" id="text-summary-details">
 				${createViewTextSummary(vars)}
@@ -187,25 +187,25 @@ const createViewDataTable = (sect, elem, vars) => `
 `;
 
 const createViewData = (vars) => {
-   	return model.map(item => {
-       	return `
+    return model.map(item => {
+        return `
        		<section class="section">
            		<h2>${item.name}</h2>
            		${item.elems.map(elem => createViewDataTable(item.id, elem, vars)).join('')}
        		</section>
 		`;
-	}).join('');
+    }).join('');
 };
 
 const updateViewData = (vars) => {
     model.forEach(item =>
         item.elems.forEach(elem => {
             const value = locate(vars, elem.path)
-			if (value !== null) {
-				const element = document.getElementById(`${item.id}-${elem.id}`);
-				if (element)
-					element.textContent = elem.format(elem, value);
-			}
+            if (value !== null) {
+                const element = document.getElementById(`${item.id}-${elem.id}`);
+                if (element)
+                    element.textContent = elem.format(elem, value);
+            }
         })
     );
 }
@@ -214,17 +214,17 @@ const updateViewData = (vars) => {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const createSectionData = (mode, vars) => {
-	if (mode === 'text')
-		return createViewText (vars);
-	else
-		return createViewData (vars);
+    if (mode === 'text')
+        return createViewText(vars);
+    else
+        return createViewData(vars);
 };
 
 const updateSectionData = (mode, vars) => {
     if (mode === 'text')
-		updateViewText (vars);
+        updateViewText(vars);
     else
-		updateViewData (vars);
+        updateViewData(vars);
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -430,11 +430,11 @@ const createSectionTime = (mode, vars) => {
 
 let varsLast;
 
-const getMode = () => 
-	localStorage.getItem('displayMode') || 'text';
+const getMode = () =>
+    localStorage.getItem('displayMode') || 'text';
 
 const setMode = (mode) =>
-	localStorage.setItem('displayMode', mode) + create(varsLast);
+    localStorage.setItem('displayMode', mode) + create(varsLast);
 
 const displayMode = (mode) => `
 	<div class="mode-switch">
@@ -445,7 +445,7 @@ const update = (vars) => {
     varsLast = vars;
     const mode = getMode();
 
-	updateWarningBanner(vars);
+    updateWarningBanner(vars);
     updateSectionData(mode, vars);
     updateSectionTime(mode, vars);
 };
@@ -468,4 +468,3 @@ const create = (vars) => {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
-

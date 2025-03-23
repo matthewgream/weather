@@ -32,8 +32,8 @@ const getWeatherInterpretation = (data) => {
     const heatIndex = calculateHeatIndex(temp, humidity);
     const windChill = calculateWindChill(temp, windSpeed);
     const feelsLike = determineFeelsLike(temp, humidity, windSpeed);
-    const month = new Date ().getMonth();
-    const day = new Date ().getDate();
+    const month = new Date().getMonth();
+    const day = new Date().getDate();
     const hour = new Date().getHours();
     const daylight = calculateDaylightHours(LOCATION_DATA.latitude, LOCATION_DATA.longitude);
 
@@ -458,8 +458,8 @@ const calculateDaylightHours = (latitude, longitude) => {
     const isLeapYear = (date.getFullYear() % 4 === 0 && date.getFullYear() % 100 !== 0) || (date.getFullYear() % 400 === 0);
     const daysInFebruary = isLeapYear ? 29 : 28;
     const daysInMonth = [31, daysInFebruary, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-    let dayOfYear = date.getDate ();
-    for (let i = 0; i < date.getMonth (); i++)
+    let dayOfYear = date.getDate();
+    for (let i = 0; i < date.getMonth(); i++)
         dayOfYear += daysInMonth[i];
     const latRad = latitude * Math.PI / 180;
     const fracYear = 2 * Math.PI / (isLeapYear ? 366 : 365) * (dayOfYear - 1 + (date.getHours() - 12) / 24);
@@ -480,7 +480,7 @@ const calculateDaylightHours = (latitude, longitude) => {
     const sunsetLocal = sunsetUTC + utcOffset;
     const civilZenith = 96 * Math.PI / 180; // 90 + 6 degrees
     const cosCivilHourAngle = (Math.cos(civilZenith) - Math.sin(latRad) * Math.sin(declination)) / (Math.cos(latRad) * Math.cos(declination));
-	const civilHourAngle = (cosCivilHourAngle >= -1 && cosCivilHourAngle <= 1) ? (Math.acos(cosCivilHourAngle) * 180 / Math.PI / 15) : (cosCivilHourAngle < -1 ? 12 : 0);
+    const civilHourAngle = (cosCivilHourAngle >= -1 && cosCivilHourAngle <= 1) ? (Math.acos(cosCivilHourAngle) * 180 / Math.PI / 15) : (cosCivilHourAngle < -1 ? 12 : 0);
     const civilDawnUTC = solarNoon - civilHourAngle;
     const civilDuskUTC = solarNoon + civilHourAngle;
     const civilDawnLocal = civilDawnUTC + utcOffset;
@@ -490,7 +490,7 @@ const calculateDaylightHours = (latitude, longitude) => {
     const finalSunset = normalizeTime(sunsetLocal);
     const finalCivilDawn = normalizeTime(civilDawnLocal);
     const finalCivilDusk = normalizeTime(civilDuskLocal);
-  	const isDaytime = (date.getHours () + (date.getMinutes ()/60)) > finalSunrise && (date.getHours () + (date.getMinutes ()/60)) < finalSunset;
+    const isDaytime = (date.getHours() + (date.getMinutes() / 60)) > finalSunrise && (date.getHours() + (date.getMinutes() / 60)) < finalSunset;
     const formatTime = (timeInHours) => `${Math.floor(timeInHours).toString().padStart(2, '0')}:${Math.floor((timeInHours - Math.floor(timeInHours)) * 60).toString().padStart(2, '0')}`;
     return {
         daylightHours: polarDay ? 24 : polarNight ? 0 : 2 * hourAngle,
@@ -504,7 +504,7 @@ const calculateDaylightHours = (latitude, longitude) => {
         isPolarNight: polarNight,
         sunriseHour: Math.floor(finalSunrise),
         sunsetHour: Math.floor(finalSunset),
-    	isDaytime
+        isDaytime
     };
 };
 
@@ -532,10 +532,10 @@ const generateDescription = (results) => {
         description = joinand([...new Set(results.conditions)]);
     if (results.phenomena.length > 0)
         description += (description ? ": " : "") + joinand([...new Set(results.phenomena)]);
-	if (description) {
+    if (description) {
         description = description.charAt(0).toUpperCase() + description.slice(1);
-    	if (!description.endsWith('.'))
-        	description += '.';
-	}
+        if (!description.endsWith('.'))
+            description += '.';
+    }
     return description || null;
 };
