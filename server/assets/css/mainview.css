@@ -181,8 +181,8 @@ h2 {
     height: auto;
     border-radius: 4px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-	opacity: 1;
-	transition: opacity 0.3s ease;
+    opacity: 1;
+    transition: opacity 0.3s ease;
 }
 
 .thumbnail-container:hover .thumbnail-image {
