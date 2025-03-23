@@ -117,20 +117,21 @@ console.log (`Loaded 'express-status-monitor' on /status`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const morgan = require('morgan');
-const FileStreamRotator = require('file-stream-rotator');
-const logsDir = logs;
-fs.existsSync(logsDir) || fs.mkdirSync(logsDir);
-const accessLogStream = FileStreamRotator.getStream({
-    date_format: 'YYYY-MM-DD',
-    filename: path.join(logsDir, 'access-%DATE%.log'),
-    frequency: 'daily',
-    verbose: false,
-    size: '1M',
-    max_logs: 10,
-    audit_file: path.join(logsDir, 'audit.json'),
-    end_stream: false
-});
-xxx.use(morgan('combined', { stream: accessLogStream }));
+// const FileStreamRotator = require('file-stream-rotator');
+// const logsDir = logs;
+// fs.existsSync(logsDir) || fs.mkdirSync(logsDir);
+// const accessLogStream = FileStreamRotator.getStream({
+//     date_format: 'YYYY-MM-DD',
+//     filename: path.join(logsDir, 'access-%DATE%.log'),
+//     frequency: 'daily',
+//     verbose: false,
+//     size: '1M',
+//     max_logs: 10,
+//     audit_file: path.join(logsDir, 'audit.json'),
+//     end_stream: false
+// });
+// xxx.use(morgan('combined', { stream: accessLogStream }));
+xxx.use(morgan('combined'));
 const requestStats = {
     totalRequests: 0,
     requestsByRoute: {},
@@ -152,9 +153,10 @@ xxx.use((req, res, next) => {
     next();
 });
 xxx.get('/requests', (req, res) => {
-    const files = fs.readdirSync(logsDir).filter(file => file.startsWith('access-'));
-    const mostRecentLog = files.sort().pop();
-    const recentLogs = mostRecentLog ? fs.readFileSync(path.join(logsDir, mostRecentLog), 'utf8').split('\n').filter(Boolean).slice(-100) : [];
+//    const files = fs.readdirSync(logsDir).filter(file => file.startsWith('access-'));
+//    const mostRecentLog = files.sort().pop();
+//    const recentLogs = mostRecentLog ? fs.readFileSync(path.join(logsDir, mostRecentLog), 'utf8').split('\n').filter(Boolean).slice(-100) : [];
+	const recentLogs = [];
     res.send(`
     <html>
       <head>
@@ -222,7 +224,8 @@ xxx.get('/requests', (req, res) => {
     </html>
   `);
 });
-console.log(`Loaded 'morgan' on /requests using logs=${logsDir}`);
+// console.log(`Loaded 'morgan' on /requests using logs=${logsDir}`);
+console.log(`Loaded 'morgan' on /requests using in-memory`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
