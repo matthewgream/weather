@@ -2,95 +2,17 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const locate = (data, path) => path.split('.').reduce((accm, part) => accm && accm[part], data);
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-const createViewDataText = (vars) => {
-
-    const outside = secs[0];
-    const lake = secs[1];
-
-    const temp = locate(vars, outside.elems[0].path);
-    const humidity = locate(vars, outside.elems[1].path);
-    const pressure = locate(vars, outside.elems[2].path);
-    const windSpeed = locate(vars, outside.elems[3].path) || 0;
-    const windGust = locate(vars, outside.elems[4].path);
-    const windDir = locate(vars, outside.elems[5].path);
-    const solarRad = locate(vars, outside.elems[6].path) || 0;
-    const solarUvi = locate(vars, outside.elems[7].path) || 0;
-    const rainRate = locate(vars, outside.elems[8].path) || 0;
-    const rainDaily = locate(vars, outside.elems[9].path);
-    const lakeSurface = locate(vars, lake.elems[0].path);
-    const lakeSubmerged = locate(vars, lake.elems[1].path);
-
-    const formattedTemp = outside.elems[0].format(outside.elems[0], temp);
-    const formattedHumidity = outside.elems[1].format(outside.elems[1], humidity);
-    const formattedPressure = outside.elems[2].format(outside.elems[2], pressure);
-    const formattedWindSpeed = outside.elems[3].format(outside.elems[3], windSpeed);
-    const formattedWindGust = outside.elems[4].format(outside.elems[4], windGust);
-    const formattedWindDir = outside.elems[5].format(outside.elems[5], windDir).replace('n/a', '');
-    const formattedSolarRad = outside.elems[6].format(outside.elems[6], solarRad);
-    const formattedSolarUvi = outside.elems[7].format(outside.elems[7], solarUvi);
-    const formattedRainRate = outside.elems[8].format(outside.elems[8], rainRate);
-    const formattedRainDaily = outside.elems[9].format(outside.elems[9], rainDaily);
-    const formattedLakeSurface = lake.elems[0].format(lake.elems[0], lakeSurface);
-    const formattedLakeSubmerged = lake.elems[1].format(lake.elems[1], lakeSubmerged);
-
-    let summary = `Temp <span class="value">${formattedTemp}°C</span> at <span class="value">${formattedHumidity}%</span> and <span class="value">${formattedPressure}</span> hPa.<br>`;
-    if (!windSpeed)
-        summary += "No wind.<br>";
-    else {
-        summary += `Wind <span class="value">${formattedWindSpeed}</span> m/s <span class="value">${formattedWindDir}</span>`;
-        if (windGust && windGust > windSpeed)
-            summary += `, gusting <span class="value">${formattedWindGust}</span> m/s</span>`;
-        summary += `.<br>`;
-    }
-    if (!rainRate && !rainDaily)
-        summary += "No rain.<br>";
-    else {
-        if (!rainRate && rainDaily)
-            summary += `No rain`;
-        else
-            summary += `Rain <span class="value">${formattedRainRate}</span> mm/hr`;
-        summary += ` (<span class="value">${formattedRainDaily}</span>mm today).<br>`;
-    }
-    if (!solarRad && !solarUvi)
-        summary += "No solar.<br>";
-    else {
-        summary += `Solar <span class="value">${formattedSolarRad}</span> W/m²</span>`;
-        if (solarUvi)
-            summary += `, UVI <span class="value">${formattedSolarUvi}</span>`;
-        summary += `.<br>`;
-    }
-    summary += `Lake <span class="value">${formattedLakeSurface}°C</span> above and <span class="value">${formattedLakeSubmerged}°C</span> below.`;
-
-    let interpretation = getWeatherInterpretation({ temp, humidity, pressure, windSpeed, solarRad, solarUvi, rainRate });
-    if (interpretation !== null) {
-        summary += `<br><br>${interpretation.description}`;
-        if (interpretation.isDaytime && interpretation.daylight.sunset)
-            summary += ` Sunset at ${interpretation.daylight.sunset}.`;
-        else if (!interpretation.isDaytime && interpretation.daylight.sunrise)
-            summary += ` Sunrise at ${interpretation.daylight.sunrise}.`;
-    }
-
-    return summary;
-};
-
 const format = (elem, valu) => (valu != null) ? valu.toFixed(elem.decimals ?? 0) : 'n/a';
-
 const formatWindSpeed = (elem, valu) => (valu != null) ? (valu / 3.6).toFixed(elem.decimals ?? 0) : 'n/a';
-
 const formatWindDirection = (elem, valu) => (valu == null) ? 'n/a' : `${valu.toFixed(elem.decimals ?? 0)}° ${['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][Math.floor(((valu + 11.25) % 360) / 22.5)]}`;
 
-const secs = [
+const model = [
     {
         name: 'Outside', id: 'outside',
         elems: [
             { label: 'Temperature', id: 'temp', unit: '°C', path: 'weather/branna.temp', decimals: 1, format },
             { label: 'Humidity', id: 'humidity', unit: '%', path: 'weather/branna.humidity', format },
-            { label: 'Pressure', id: 'pressure', unit: 'hPa', path: 'weather/branna.baromrel', format },
+            { label: 'Pressure', id: 'pressure', unit: 'hPa', path: 'weather/branna.baromrel', decimals: 2, format },
             { label: 'Wind Speed', id: 'windspeed', unit: 'm/s', path: 'weather/branna.windspeed', decimals: 1, format: formatWindSpeed },
             { label: 'Wind Gust', id: 'windgust', unit: 'm/s', path: 'weather/branna.windgust', decimals: 1, format: formatWindSpeed },
             { label: 'Wind Direction', id: 'winddir', unit: '', path: 'weather/branna.winddir', format: formatWindDirection },
@@ -109,6 +31,151 @@ const secs = [
     },
 ];
 
+const locate = (data, path) => path.split('.').reduce((accm, part) => accm && accm[part], data);
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+const formatWarningBanner = (timestamp, timeDiff) => {
+	return `Weather data was last received at ${timestamp} (more than ${Math.floor(timeDiff)} minutes ago), thus the local weather station connection is offline.
+        	Please use <a href="https://www.wunderground.com/dashboard/pws/IBRUNS40">Weather Underground</a>. The Camera image is up to date.`;
+};
+
+const createWarningBanner = (vars) => {
+    const timestamp = locate(vars, config.var_timestamp);
+    const timeDiff = Math.floor((new Date() - new Date(timestamp.replace(/([+-]\d{2})Z$/, '$1:00'))) / (60 * 1000));
+    return (timeDiff > 60) ?
+        `<section class="section>
+			<div style="background-color: #fee2e2; border: 1px solid #ef4444; padding: 1rem; margin-bottom: 1rem; border-radius: 0.375rem; font-weight: bold;" id="warning-banner">
+				${formatWarningBanner(timestamp, timeDiff)}
+    		</div>
+		 </section>
+		` : '';
+};
+
+const updateWarningBanner = (vars) => {
+    const timestamp = locate(vars, config.var_timestamp);
+    const timeDiff = Math.floor((new Date() - new Date(timestamp.replace(/([+-]\d{2})Z$/, '$1:00'))) / (60 * 1000));
+    const element = document.getElementById('warning-banner');
+	if (element)
+		element.innerHTML = (timeDiff > 60) ? formatWarningBanner(timestamp, timeDiff) : '';
+};
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+const createViewTextSummary = (vars) => {
+
+    const outside = model[0];
+    const lake = model[1];
+
+    const temp = locate(vars, outside.elems[0].path);
+    const humidity = locate(vars, outside.elems[1].path);
+    const pressure = locate(vars, outside.elems[2].path);
+    const windSpeed = locate(vars, outside.elems[3].path);
+    const windGust = locate(vars, outside.elems[4].path);
+    const windDir = locate(vars, outside.elems[5].path);
+    const rainRate = locate(vars, outside.elems[8].path);
+    const rainDaily = locate(vars, outside.elems[9].path);
+    const solarRad = locate(vars, outside.elems[6].path);
+    const solarUvi = locate(vars, outside.elems[7].path);
+    const lakeSurface = locate(vars, lake.elems[0].path);
+    const lakeSubmerged = locate(vars, lake.elems[1].path);
+
+    let details = '';
+	if (temp !== null && humidity !== null && pressure !== null) {
+		if (temp === null || humidity === null || pressure === null)
+			details += "No data.<br>";
+		else {
+    		const formattedTemp = outside.elems[0].format(outside.elems[0], temp);
+    		const formattedHumidity = outside.elems[1].format(outside.elems[1], humidity);
+    		const formattedPressure = outside.elems[2].format(outside.elems[2], pressure);
+			details += `Temp <span class="value">${formattedTemp}°C</span> at <span class="value">${formattedHumidity}%</span> and <span class="value">${formattedPressure}</span> hPa.<br>`;
+		}
+    	if (!windSpeed)
+        	details += "No wind.<br>";
+    	else {
+    		const formattedWindSpeed = outside.elems[3].format(outside.elems[3], windSpeed);
+    		const formattedWindDir = outside.elems[5].format(outside.elems[5], windDir).replace('n/a', '');
+        	details += `Wind <span class="value">${formattedWindSpeed}</span> m/s <span class="value">${formattedWindDir}</span>`;
+        	if (windGust && windGust > windSpeed) {
+    			const formattedWindGust = outside.elems[4].format(outside.elems[4], windGust);
+            	details += `, gusting <span class="value">${formattedWindGust}</span> m/s</span>`;
+			}
+        	details += `.<br>`;
+    	}
+    	if (!rainRate && !rainDaily)
+        	details += "No rain.<br>";
+    	else {
+    		const formattedRainRate = outside.elems[8].format(outside.elems[8], rainRate);
+        	details += `Rain <span class="value">${formattedRainRate}</span> mm/hr`;
+			if (rainDaily) {
+    			const formattedRainDaily = outside.elems[9].format(outside.elems[9], rainDaily);
+        		details += ` (<span class="value">${formattedRainDaily}</span>mm today)`;
+			}
+        	details += `.<br>`;
+    	}
+    	if (!solarRad)
+        	details += "No solar.<br>";
+    	else {
+    		const formattedSolarRad = outside.elems[6].format(outside.elems[6], solarRad);
+        	details += `Solar <span class="value">${formattedSolarRad}</span> W/m²</span>`;
+        	if (solarUvi) {
+    			const formattedSolarUvi = outside.elems[7].format(outside.elems[7], solarUvi);
+            	details += `, UVI <span class="value">${formattedSolarUvi}</span>`;
+			}
+        	details += `.<br>`;
+    	}
+		if (lakeSurface === null && lakeSubmerged === null)
+			details += "No lake.<br>";
+		else {
+    		const formattedLakeSurface = lake.elems[0].format(lake.elems[0], lakeSurface);
+    		const formattedLakeSubmerged = lake.elems[1].format(lake.elems[1], lakeSubmerged);
+    		details += `Lake <span class="value">${formattedLakeSurface}°C</span> above and <span class="value">${formattedLakeSubmerged}°C</span> below.`;
+		}
+	}
+
+	let analysis = '';
+	if (temp !== null && humidity !== null && pressure !== null) {
+    	let w = getWeatherInterpretation({ temp, humidity, pressure, windSpeed, solarRad, solarUvi, rainRate });
+    	if (w) {
+        	analysis += `<br><br>${w.description}`;
+			if (w.daylight) {
+        		if (w.daylight.isDaytime && w.daylight.sunset)
+            		analysis += ` Sunset at ${w.daylight.sunset}.`;
+        		else if (!w.daylight.isDaytime && w.daylight.sunrise)
+            		analysis += ` Sunrise at ${w.daylight.sunrise}.`;
+			}
+			if (w.alerts && w.alerts.length > 0)
+				analysis += `<br><br>WARNING: ${joinand (w.alerts)}.`;
+		}
+	}
+
+	let result = details + analysis;
+	if (!result)
+		result = "No data: likely technical fault.<br>";
+
+	return result;
+};
+
+const createViewText = (vars) => {
+	return `
+    	<section class="section">
+        	<div class="text-summary" id="text-summary-details">
+				${createViewTextSummary(vars)}
+			</div>
+    	</section>
+	`;
+};
+const updateViewText = (vars) => {
+    const element = document.getElementById('text-summary-details');
+    if (element)
+        element.innerHTML = createViewTextSummary(vars);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 const createViewDataTable = (sect, elem, vars) => `
     <div class="data-row">
         <span class="label">${elem.label}</span>
@@ -119,50 +186,46 @@ const createViewDataTable = (sect, elem, vars) => `
     </div>
 `;
 
-const createViewData = (mode, sect, vars) => {
-    const timestamp = locate(vars, config.var_timestamp);
-    const timeDiff = Math.floor((new Date() - new Date(timestamp.replace(/([+-]\d{2})Z$/, '$1:00'))) / (60 * 1000));
-    const warningBanner = (sect.id === 'outside' && timeDiff > 60) ?
-        `<div style="background-color: #fee2e2; border: 1px solid #ef4444; padding: 1rem; margin-bottom: 1rem; border-radius: 0.375rem; font-weight: bold;">
-        Weather data was last received at ${timestamp} (more than ${Math.floor(timeDiff)} minutes ago), thus the local weather station connection is offline.
-        Please use <a href="https://www.wunderground.com/dashboard/pws/IBRUNS40">Weather Underground</a>. The Camera image is up to date.
-    </div>` : '';
-    if (mode === 'text' && sect.id === 'outside') {
-        return `
-        <section class="section">
-            ${warningBanner}
-            <div class="text-summary"><div id="text-summary-details">${createViewDataText(vars)}</span></div>
-        </section>`;
-    } else if (mode === 'text' && sect.id === 'lake') {
-        return ''; // Skip lake section in text mode as it's included in the summary
-    } else {
-        return `
-        <section class="section">
-            ${warningBanner}
-            <h2>${sect.name}</h2>
-            ${sect.elems.map(elem => createViewDataTable(sect.id, elem, vars)).join('')}
-        </section>`;
-    }
+const createViewData = (vars) => {
+   	return model.map(item => {
+       	return `
+       		<section class="section">
+           		<h2>${item.name}</h2>
+           		${item.elems.map(elem => createViewDataTable(item.id, elem, vars)).join('')}
+       		</section>
+		`;
+	}).join('');
 };
 
-const createSectionData = (mode, vars) => {
-    return secs.map(sect => createViewData(mode, sect, vars)).join('')
+const updateViewData = (vars) => {
+    model.forEach(item =>
+        item.elems.forEach(elem => {
+            const value = locate(vars, elem.path)
+			if (value !== null) {
+				const element = document.getElementById(`${item.id}-${elem.id}`);
+				if (element)
+					element.textContent = elem.format(elem, value);
+			}
+        })
+    );
 }
-const updateSectionData = (mode, vars) => {
 
-    if (mode === 'text') {
-        const textElement = document.getElementById('text-summary-details');
-        if (textElement)
-            textElement.innerHTML = createViewDataText(vars);
-    } else {
-        secs.forEach(sect =>
-            sect.elems.forEach(elem => {
-                const valu = locate(vars, elem.path), id = `${sect.id}-${elem.id}`;
-                if (valu != null && document.getElementById(id) != null) document.getElementById(id).textContent = elem.format(elem, valu);
-            })
-        );
-    }
-}
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+const createSectionData = (mode, vars) => {
+	if (mode === 'text')
+		return createViewText (vars);
+	else
+		return createViewData (vars);
+};
+
+const updateSectionData = (mode, vars) => {
+    if (mode === 'text')
+		updateViewText (vars);
+    else
+		updateViewData (vars);
+};
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -188,9 +251,7 @@ const createSectionThumbs = () => {
         thumbnailsHtml += `
             <div class="thumbnail-container">
                 <a href="/${thumbnail.file}" target="_blank">
-                    <img src="${thumbnailSrc}" alt="${thumbnail.label}" 
-                         class="thumbnail-image"
-                         data-thumbnail="${thumbnail.file}">
+                    <img src="${thumbnailSrc}" alt="${thumbnail.label}" class="thumbnail-image" data-thumbnail="${thumbnail.file}">
                     <div class="thumbnail-label">${thumbnail.label}</div>
                 </a>
             </div>
@@ -306,12 +367,10 @@ const createSectionCamera = (mode) => {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const createSectionLinks = (mode) => {
-
     const links = config.external_links.map(link => {
         const [label, url] = Object.entries(link)[0];
         return `<a href="${url}" target="_blank"><strong>${label}</strong></a>`;
     }).join(' | ');
-
     return `
         <div class="external-links">
             ${links}
@@ -371,10 +430,22 @@ const createSectionTime = (mode, vars) => {
 
 let varsLast;
 
+const getMode = () => 
+	localStorage.getItem('displayMode') || 'text';
+
+const setMode = (mode) =>
+	localStorage.setItem('displayMode', mode) + create(varsLast);
+
+const displayMode = (mode) => `
+	<div class="mode-switch">
+		<a onclick="setMode('${mode === 'table' ? 'text' : 'table'}')">[${mode === 'table' ? 'table' : 'text'} view: click for ${mode === 'table' ? 'text' : 'table'}]</a>
+	</div>`;
+
 const update = (vars) => {
     varsLast = vars;
     const mode = getMode();
 
+	updateWarningBanner(vars);
     updateSectionData(mode, vars);
     updateSectionTime(mode, vars);
 };
@@ -384,9 +455,8 @@ const create = (vars) => {
     const mode = getMode();
 
     document.getElementById('weather-dashboard').innerHTML = `
-        <div class="mode-switch">
-            <a onclick="setMode('${mode === 'table' ? 'text' : 'table'}')">[${mode === 'table' ? 'table' : 'text'} mode: click for ${mode === 'table' ? 'text' : 'table'} mode]</a>
-        </div>
+		${displayMode(mode)}
+		${createWarningBanner(vars)}
         ${createSectionData(mode, vars)}
         ${createSectionCamera(mode)}
         ${createSectionTime(mode, vars)}
@@ -395,10 +465,6 @@ const create = (vars) => {
 
     loadSectionThumbs();
 }
-
-const reload = () => {
-    create(varsLast);
-};
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------

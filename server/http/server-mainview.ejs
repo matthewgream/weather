@@ -16,13 +16,6 @@
         <script src="/static/js/weather.js"></script>
         <script src="/static/js/mainview.js"></script>
         <script>
-            const getMode = () => {
-                return localStorage.getItem('displayMode') || 'table';
-            };
-            const setMode = (mode) => {
-                localStorage.setItem('displayMode', mode);
-                reload();
-            };
             create(<%- JSON.stringify(vars) %>);
             io().on('update', update);
         </script>
