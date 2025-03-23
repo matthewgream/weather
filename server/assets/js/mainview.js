@@ -137,7 +137,7 @@ const createViewTextSummary = (vars) => {
 
     let analysis = '';
     if (temp !== null && humidity !== null && pressure !== null) {
-        let w = getWeatherInterpretation({ temp, humidity, pressure, windSpeed, solarRad, solarUvi, rainRate });
+        let w = getWeatherInterpretation({ temp, humidity, pressure, windSpeed: windSpeed/3.6, solarRad, solarUvi, rainRate }); // XXX
         if (w) {
             analysis += `<br><br>${w.description}`;
             if (w.daylight) {

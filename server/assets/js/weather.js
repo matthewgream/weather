@@ -147,7 +147,7 @@ const getWeatherInterpretation = (data) => {
             results.alerts.push("strong wind");
         } else if (windSpeed < 20.7) {
             results.conditions.push("gale");
-            results.alerts.push("gale warning");
+            results.alerts.push("gale");
         } else if (windSpeed < 24.4) {
             results.conditions.push("strong gale");
             results.alerts.push("strong gale");
