@@ -12,32 +12,31 @@ h1 {
     margin-bottom: 20px;
 }
 
-.date-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.date-item {
+.item-list {
     background-color: white;
-    padding: 12px 16px;
+    padding: 8px 16px;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.date-item a {
-    color: #4299e1;
-    text-decoration: none;
-    font-weight: 500;
-    display: block;
+.item-entry {
+    padding: 3px 0;
+    display: flex;
+    align-items: center;
 }
 
-.date-item a:hover {
+.item-detail {
+    font-weight: 500;
+    min-width: 80px;
+    margin-right: 16px;
+}
+
+.item-entry a {
+    color: #4299e1;
+    text-decoration: none;
+}
+
+.item-entry a:hover {
     text-decoration: underline;
 }
 
-.back-link {
-    margin-top: 20px;
-    display: inline-block;
-    color: #4299e1;
-}

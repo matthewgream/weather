@@ -5,19 +5,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Snapshots</title>
-    <link rel="stylesheet" href="/static/css/snapshot-list.css">
+    <link rel="stylesheet" href="/static/css/snapshot.css">
 </head>
 
 <body>
     <h1>Snapshots</h1>
-    <div class="date-list">
+    <div class="item-list">
         <% formattedDates.forEach(function(date) { %>
-            <div class="date-item">
-                <a href="/snapshot/list/<%= date.dateCode %>">
-                    <%= date.formattedDate %>
-                </a>
-            </div>
-            <% }); %>
+			<div class="item-entry">
+            	<a href="/snapshot/list/<%= date.dateCode %>">
+                	<%= date.formattedDate %>
+            	</a>
+    		</div>
+         <% }); %>
     </div>
 </body>
 

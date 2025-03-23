@@ -6,16 +6,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Snapshots: <%= formattedDate %>
     </title>
-    <link rel="stylesheet" href="/static/css/snapshot-date.css">
+    <link rel="stylesheet" href="/static/css/snapshot.css">
 </head>
 
 <body>
     <h1>Snapshots: <%= formattedDate %>
     </h1>
-    <div class="snapshot-container">
+    <div class="item-list">
         <% snapshots.forEach(function(snapshot) { %>
-            <div class="snapshot-row">
-                <span class="snapshot-time">
+            <div class="item-entry">
+                <span class="item-detail">
                     <%= snapshot.formattedTime %>
                 </span>
                 <a href="/snapshot/file/<%= snapshot.filename %>" target="_blank">View Image</a>
