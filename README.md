@@ -34,7 +34,8 @@ IOT weather display for Ecowitt devices using Inkpad2.
 In this case, the server components (ecowitt2mqtt, mosquitto, nodejs) are housed on a Raspberry Pi Zero (32 bit)
 running DietPI with an Ethernet HAT, paired with a Ecowitt GW1100 as a sink, both of which are mounted outside
 (for proximity to sensors in a lake) in an IP67 case and powered by PoE. There are two other sinks (WS3900 consoles)
-inside separate houses that are also delivering to the server.
+inside separate houses that are also delivering to the server. Furthermore, the server periodically captures, 
+stores and renders images from a local webcamera RTSP stream using ffmpeg.
 
 ## display (hardware)
 
@@ -57,9 +58,9 @@ red and black. The USB-C port is for charging and communications. The provided b
     USBA to Micro-USB (to power the Zero)
     IP67 box 200x120x75 (for external mounting) -- https://www.aliexpress.com/item/1005005367221276.html
 
-If you use an external PoE cable, make sure to isolate the Ethernet cable on entry to your property,
-and preferably use shielded cable and ground the shielding. Do not ground these to your electricity supply
-ground, but ground directly to earth bonding.
+If you use an external PoE cable, you must isolate the Ethernet cable on entry to your property. and preferably use 
+shielded cable and ground the shielding. Do not ground these to your electricity supply ground, but ground directly
+to earth bonding. If you do not do this grounding, you risk losing your device, the PoE switch, and possibly more.
 
 ![Station](images/station1.jpg)
 <table><tr><td><img src="images/station2.jpg" alt="Station 2"/></td><td><img src="images/station3.jpg" alt="Station 3"/></td></tr></table>
@@ -79,7 +80,7 @@ Install DietPI then the software components including systemd service scripts an
 and all processes, including server components, run as root. The MQTT broker is not password protected. The server publishes itself 
 as 'weather.local' using mDNS via. avahi. UPnP is used to configure an inbound sshd gateway. Configure sshd as public
 key authentication only -- no password. The Ecowitt sinks must to be configured as per ecowitt2mqtt instructions. The sinks can still
-publish to other services including Ecowitt itself.
+publish to other services including Ecowitt itself. The server's webpage is responsive and will autorefresh.
 
 ![Server](images/server1.jpg)
 ![Server](images/server2.jpg)
@@ -96,9 +97,10 @@ publish to other services including Ecowitt itself.
 
 Sources: https://github.com/matthewgream/weather/tree/main/client/Arduino
 
-The client software builds under Arduino IDE and is simple in execution as below. Note the intent to minimise wifi enablement time
+The client software builds under Arduino IDE and is simple in execution. Note the intent to minimise wifi enablement time
 and power on time to conserve battery, and to only refresh display if network update succeeds. Initial testing with a 5 minute
-update interval resulted in a life of 6 days and 17 hours (161 hours, 9687 minutes), which at 5 minute intervals is 1937 updates, before the battery was exhausted.
+update interval resulted in a life of 6 days and 17 hours (161 hours, 9687 minutes), which at 5 minute intervals is 1937 updates, 
+before the battery was exhausted.
 The standard Inkplate library has been included and stripped down to remove unneeded modules (e.g. JPG, PNG and BMP
 images, and colour dithering), but the code will build against the standard library. The files Secrets.hpp (in the Arduino project
 folder) and secrets.txt (in the server config files) have been suppressed from the repository for obvious reasons. If the client
