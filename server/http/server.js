@@ -378,23 +378,7 @@ snapshotInitialise();
 
 const sharp = require('sharp');
 const crypto = require('crypto');
-const MAX_CACHE_ENTRIES = 50;
 const thumbnailCache = {};
-async function thumbnailLoad(width, filename, mtime) {
-    const cacheKey = crypto.createHash('md5').update(`${filename}-${width}-${mtime}`).digest('hex');
-    if (!thumbnailCache[cacheKey]) {
-        thumbnailCache[cacheKey] = await sharp(sourcePath)
-            .resize(width)
-            .jpeg({ quality: 70 })
-            .toBuffer();
-        const cacheKeys = Object.keys(thumbnailCache);
-        if (cacheKeys.length > MAX_CACHE_ENTRIES)
-            cacheKeys.slice(0, cacheKeys.length - MAX_CACHE_ENTRIES)
-                .forEach(key => delete thumbnailCache[key]);
-    }
-    return thumbnailCache[cacheKey];
-}
-
 xxx.get('/snapshot/list', function (req, res) {
     const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     const formattedDates = [...new Set(snapshotsList__.map(file => file.slice(9, 17)))].sort((a, b) => b.localeCompare(a))
@@ -429,14 +413,33 @@ xxx.get('/snapshot/file/:file', function (req, res) {
     else
         res.status(404).send('Snapshot not found');
 });
+const MAX_CACHE_ENTRIES = 50;
 xxx.get('/snapshot/thumb/:filename', async (req, res) => {
     try {
-        const sourcePath = `/dev/shm/${req.params.filename}`;
+        const filename = req.params.filename;
+        const sourcePath = `/dev/shm/${filename}`;
         if (!fs.existsSync(sourcePath))
-            return res.status(404).send('Thumbnail not found');
+            return res.status(404).send('Image not found');
+        const width = parseInt(req.query.width) || 200;
+        const mtime = fs.statSync(sourcePath).mtime.getTime();
+        const cacheKey = crypto.createHash('md5').update(`${filename}-${width}-${mtime}`).digest('hex');
+        if (thumbnailCache[cacheKey]) {
+            res.set('Content-Type', 'image/jpeg');
+            res.set('Cache-Control', 'public, max-age=300');
+            return res.send(thumbnailCache[cacheKey]);
+        }
+        const thumbnail = await sharp(sourcePath)
+            .resize(width)
+            .jpeg({ quality: 70 })
+            .toBuffer();
+        thumbnailCache[cacheKey] = thumbnail;
+        const cacheKeys = Object.keys(thumbnailCache);
+        if (cacheKeys.length > MAX_CACHE_ENTRIES)
+            cacheKeys.slice(0, cacheKeys.length - MAX_CACHE_ENTRIES)
+                .forEach(key => delete thumbnailCache[key]);
         res.set('Content-Type', 'image/jpeg');
         res.set('Cache-Control', 'public, max-age=300');
-        return res.send(thumbnailLoad(parseInt(req.query.width) || 200, req.params.filename, fs.statSync(sourcePath).mtime.getTime()));
+        res.send(thumbnail);
     } catch (error) {
         console.error('Error generating thumbnail:', error);
         res.status(500).send('Error generating thumbnail');
