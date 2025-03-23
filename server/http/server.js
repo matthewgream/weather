@@ -39,7 +39,7 @@ const data_views = data + '/http';
 const data_images = data + '/images';
 const data_assets = data + '/assets';
 const subs = ['weather/#'];
-console.log (`Loaded 'config' using ${configPath}`);
+console.log(`Loaded 'config' using ${configPath}`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -53,7 +53,7 @@ const credentials = {
     cert: certificate,
     ca
 };
-console.log (`Loaded 'certificates' using ${letsencrypt}`);
+console.log(`Loaded 'certificates' using ${letsencrypt}`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -62,7 +62,7 @@ const exp = require('express');
 const xxx = exp();
 xxx.set('view engine', 'ejs');
 xxx.set('views', data_views);
-console.log (`Loaded 'EJS' using ${data_views}`);
+console.log(`Loaded 'EJS' using ${data_views}`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -72,7 +72,7 @@ xxx.use((req, res, next) => {
         return res.redirect(`https://${req.headers.host.split(':')[0]}${req.url}`);
     next();
 });
-console.log (`Loaded 'http -> https'`);
+console.log(`Loaded 'http -> https'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -82,7 +82,7 @@ const https = require('https');
 const httpsServer = https.createServer(credentials, xxx);
 const httpServer = http.createServer(xxx);
 const socket = require('socket.io')(httpsServer);
-console.log (`Loaded 'socket_io' using https`);
+console.log(`Loaded 'socket_io' using https`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -96,19 +96,19 @@ mqtt_client.on('connect', () => mqtt_client.subscribe(subs, () => {
 mqtt_client.on('message', (topic, message) => {
     mqtt_content[topic] = { ...JSON.parse(message.toString()), timestamp: formatInTimeZone(new Date(), conf.TZ, "yyyy-MM-dd'T'HH:mm:ssXXX'Z'").replace(":00'Z", 'Z') };
     if (topic == 'weather/branna') {
-		console.log (`mqtt message received on '${topic}' with '${JSON.stringify(mqtt_content[topic])}'`);
+        console.log(`mqtt message received on '${topic}' with '${JSON.stringify(mqtt_content[topic])}'`);
         socket.emit('update', { [topic]: mqtt_content[topic] });
-}
+    }
 });
-console.log (`Loaded 'mqtt_subscriber' using 'mqtt:://localhost' for 'weather/branna'`);
+console.log(`Loaded 'mqtt_subscriber' using 'mqtt:://localhost' for 'weather/branna'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 /* broken ...
 xxx.use(require('express-status-monitor')({ 
-	websocket: socket,
-	port: 8080
+    websocket: socket,
+    port: 8080
 }));
 console.log (`Loaded 'express-status-monitor' on /status`);
 */
@@ -121,41 +121,41 @@ const FileStreamRotator = require('file-stream-rotator');
 const logsDir = logs;
 fs.existsSync(logsDir) || fs.mkdirSync(logsDir);
 const accessLogStream = FileStreamRotator.getStream({
-  date_format: 'YYYY-MM-DD',
-  filename: path.join(logsDir, 'access-%DATE%.log'),
-  frequency: 'daily',
-  verbose: false,
-  size: '1M',
-  max_logs: 10,
-  audit_file: path.join(logsDir, 'audit.json'),
-  end_stream: false  
+    date_format: 'YYYY-MM-DD',
+    filename: path.join(logsDir, 'access-%DATE%.log'),
+    frequency: 'daily',
+    verbose: false,
+    size: '1M',
+    max_logs: 10,
+    audit_file: path.join(logsDir, 'audit.json'),
+    end_stream: false
 });
 xxx.use(morgan('combined', { stream: accessLogStream }));
 const requestStats = {
-  totalRequests: 0,
-  requestsByRoute: {},
-  requestsByMethod: {},
-  requestsByStatus: {},
-  requestsByIp: {}
+    totalRequests: 0,
+    requestsByRoute: {},
+    requestsByMethod: {},
+    requestsByStatus: {},
+    requestsByIp: {}
 };
 xxx.use((req, res, next) => {
-  const originalEnd = res.end;
-  requestStats.totalRequests++;
-  requestStats.requestsByRoute[req.path] = (requestStats.requestsByRoute[req.path] || 0) + 1;
-  requestStats.requestsByMethod[req.method] = (requestStats.requestsByMethod[req.method] || 0) + 1;
-  const ip = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-  requestStats.requestsByIp[ip] = (requestStats.requestsByIp[ip] || 0) + 1;
-  res.end = function(...args) {
-    requestStats.requestsByStatus[res.statusCode] = (requestStats.requestsByStatus[res.statusCode] || 0) + 1;
-    originalEnd.apply(res, args);
-  };
-  next();
+    const originalEnd = res.end;
+    requestStats.totalRequests++;
+    requestStats.requestsByRoute[req.path] = (requestStats.requestsByRoute[req.path] || 0) + 1;
+    requestStats.requestsByMethod[req.method] = (requestStats.requestsByMethod[req.method] || 0) + 1;
+    const ip = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+    requestStats.requestsByIp[ip] = (requestStats.requestsByIp[ip] || 0) + 1;
+    res.end = function (...args) {
+        requestStats.requestsByStatus[res.statusCode] = (requestStats.requestsByStatus[res.statusCode] || 0) + 1;
+        originalEnd.apply(res, args);
+    };
+    next();
 });
 xxx.get('/requests', (req, res) => {
-  const files = fs.readdirSync(logsDir).filter(file => file.startsWith('access-'));
-  const mostRecentLog = files.sort().pop();
-  const recentLogs = mostRecentLog ? fs.readFileSync(path.join(logsDir, mostRecentLog), 'utf8').split('\n').filter(Boolean).slice(-100) : [];
-  res.send(`
+    const files = fs.readdirSync(logsDir).filter(file => file.startsWith('access-'));
+    const mostRecentLog = files.sort().pop();
+    const recentLogs = mostRecentLog ? fs.readFileSync(path.join(logsDir, mostRecentLog), 'utf8').split('\n').filter(Boolean).slice(-100) : [];
+    res.send(`
     <html>
       <head>
         <title>Server Stats</title>
@@ -181,9 +181,9 @@ xxx.get('/requests', (req, res) => {
             <table>
               <tr><th>Path</th><th>Count</th></tr>
               ${Object.entries(requestStats.requestsByRoute)
-                .sort((a, b) => b[1] - a[1])
-                .map(([path, count]) => `<tr><td>${path}</td><td>${count}</td></tr>`)
-                .join('')}
+            .sort((a, b) => b[1] - a[1])
+            .map(([path, count]) => `<tr><td>${path}</td><td>${count}</td></tr>`)
+            .join('')}
             </table>
           </div>
           <div class="stats-box">
@@ -191,8 +191,8 @@ xxx.get('/requests', (req, res) => {
             <table>
               <tr><th>Method</th><th>Count</th></tr>
               ${Object.entries(requestStats.requestsByMethod)
-                .map(([method, count]) => `<tr><td>${method}</td><td>${count}</td></tr>`)
-                .join('')}
+            .map(([method, count]) => `<tr><td>${method}</td><td>${count}</td></tr>`)
+            .join('')}
             </table>
           </div>
           <div class="stats-box">
@@ -200,8 +200,8 @@ xxx.get('/requests', (req, res) => {
             <table>
               <tr><th>Status</th><th>Count</th></tr>
               ${Object.entries(requestStats.requestsByStatus)
-                .map(([status, count]) => `<tr><td>${status}</td><td>${count}</td></tr>`)
-                .join('')}
+            .map(([status, count]) => `<tr><td>${status}</td><td>${count}</td></tr>`)
+            .join('')}
             </table>
           </div>
           <div class="stats-box">
@@ -209,10 +209,10 @@ xxx.get('/requests', (req, res) => {
             <table>
               <tr><th>IP</th><th>Count</th></tr>
               ${Object.entries(requestStats.requestsByIp)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 10)
-                .map(([ip, count]) => `<tr><td>${ip}</td><td>${count}</td></tr>`)
-                .join('')}
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .map(([ip, count]) => `<tr><td>${ip}</td><td>${count}</td></tr>`)
+            .join('')}
             </table>
           </div>
         </div>
@@ -222,7 +222,7 @@ xxx.get('/requests', (req, res) => {
     </html>
   `);
 });
-console.log (`Loaded 'morgan' on /requests using logs=${logsDir}`);
+console.log(`Loaded 'morgan' on /requests using logs=${logsDir}`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -230,19 +230,16 @@ console.log (`Loaded 'morgan' on /requests using logs=${logsDir}`);
 xxx.get('/', function (req, res) {
     res.render('server-mainview', { vars: { 'weather/branna': mqtt_content['weather/branna'] } });
 });
-console.log (`Loaded '/' using 'server-mainview' using vars='weather/branna'`);
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
+console.log(`Loaded '/' using 'server-mainview' using vars='weather/branna'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 xxx.use(exp.static('/dev/shm'));
-console.log (`Loaded 'static' using /dev/shm`);
+console.log(`Loaded 'static' using /dev/shm`);
 
 xxx.use('/static', exp.static(data_assets));
-console.log (`Loaded 'static' using /static -> ${data_assets}`);
+console.log(`Loaded 'static' using /static -> ${data_assets}`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -251,7 +248,7 @@ xxx.get('/vars', function (req, res) {
     console.log(`/vars requested from '${req.headers['x-forwarded-for'] || req.connection.remoteAddress}'`);
     res.json(mqtt_content);
 });
-console.log (`Loaded 'vars/json' on /vars`);
+console.log(`Loaded 'vars/json' on /vars`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -381,7 +378,22 @@ snapshotInitialise();
 
 const sharp = require('sharp');
 const crypto = require('crypto');
+const MAX_CACHE_ENTRIES = 50;
 const thumbnailCache = {};
+async function thumbnailLoad(width, filename, mtime) {
+    const cacheKey = crypto.createHash('md5').update(`${filename}-${width}-${mtime}`).digest('hex');
+    if (!thumbnailCache[cacheKey]) {
+        thumbnailCache[cacheKey] = await sharp(sourcePath)
+            .resize(width)
+            .jpeg({ quality: 70 })
+            .toBuffer();
+        const cacheKeys = Object.keys(thumbnailCache);
+        if (cacheKeys.length > MAX_CACHE_ENTRIES)
+            cacheKeys.slice(0, cacheKeys.length - MAX_CACHE_ENTRIES)
+                .forEach(key => delete thumbnailCache[key]);
+    }
+    return thumbnailCache[cacheKey];
+}
 
 xxx.get('/snapshot/list', function (req, res) {
     const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -419,37 +431,18 @@ xxx.get('/snapshot/file/:file', function (req, res) {
 });
 xxx.get('/snapshot/thumb/:filename', async (req, res) => {
     try {
-        const filename = req.params.filename;
-        const sourcePath = `/dev/shm/${filename}`;
+        const sourcePath = `/dev/shm/${req.params.filename}`;
         if (!fs.existsSync(sourcePath))
-            return res.status(404).send('Image not found');
-        const width = parseInt(req.query.width) || 200;
-        const mtime = fs.statSync(sourcePath).mtime.getTime();
-        const cacheKey = crypto.createHash('md5').update(`${filename}-${width}-${mtime}`).digest('hex');
-        if (thumbnailCache[cacheKey]) {
-            res.set('Content-Type', 'image/jpeg');
-            res.set('Cache-Control', 'public, max-age=300');
-            return res.send(thumbnailCache[cacheKey]);
-        }
-        const thumbnail = await sharp(sourcePath)
-            .resize(width)
-            .jpeg({ quality: 70 })
-            .toBuffer();
-        thumbnailCache[cacheKey] = thumbnail;
-        const MAX_CACHE_ENTRIES = 50;
-        const cacheKeys = Object.keys(thumbnailCache);
-        if (cacheKeys.length > MAX_CACHE_ENTRIES)
-            cacheKeys.slice(0, cacheKeys.length - MAX_CACHE_ENTRIES)
-                .forEach(key => delete thumbnailCache[key]);
+            return res.status(404).send('Thumbnail not found');
         res.set('Content-Type', 'image/jpeg');
         res.set('Cache-Control', 'public, max-age=300');
-        res.send(thumbnail);
+        return res.send(thumbnailLoad(parseInt(req.query.width) || 200, req.params.filename, fs.statSync(sourcePath).mtime.getTime()));
     } catch (error) {
         console.error('Error generating thumbnail:', error);
         res.status(500).send('Error generating thumbnail');
     }
 });
-console.log (`Loaded 'snapshots' on /snapshot`);
+console.log(`Loaded 'snapshots' on /snapshot, with thumbnail cache-entries=${MAX_CACHE_ENTRIES}`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -509,7 +502,7 @@ xxx.get('/images/:filename', (req, res) => {
         res.status(404).send('File not found');
     }
 });
-console.log (`Loaded 'images' on /images`);
+console.log(`Loaded 'images' on /images`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -533,7 +526,7 @@ xxx.get('/sets', (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-console.log (`Loaded 'sets' on /sets`);
+console.log(`Loaded 'sets' on /sets`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
