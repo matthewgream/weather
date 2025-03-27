@@ -3,20 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Snapshots: <%= formattedDate %>
-    </title>
-    <link rel="stylesheet" href="/static/css/snapshot.css">
+    <title>Snapshots: <%= dateFormatted %></title>
+    <link href="/static/css/snapshot.css" rel="stylesheet">
 </head>
 <body>
-    <h1>Snapshots: <%= formattedDate %>
-    </h1>
+    <h1>Snapshots: <%= dateFormatted %></h1>
     <div class="item-list">
-        <% snapshots.forEach(function(snapshot) { %>
+        <% entries.forEach(entry => {%>
             <div class="item-entry">
                 <span class="item-detail">
-                    <%= snapshot.formattedTime %>
+                    <%= entry.timeFormatted %>
                 </span>
-                <a href="/snapshot/file/<%= snapshot.filename %>" target="_blank">View Image</a>
+                <a href="/snapshot/file/<%= entry.file %>" target="_blank">View Image</a>
             </div>
         <% }); %>
     </div>

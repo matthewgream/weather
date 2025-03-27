@@ -29,29 +29,25 @@ function loadConfig(configPath) {
 
 const configPath = path.join(__dirname, 'secrets.txt');
 const conf = loadConfig(configPath);
-const name = 'weather_server';
 const fqdn = conf.FQDN;
 const host = conf.HOST;
 const port = conf.PORT;
 const data = conf.DATA;
 const logs = conf.LOGS;
+const subs = ['weather/#', 'sensors/#'];
 const data_views = data + '/http';
 const data_images = data + '/images';
 const data_assets = data + '/assets';
-const subs = ['weather/#'];
 console.log(`Loaded 'config' using ${configPath}`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const letsencrypt = `/etc/letsencrypt/live/${fqdn}`;
-const privateKey = fs.readFileSync(`${letsencrypt}/privkey.pem`, 'utf8');
-const certificate = fs.readFileSync(`${letsencrypt}/cert.pem`, 'utf8');
-const ca = fs.readFileSync(`${letsencrypt}/chain.pem`, 'utf8');
 const credentials = {
-    key: privateKey,
-    cert: certificate,
-    ca
+    key: fs.readFileSync(`${letsencrypt}/privkey.pem`, 'utf8'),
+    cert: fs.readFileSync(`${letsencrypt}/cert.pem`, 'utf8'),
+    ca: fs.readFileSync(`${letsencrypt}/chain.pem`, 'utf8')
 };
 console.log(`Loaded 'certificates' using ${letsencrypt}`);
 
@@ -88,50 +84,58 @@ console.log(`Loaded 'socket_io' using https`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const { formatInTimeZone } = require('date-fns-tz');
+const getTimestamp = (tz) => 
+    formatInTimeZone(new Date(), tz, "yyyy-MM-dd'T'HH:mm:ssXXX'Z'").replace(":00'Z", 'Z');
+
 const mqtt_content = {};
+function variablesRender () {
+	return { 
+		'weather/branna': mqtt_content['weather/branna'],
+		'sensors/radiation/cpm': mqtt_content['sensors/radiation/cpm']
+	};
+}
+function variablesUpdate (topic, message) {
+	if (topic.startsWith ('sensors'))
+    	mqtt_content[topic] = { value: message.toString (), timestamp: getTimestamp (conf.TZ) };
+	else if (topic.startsWith ('weather'))
+    	mqtt_content[topic] = { ...JSON.parse(message.toString()), timestamp: getTimestamp (conf.TZ) };
+	else
+		return;
+    if (topic == 'weather/branna' || topic == 'sensors/radiation/cpm') {
+        console.log(`mqtt message received on '${topic}' with '${JSON.stringify(mqtt_content[topic])}'`);
+        socket.emit('update', variablesRender ());
+    }
+}
+console.log(`Loaded 'variables'`);
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 const mqtt_client = require('mqtt').connect('mqtt://localhost');
 mqtt_client.on('connect', () => mqtt_client.subscribe(subs, () => {
     console.log(`mqtt connected & subscribed for '${subs}'`);
 }));
 mqtt_client.on('message', (topic, message) => {
-    mqtt_content[topic] = { ...JSON.parse(message.toString()), timestamp: formatInTimeZone(new Date(), conf.TZ, "yyyy-MM-dd'T'HH:mm:ssXXX'Z'").replace(":00'Z", 'Z') };
-    if (topic == 'weather/branna') {
-        console.log(`mqtt message received on '${topic}' with '${JSON.stringify(mqtt_content[topic])}'`);
-        socket.emit('update', { [topic]: mqtt_content[topic] });
-    }
+	variablesUpdate (topic, message);
 });
-console.log(`Loaded 'mqtt_subscriber' using 'mqtt:://localhost' for 'weather/branna'`);
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-/* broken ...
-xxx.use(require('express-status-monitor')({ 
-    websocket: socket,
-    port: 8080
-}));
-console.log (`Loaded 'express-status-monitor' on /status`);
-*/
+console.log(`Loaded 'mqtt_subscriber' using 'mqtt:://localhost'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const morgan = require('morgan');
-// const FileStreamRotator = require('file-stream-rotator');
-// const logsDir = logs;
-// fs.existsSync(logsDir) || fs.mkdirSync(logsDir);
-// const accessLogStream = FileStreamRotator.getStream({
+xxx.use(morgan('combined'));
+// const accessLogStream = require('file-stream-rotator').getStream({
 //     date_format: 'YYYY-MM-DD',
-//     filename: path.join(logsDir, 'access-%DATE%.log'),
+//     filename: path.join(logs, 'access-%DATE%.log'),
 //     frequency: 'daily',
 //     verbose: false,
 //     size: '1M',
 //     max_logs: 10,
-//     audit_file: path.join(logsDir, 'audit.json'),
+//     audit_file: path.join(logs, 'audit.json'),
 //     end_stream: false
 // });
 // xxx.use(morgan('combined', { stream: accessLogStream }));
-xxx.use(morgan('combined'));
 const requestStats = {
     totalRequests: 0,
     requestsByRoute: {},
@@ -153,10 +157,8 @@ xxx.use((req, res, next) => {
     next();
 });
 xxx.get('/requests', (req, res) => {
-//    const files = fs.readdirSync(logsDir).filter(file => file.startsWith('access-'));
-//    const mostRecentLog = files.sort().pop();
-//    const recentLogs = mostRecentLog ? fs.readFileSync(path.join(logsDir, mostRecentLog), 'utf8').split('\n').filter(Boolean).slice(-100) : [];
-	const recentLogs = [];
+//    const mostRecentLog = fs.readdirSync(logs).filter(file => file.startsWith('access-')).sort().pop();
+//    const recentLogs = mostRecentLog ? fs.readFileSync(path.join(logs, mostRecentLog), 'utf8').split('\n').filter(Boolean).slice(-100) : [];
     res.send(`
     <html>
       <head>
@@ -218,22 +220,24 @@ xxx.get('/requests', (req, res) => {
             </table>
           </div>
         </div>
-        <h2>Recent Logs</h2>
-        <pre>${recentLogs.join('\n')}</pre>
+//        <h2>Recent Logs</h2>
+//        <pre>${recentLogs.join('\n')}</pre>
       </body>
     </html>
   `);
 });
-// console.log(`Loaded 'morgan' on /requests using logs=${logsDir}`);
+// console.log(`Loaded 'morgan' on /requests using logs=${logs}`);
 console.log(`Loaded 'morgan' on /requests using in-memory`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 xxx.get('/', function (req, res) {
-    res.render('server-mainview', { vars: { 'weather/branna': mqtt_content['weather/branna'] } });
+    res.render('server-mainview', { 
+		vars: variablesRender ()
+	});
 });
-console.log(`Loaded '/' using 'server-mainview' using vars='weather/branna'`);
+console.log(`Loaded '/' using 'server-mainview'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -379,53 +383,80 @@ async function snapshotInitialise() {
 }
 snapshotInitialise();
 
-const sharp = require('sharp');
-const crypto = require('crypto');
-const thumbnailCache = {};
-xxx.get('/snapshot/list', function (req, res) {
-    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    const formattedDates = [...new Set(snapshotsList__.map(file => file.slice(9, 17)))].sort((a, b) => b.localeCompare(a))
+//
+
+const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+function getFormattedDate (date) {
+	return `${date.substring(0, 4)} ${months[parseInt(date.substring(4, 6)) - 1]} ${parseInt(date.substring(6, 8))}`;
+}
+function getFormattedTime (time) {
+	return `${parseInt(time.substring(0, 2)).toString().padStart(2, '0')}:${parseInt(time.substring(2, 4)).toString().padStart(2, '0')}:${parseInt(time.substring(4, 6)).toString().padStart(2, '0')}`;
+}
+function getSnapshotsListForDate (date) {
+    return snapshotsList__
+        .filter(file => file.slice(9, 17) === date)
+        .sort((a, b) => b.localeCompare(a))
+        .map(file => ({ file, timeCode: file.slice(17, 23) }))
+        .map(({ file, timeCode }) => ({
+            file,
+            timeFormatted: getFormattedTime (timeCode)
+        }));
+}
+function getSnapshotsListOfDates () {
+    return [...new Set(snapshotsList__.map(file => file.slice(9, 17)))]
+		.sort((a, b) => b.localeCompare(a))
         .map(dateCode => ({
             dateCode,
-            formattedDate: `${dateCode.substring(0, 4)} ${months[parseInt(dateCode.substring(4, 6)) - 1]} ${parseInt(dateCode.substring(6, 8))}`
+            dateFormatted: getFormattedDate (dateCode)
         }));
-    res.render('server-snapshot-list', {
-        formattedDates
+}
+function getSnapshotsImageFilename (file) {
+    if (snapshotsList__.includes(file))
+        return `/opt/snapshots/${file}`;
+	return undefined;
+}
+
+//
+
+xxx.get('/snapshot/list', function (req, res) {
+    return res.render('server-snapshot-list', {
+        entries: getSnapshotsListOfDates ()
     });
 });
 xxx.get('/snapshot/list/:date', function (req, res) {
-    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    const dateStr = req.params.date;
-    const formattedDate = `${dateStr.substring(0, 4)} ${months[parseInt(dateStr.substring(4, 6)) - 1]} ${parseInt(dateStr.substring(6, 8))}`;
-    const snapshots = snapshotsList__
-        .filter(file => file.slice(9, 17) === dateStr)
-        .sort((a, b) => b.localeCompare(a))
-        .map(filename => ({ filename, timeStr: filename.slice(17, 23) }))
-        .map(({ filename, timeStr }) => ({
-            filename,
-            formattedTime: `${parseInt(timeStr.substring(0, 2)).toString().padStart(2, '0')}:${parseInt(timeStr.substring(2, 4)).toString().padStart(2, '0')}:${parseInt(timeStr.substring(4, 6)).toString().padStart(2, '0')}`
-        }));
-    res.render('server-snapshot-date', {
-        formattedDate,
-        snapshots
+    const date = req.params.date;
+	//
+    return res.render('server-snapshot-date', {
+       	dateFormatted: getFormattedDate (date),
+       	entries: getSnapshotsListForDate (date)
     });
 });
 xxx.get('/snapshot/file/:file', function (req, res) {
-    if (snapshotsList__.includes(req.params.file))
-        res.sendFile(`/opt/snapshots/${req.params.file}`);
-    else
-        res.status(404).send('Snapshot not found');
+	const file = req.params.file;
+	//
+	const filename = getSnapshotsImageFilename (file);
+	if (!filename)
+        return res.status(404).send('Snapshot not found');
+    return res.sendFile(filename);
 });
+
+//
+
+const sharp = require('sharp');
+const crypto = require('crypto');
+const thumbnailCache = {};
 const MAX_CACHE_ENTRIES = 50;
-xxx.get('/snapshot/thumb/:filename', async (req, res) => {
+
+xxx.get('/snapshot/thumb/:file', async (req, res) => {
+    const file = req.params.file;
+    const width = parseInt(req.query.w) || 200;
+    //
     try {
-        const filename = req.params.filename;
-        const sourcePath = `/dev/shm/${filename}`;
+        const sourcePath = `/dev/shm/${file}`;
         if (!fs.existsSync(sourcePath))
             return res.status(404).send('Thumbnail not found');
-        const width = parseInt(req.query.width) || 200;
         const mtime = fs.statSync(sourcePath).mtime.getTime();
-        const cacheKey = crypto.createHash('md5').update(`${filename}-${width}-${mtime}`).digest('hex');
+        const cacheKey = crypto.createHash('md5').update(`${file}-${width}-${mtime}`).digest('hex');
         if (!thumbnailCache[cacheKey]) {
         	const thumbnail = await sharp(sourcePath)
             	.resize(width)
@@ -439,7 +470,7 @@ xxx.get('/snapshot/thumb/:filename', async (req, res) => {
 		}
         res.set('Content-Type', 'image/jpeg');
         res.set('Cache-Control', 'public, max-age=300');
-        return res.send(thumbnailCache[cacheKey]);
+        res.send(thumbnailCache[cacheKey]);
     } catch (error) {
         console.error('Error generating thumbnail:', error);
         res.status(500).send('Error generating thumbnail');

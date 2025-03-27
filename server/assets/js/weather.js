@@ -1,5 +1,35 @@
 
-const getWeatherInterpretation = (data) => {
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+const joinand = (items) => {
+    if (!items || items.length === 0) return '';
+    else if (items.length === 1) return items[0];
+    else if (items.length === 2) return `${items[0]} and ${items[1]}`;
+    const lastItem = items.pop();
+    return `${items.join(', ')}, and ${lastItem}`;
+};
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+const __generateDescription = (results) => {
+    let description = '';
+    if (results.conditions.length > 0)
+        description = joinand([...new Set(results.conditions)]);
+    if (results.phenomena.length > 0)
+        description += (description ? ": " : "") + joinand([...new Set(results.phenomena)]);
+    if (description) {
+        description = description.charAt(0).toUpperCase() + description.slice(1);
+        if (!description.endsWith('.'))
+            description += '.';
+    }
+    return description || null;
+};
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+const getWeatherInterpretation = (location_data, data) => {
 
     const {
         temp,
@@ -9,33 +39,21 @@ const getWeatherInterpretation = (data) => {
         solarRad,
         solarUvi,
         rainRate,
+		radiation,
+		snowDepth,
+		iceDepth,
         cloudCover = null,
-        visibility = null,
-        location = "Central Sweden",
-        season = getCurrentSeason("northern")
+        season = location_data.hemisphere
     } = data;
-
-    const LOCATION_DATA = {
-        elevation: 145,
-        latitude: 59.662083,
-        longitude: 12.995500,
-        summerAvgHigh: 21,
-        winterAvgLow: -7,
-        annualRainfall: 750, // mm
-        annualSnowfall: 150, // cm
-        forestCoverage: "high",
-        nearbyLakes: true,
-        climateType: "humid continental"
-    };
 
     const dewPoint = calculateDewPoint(temp, humidity);
     const heatIndex = calculateHeatIndex(temp, humidity);
     const windChill = calculateWindChill(temp, windSpeed);
-    const feelsLike = determineFeelsLike(temp, humidity, windSpeed);
+    const feelsLike = calculateFeelsLike(temp, humidity, windSpeed);
     const month = new Date().getMonth();
     const day = new Date().getDate();
     const hour = new Date().getHours();
-    const daylight = calculateDaylightHours(LOCATION_DATA.latitude, LOCATION_DATA.longitude);
+    const daylight = getDaylightHours(location_data.latitude, location_data.longitude);
 
     const results = {
         conditions: [],
@@ -49,7 +67,7 @@ const getWeatherInterpretation = (data) => {
 
     // Atmospheric pressure conditions - Nordic context
     if (pressure !== null) {
-        const elevationAdjustment = Math.exp(LOCATION_DATA.elevation / (29.3 * (temp + 273))); // Adjust pressure for elevation (approximately 150m)
+        const elevationAdjustment = Math.exp(location_data.elevation / (29.3 * (temp + 273))); // Adjust pressure for elevation (approximately 150m)
         const adjustedPressure = pressure * elevationAdjustment;
         if (adjustedPressure < 970) {
             results.conditions.push("severe storm conditions");
@@ -68,7 +86,7 @@ const getWeatherInterpretation = (data) => {
             if (adjustedPressure > 1020)
                 results.phenomena.push("clear winter conditions likely"); // High pressure in winter often brings very cold conditions
             else if (adjustedPressure < 990 && temp > 0)
-                results.phenomena.push("winter precipitation likely"); // Low pressure in winter with temps above freezing often brings precipitation
+                results.phenomena.push("winter rain likely"); // Low pressure in winter with temps above freezing often brings rain
         }
     }
 
@@ -180,13 +198,13 @@ const getWeatherInterpretation = (data) => {
     // Precipitation conditions
     if (rainRate !== null) {
         if (rainRate > 0 && rainRate < 0.5)
-            results.conditions.push("light precipitation");
+            results.conditions.push("light rain");
         else if (rainRate >= 0.5 && rainRate < 4)
-            results.conditions.push("moderate precipitation");
+            results.conditions.push("moderate rain");
         else if (rainRate >= 4 && rainRate < 8)
-            results.conditions.push("heavy precipitation");
+            results.conditions.push("heavy rain");
         else if (rainRate >= 8) {
-            results.conditions.push("very heavy precipitation");
+            results.conditions.push("very heavy rain");
             results.alerts.push("heavy rainfall");
         }
     }
@@ -210,22 +228,124 @@ const getWeatherInterpretation = (data) => {
                 results.conditions.push("moderate UV");
         }
     }
-
-    // Visibility conditions
-    if (visibility !== null) {
-        if (visibility < 0.05) {
-            results.conditions.push("dense fog");
-            results.alerts.push("dense fog");
-        } else if (visibility < 0.2)
-            results.conditions.push("fog");
-        else if (visibility < 1)
-            results.conditions.push("mist");
-        else if (visibility < 4)
-            results.conditions.push("poor visibility");
-        else if (visibility > 20)
-            results.conditions.push("excellent visibility");
-    }
-
+	
+	// Snow and Ice Depth Interpretation
+	if (snowDepth !== null) {
+	    if (snowDepth === 0) {
+	        if (month >= 11 || month <= 2)
+	            results.phenomena.push("no snow cover during winter");
+	    } else if (snowDepth < 50) {
+	        results.conditions.push("light snow cover");
+	        if (month >= 3 && month <= 4)
+	            results.phenomena.push("spring snow melt beginning");
+	    } else if (snowDepth < 200) {
+	        results.conditions.push("moderate snow cover");
+	        if (temp > 0)
+	            results.phenomena.push("snow compaction likely");
+	    } else if (snowDepth < 500) {
+	        results.conditions.push("deep snow cover");
+	        results.phenomena.push("challenging forest mobility");
+	        if (windSpeed > 5)
+	            results.phenomena.push("snow drifting possible");
+	    } else {
+	        results.conditions.push("very deep snow cover");
+	        results.alerts.push("extreme snow depth");
+	        results.phenomena.push("restricted mobility in forest");
+	    }
+	    if (month === 10 && snowDepth > 0) // Season-specific snow interpretations
+	        results.phenomena.push("early season snow");
+	    else if (month === 4 && snowDepth > 100)
+	        results.phenomena.push("late season persistent snow pack");
+	    else if (month >= 5 && month <= 8 && snowDepth > 0)
+	        results.phenomena.push("unusual summer snow");
+	    if (snowDepth > 30) { // Snow quality based on temperature
+	        if (temp < -15)
+	            results.phenomena.push("powder snow conditions");
+	        else if (temp < -5)
+	            results.phenomena.push("dry snow conditions");
+	        else if (temp < 0)
+	            results.phenomena.push("packed snow conditions");
+	        else if (temp > 0) {
+	            results.phenomena.push("wet snow conditions");
+	            if (temp > 5)
+	                results.phenomena.push("rapid snowmelt possible");
+	        }
+	    }
+	}
+	
+	// Ice Depth Interpretation
+	if (iceDepth !== null) {
+	    if (iceDepth === 0) {
+	        if (month >= 11 || month <= 3)
+	            if (temp < -5)
+	                results.phenomena.push("ice formation beginning");
+	    } else if (iceDepth < 50) {
+	        results.conditions.push("thin ice cover");
+	        if (month >= 11 || month <= 3)
+	            results.alerts.push("unsafe ice conditions");
+	    } else if (iceDepth < 150) {
+	        results.conditions.push("moderate ice cover");
+	        if (month >= 11 || month <= 2)
+	            results.phenomena.push("lakes partially frozen");
+	    } else if (iceDepth < 300) {
+	        results.conditions.push("thick ice cover");
+	        results.phenomena.push("lakes solidly frozen");
+	    } else {
+	        results.conditions.push("very thick ice cover");
+	        results.phenomena.push("exceptional ice thickness");
+	    }
+	    if (month === 10 && iceDepth > 0)  // Season-specific ice interpretations
+	        results.phenomena.push("early lake ice formation");
+	    else if (month === 4 && iceDepth > 100)
+	        results.phenomena.push("late season persistent ice");
+	    else if (month >= 5 && month <= 9 && iceDepth > 0)
+	        results.phenomena.push("unusual season ice");
+	    if (iceDepth > 0) { // Ice safety and quality based on temperature and thickness
+	        if (temp > 0 && iceDepth < 150)
+	            results.alerts.push("weakening ice conditions");
+	        if (iceDepth < 50)
+	            results.alerts.push("thin ice hazard");
+	        else if (iceDepth >= 50 && iceDepth < 100)
+	            results.phenomena.push("ice may support single person");
+	        else if (iceDepth >= 100 && iceDepth < 200)
+	            results.phenomena.push("ice supports group activity");
+	        else if (iceDepth >= 200)
+	            results.phenomena.push("ice supports vehicle weight");
+	    }
+	    if (snowDepth > 100 && iceDepth > 100)  // Combined snow and ice effects
+	        results.phenomena.push("typical Nordic winter conditions");
+	}
+	
+	// Radiation Interpretation
+	if (radiation !== null) {
+	    if (radiation <= 20) { // Background radiation in Sweden normally ranges from 5-20 CPM
+	        // Normal background radiation - no specific condition
+	    } else if (radiation > 20 && radiation <= 50) {
+	        results.conditions.push("slightly elevated radiation");
+	        results.phenomena.push("above normal background radiation");
+	    } else if (radiation > 50 && radiation <= 100) {
+	        results.conditions.push("moderately elevated radiation");
+	        results.alerts.push("elevated radiation levels");
+	        results.phenomena.push("investigate radiation source");
+	    } else if (radiation > 100 && radiation <= 300) {
+	        results.conditions.push("high radiation");
+	        results.alerts.push("high radiation levels");
+	        results.phenomena.push("minimize prolonged exposure");
+	    } else if (radiation > 300) {
+	        results.conditions.push("extremely high radiation");
+	        results.alerts.push("dangerous radiation levels");
+	        results.phenomena.push("seek immediate shelter");
+	    }
+	    if (radiation > 30) { // Context-specific radiation interpretations
+	        if (rainRate > 0)
+	            results.phenomena.push("possible radon washout in precipitation");
+	        if (month >= 9 || month <= 3)
+	            results.phenomena.push("seasonal radon fluctuation possible");
+	    }
+	    if (radiation > 50 && solarUvi > 5)  // Radiation health context
+	        results.phenomena.push("combined radiation and UV exposure");
+	}
+	
     // Weather phenomena interpretations - Nordic forest context
     if (temp !== null && humidity !== null) {
         if (temp < 0 && humidity > 70) { // Snow conditions - common in this region
@@ -248,13 +368,12 @@ const getWeatherInterpretation = (data) => {
         }
         if (temp > 20 && humidity > 75) // Nordic summer humidity feels different - adjust muggy threshold
             results.phenomena.push("humid for Nordic climate");
-        if (Math.abs(temp - dewPoint) < 3 && temp > 0) // Fog conditions - common in forested areas near lakes
-            if (visibility === null || visibility < 1) {
-                if (hour < 10 || hour > 18)
-                    results.phenomena.push("forest fog likely");
-                else
-                    results.phenomena.push("fog likely");
-            }
+        if (Math.abs(temp - dewPoint) < 3 && temp > 0) { // Fog conditions - common in forested areas near lakes
+            if (hour < 10 || hour > 18)
+                results.phenomena.push("forest fog likely");
+            else
+                results.phenomena.push("fog likely");
+		}
         if (month >= 5 && month <= 8 && temp > 22 && humidity < 40 && rainRate === 0) { // Forest-specific fire risk in dry conditions (rare but possible in summer)
             results.phenomena.push("dry forest conditions");
             if (humidity < 30 && temp > 25)
@@ -265,7 +384,7 @@ const getWeatherInterpretation = (data) => {
     // Precipitation predictions based on pressure and humidity
     if (pressure !== null && humidity !== null) {
         if (pressure < 1000 && humidity > 75)
-            results.phenomena.push("precipitation likely");
+            results.phenomena.push("rain likely");
         else if (pressure > 1020 && humidity < 40)
             results.phenomena.push("clear and dry");
     }
@@ -295,7 +414,7 @@ const getWeatherInterpretation = (data) => {
                 results.phenomena.push("extended Nordic summer evening light");
             if (daylight.sunriseDecimal < 4.5 && hour < 7) // Show precise sunrise time for very early summer mornings
                 results.phenomena.push(`early sunrise`);
-            if (!daylight.isDaytime && hour > daylight.sunsetHour && hour < daylight.sunsetHour + 2) // Add twilight information when relevant
+            if (!daylight.isDaytime && hour > Math.floor (daylight.sunsetDecimal) && hour < Math.floor (daylight.sunsetDecimal) + 2) // Add twilight information when relevant
                 results.phenomena.push("lingering twilight");
             if (month === 6 && daylight.daylightHours > 18) // For near-solstice days
                 results.phenomena.push("peak summer daylight period");
@@ -312,11 +431,11 @@ const getWeatherInterpretation = (data) => {
         const currentHourDecimal = hour + new Date().getMinutes() / 60; // Civil twilight phenomena
         if (!daylight.isDaytime && currentHourDecimal >= daylight.sunsetDecimal && currentHourDecimal <= daylight.civilDuskLocal)
             results.phenomena.push("civil twilight");
-        if (temp < 3 && hour > daylight.sunriseHour && hour < (daylight.sunriseHour + 3)) // Standard time patterns adjusted for Nordic climate
+        if (temp < 3 && hour > Math.floor (daylight.sunriseDecimal) && hour < (Math.floor (daylight.sunriseDecimal) + 3)) // Standard time patterns adjusted for Nordic climate
             results.phenomena.push("morning chill");
         if (temp > 22 && hour > 12 && hour < 16)
             results.phenomena.push("afternoon warmth");
-        if (windSpeed > 5 && LOCATION_DATA.forestCoverage === "high") // Forest-specific phenomena
+        if (windSpeed > 5 && location_data.forestCoverage === "high") // Forest-specific phenomena
             results.phenomena.push("forest wind effect");
     }
 
@@ -354,11 +473,14 @@ const getWeatherInterpretation = (data) => {
         }
     }
 
-    results.comfort = determineComfortLevel(temp, humidity, windSpeed, solarRad);
-    results.description = generateDescription(results);
+    results.comfort = calculateComfortLevel(temp, humidity, windSpeed, solarRad);
+    results.description = __generateDescription(results);
 
     return results;
 };
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
 const calculateDewPoint = (temp, humidity) => { // Magnus-Tetens formula
     const a = 17.27;
@@ -366,6 +488,8 @@ const calculateDewPoint = (temp, humidity) => { // Magnus-Tetens formula
     const alpha = ((a * temp) / (b + temp)) + Math.log(humidity / 100);
     return (b * alpha) / (a - alpha);
 };
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
 const calculateHeatIndex = (temp, rh) => {
     if (temp < 20) return temp; // Only applicable for temps > 20°C
@@ -382,13 +506,17 @@ const calculateHeatIndex = (temp, rh) => {
     return (heatIndexF - 32) * 5 / 9; // Convert back to Celsius
 };
 
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 const calculateWindChill = (temp, windSpeed) => {
     if (temp > 10 || windSpeed <= 1.3) return temp; // Only applicable for temps <= 10°C and wind > 1.3 m/s
     const windSpeedKmh = windSpeed * 3.6; // Convert wind speed to km/h
     return 13.12 + 0.6215 * temp - 11.37 * Math.pow(windSpeedKmh, 0.16) + 0.3965 * temp * Math.pow(windSpeedKmh, 0.16); // Calculate wind chill using Environment Canada formula
 };
 
-const determineFeelsLike = (temp, humidity, windSpeed) => {
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+const calculateFeelsLike = (temp, humidity, windSpeed) => {
     if (temp <= 10) // For cold conditions, use wind chill
         return calculateWindChill(temp, windSpeed);
     else if (temp >= 20) // For warm conditions, use heat index
@@ -397,8 +525,10 @@ const determineFeelsLike = (temp, humidity, windSpeed) => {
         return temp;
 };
 
-const determineComfortLevel = (temp, humidity, windSpeed, solarRad) => {
-    const feelsLike = determineFeelsLike(temp, humidity, windSpeed);
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+const calculateComfortLevel = (temp, humidity, windSpeed, solarRad) => {
+    const feelsLike = calculateFeelsLike(temp, humidity, windSpeed);
     if (feelsLike < -10 || feelsLike > 35)
         return "very uncomfortable";
     if (feelsLike < 0 || feelsLike > 30)
@@ -416,7 +546,9 @@ const determineComfortLevel = (temp, humidity, windSpeed, solarRad) => {
     return "moderately comfortable";
 };
 
-const getCurrentSeason = (hemisphere = 'northern') => { // Nordic season adjustment - spring comes later, winter comes earlier
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+const getSeason = (hemisphere = 'northern') => { // Nordic season adjustment - spring comes later, winter comes earlier
     const month = new Date().getMonth();
     if (hemisphere.toLowerCase() === 'northern') {
         if (month >= 3 && month <= 5) return 'spring';
@@ -431,19 +563,19 @@ const getCurrentSeason = (hemisphere = 'northern') => { // Nordic season adjustm
     }
 };
 
-const isDateInDST = (date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    if (month > 10 || month < 2) return false; // November to February
-    if (month > 3 && month < 9) return true;   // April to September
-    const lastDayOfMarch = new Date(year, 2, 31);
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+const getDST = (date) => {
+    if (date.getMonth () > 10 || date.getMonth () < 2) return false; // November to February
+    if (date.getMonth () > 3 && date.getMonth () < 9) return true;   // April to September
+    const lastDayOfMarch = new Date(date.getFullYear (), 2, 31);
     while (lastDayOfMarch.getMonth() > 2)
         lastDayOfMarch.setDate(lastDayOfMarch.getDate() - 1);
     const lastSundayOfMarch = new Date(lastDayOfMarch);
     while (lastSundayOfMarch.getDay() !== 0)
         lastSundayOfMarch.setDate(lastSundayOfMarch.getDate() - 1);
     lastSundayOfMarch.setHours(2, 0, 0, 0); // 02:00 CET
-    const lastDayOfOctober = new Date(year, 9, 31);
+    const lastDayOfOctober = new Date(date.getFullYear (), 9, 31);
     while (lastDayOfOctober.getMonth() > 9)
         lastDayOfOctober.setDate(lastDayOfOctober.getDate() - 1);
     const lastSundayOfOctober = new Date(lastDayOfOctober);
@@ -453,11 +585,15 @@ const isDateInDST = (date) => {
     return date >= lastSundayOfMarch && date < lastSundayOfOctober;
 };
 
-const calculateDaylightHours = (latitude, longitude) => {
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+const getDaylightHours = (latitude, longitude) => {
+    const normalizeTime = (time) => time < 0 ? (time + 24) : (time >= 24 ? time - 24 : time);
+    const formatTime = (timeInHours) => `${Math.floor(timeInHours).toString().padStart(2, '0')}:${Math.floor((timeInHours - Math.floor(timeInHours)) * 60).toString().padStart(2, '0')}`;
+	//
     const date = new Date();
     const isLeapYear = (date.getFullYear() % 4 === 0 && date.getFullYear() % 100 !== 0) || (date.getFullYear() % 400 === 0);
-    const daysInFebruary = isLeapYear ? 29 : 28;
-    const daysInMonth = [31, daysInFebruary, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    const daysInMonth = [31, (isLeapYear ? 29 : 28), 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     let dayOfYear = date.getDate();
     for (let i = 0; i < date.getMonth(); i++)
         dayOfYear += daysInMonth[i];
@@ -469,73 +605,44 @@ const calculateDaylightHours = (latitude, longitude) => {
     const solarNoon = 12 - eqTime / 60 - longitude / 15;
     const zenith = 90.8333 * Math.PI / 180; // Calculate sunrise/sunset hour angle, standard zenith: 90.8333 degrees (sun diameter + atmospheric refraction)
     const cosHourAngle = (Math.cos(zenith) - Math.sin(latRad) * Math.sin(declination)) / (Math.cos(latRad) * Math.cos(declination));
-    const polarDay = (cosHourAngle < -1);
-    const polarNight = (cosHourAngle > 1);
-    const hourAngle = (!polarDay && !polarNight) ? Math.acos(cosHourAngle) * 180 / Math.PI / 15 : 0;
-    const sunriseUTC = solarNoon - hourAngle;
-    const sunsetUTC = solarNoon + hourAngle;
-    const isDST = isDateInDST(date);
+    const isPolarDay = (cosHourAngle < -1);
+    const isPolarNight = (cosHourAngle > 1);
+    const hourAngle = (!isPolarDay && !isPolarNight) ? Math.acos(cosHourAngle) * 180 / Math.PI / 15 : 0;
+	const isDST = getDST (date);
     const utcOffset = isDST ? 2 : 1;
-    const sunriseLocal = sunriseUTC + utcOffset;
-    const sunsetLocal = sunsetUTC + utcOffset;
-    const civilZenith = 96 * Math.PI / 180; // 90 + 6 degrees
-    const cosCivilHourAngle = (Math.cos(civilZenith) - Math.sin(latRad) * Math.sin(declination)) / (Math.cos(latRad) * Math.cos(declination));
+	//
+    const cosCivilHourAngle = (Math.cos(96 * Math.PI / 180) - Math.sin(latRad) * Math.sin(declination)) / (Math.cos(latRad) * Math.cos(declination)); // 90 + 6 degrees
     const civilHourAngle = (cosCivilHourAngle >= -1 && cosCivilHourAngle <= 1) ? (Math.acos(cosCivilHourAngle) * 180 / Math.PI / 15) : (cosCivilHourAngle < -1 ? 12 : 0);
     const civilDawnUTC = solarNoon - civilHourAngle;
     const civilDuskUTC = solarNoon + civilHourAngle;
     const civilDawnLocal = civilDawnUTC + utcOffset;
     const civilDuskLocal = civilDuskUTC + utcOffset;
-    const normalizeTime = (time) => time < 0 ? (time + 24) : (time >= 24 ? time - 24 : time);
-    const finalSunrise = normalizeTime(sunriseLocal);
-    const finalSunset = normalizeTime(sunsetLocal);
-    const finalCivilDawn = normalizeTime(civilDawnLocal);
-    const finalCivilDusk = normalizeTime(civilDuskLocal);
-    const isDaytime = (date.getHours() + (date.getMinutes() / 60)) > finalSunrise && (date.getHours() + (date.getMinutes() / 60)) < finalSunset;
-    const formatTime = (timeInHours) => `${Math.floor(timeInHours).toString().padStart(2, '0')}:${Math.floor((timeInHours - Math.floor(timeInHours)) * 60).toString().padStart(2, '0')}`;
+    const civilDawnDecimal = normalizeTime(civilDawnLocal);
+    const civilDuskDecimal = normalizeTime(civilDuskLocal);
+	//
+    const sunriseUTC = solarNoon - hourAngle;
+    const sunsetUTC = solarNoon + hourAngle;
+    const sunriseLocal = sunriseUTC + utcOffset;
+    const sunsetLocal = sunsetUTC + utcOffset;
+    const sunriseDecimal = normalizeTime(sunriseLocal);
+    const sunsetDecimal = normalizeTime(sunsetLocal);
+	//
+    const daylightHours = isPolarDay ? 24 : isPolarNight ? 0 : 2 * hourAngle;
+    const isDaytime = (date.getHours() + (date.getMinutes() / 60)) > sunriseDecimal && (date.getHours() + (date.getMinutes() / 60)) < sunsetDecimal;
+	//
     return {
-        daylightHours: polarDay ? 24 : polarNight ? 0 : 2 * hourAngle,
-        sunriseDecimal: finalSunrise,
-        sunsetDecimal: finalSunset,
-        sunrise: formatTime(finalSunrise),
-        sunset: formatTime(finalSunset),
-        civilDawn: formatTime(finalCivilDawn),
-        civilDusk: formatTime(finalCivilDusk),
-        isPolarDay: polarDay,
-        isPolarNight: polarNight,
-        sunriseHour: Math.floor(finalSunrise),
-        sunsetHour: Math.floor(finalSunset),
-        isDaytime
+        sunriseDecimal,
+        sunsetDecimal,
+        sunrise: formatTime(sunriseDecimal),
+        sunset: formatTime(sunsetDecimal),
+        civilDawn: formatTime(civilDawnDecimal),
+        civilDusk: formatTime(civilDuskDecimal),
+        daylightHours,
+        isDaytime,
+		isDST
     };
 };
 
-const getJulianDate = (date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-    const hours = date.getUTCHours();
-    const minutes = date.getUTCMinutes();
-    const seconds = date.getUTCSeconds();
-    return 367 * year - Math.floor(7 * (year + Math.floor((month + 9) / 12)) / 4) + Math.floor(275 * month / 9) + day + 1721013.5 + (hours + minutes / 60 + seconds / 3600) / 24;
-};
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
-const joinand = (items) => {
-    if (!items || items.length === 0) return '';
-    else if (items.length === 1) return items[0];
-    else if (items.length === 2) return `${items[0]} and ${items[1]}`;
-    const lastItem = items.pop();
-    return `${items.join(', ')}, and ${lastItem}`;
-};
-
-const generateDescription = (results) => {
-    let description = '';
-    if (results.conditions.length > 0)
-        description = joinand([...new Set(results.conditions)]);
-    if (results.phenomena.length > 0)
-        description += (description ? ": " : "") + joinand([...new Set(results.phenomena)]);
-    if (description) {
-        description = description.charAt(0).toUpperCase() + description.slice(1);
-        if (!description.endsWith('.'))
-            description += '.';
-    }
-    return description || null;
-};

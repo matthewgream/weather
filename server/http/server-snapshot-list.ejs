@@ -4,15 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Snapshots</title>
-    <link rel="stylesheet" href="/static/css/snapshot.css">
+    <link href="/static/css/snapshot.css" rel="stylesheet">
 </head>
 <body>
     <h1>Snapshots</h1>
     <div class="item-list">
-        <% formattedDates.forEach(function(date) { %>
+        <% entries.forEach(entry => {%>
 			<div class="item-entry">
-            	<a href="/snapshot/list/<%= date.dateCode %>">
-                	<%= date.formattedDate %>
+            	<a href="/snapshot/list/<%= entry.dateCode %>">
+                	<%= entry.dateFormatted %>
             	</a>
     		</div>
          <% }); %>
