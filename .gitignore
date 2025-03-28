@@ -4,5 +4,5 @@ build
 [sS]ecrets*
 package-lock.json
 .theia
-.prettierrc.json
+server/assets/js/.prettierrc.json
 eslint.config.mjs
