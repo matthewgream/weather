@@ -9,17 +9,18 @@ const path = require('path');
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function loadConfig(configPath) {
+function configLoad(configPath) {
     try {
-        const vars = {};
-        fs.readFileSync(configPath, 'utf8').split('\n').forEach(line => {
-            const [key, value] = line.split('=').map(s => s.trim());
-            if (key && value)
-                vars[key] = value;
-        });
-        return vars;
+        const items = {};
+        fs.readFileSync(configPath, 'utf8')
+            .split('\n')
+            .forEach((line) => {
+                const [key, value] = line.split('=').map((s) => s.trim());
+                if (key && value) items[key] = value;
+            });
+        return items;
     } catch (err) {
-        console.warn('Could not load secrets.txt, using defaults');
+        console.warn(`Could not load '${configPath}', using defaults (which may not work correctly)`);
         return {};
     }
 }
@@ -28,28 +29,28 @@ function loadConfig(configPath) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const configPath = path.join(__dirname, 'secrets.txt');
-const conf = loadConfig(configPath);
-const fqdn = conf.FQDN;
-const host = conf.HOST;
-const port = conf.PORT;
-const data = conf.DATA;
-const logs = conf.LOGS;
+const conf = configLoad(configPath);
 const subs = ['weather/#', 'sensors/#'];
-const data_views = data + '/http';
-const data_images = data + '/images';
-const data_assets = data + '/assets';
-console.log(`Loaded 'config' using ${configPath}`);
+const vars = ['weather/branna', 'sensors/radiation/cpm'];
+const data_views = conf.DATA + '/http';
+const data_images = conf.DATA + '/images';
+const data_assets = conf.DATA + '/assets';
+console.log(
+    `Loaded 'config' using '${configPath}': ${Object.entries(conf)
+        .map(([k, v]) => k.toLowerCase() + '=' + v)
+        .join(', ')}`
+);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const letsencrypt = `/etc/letsencrypt/live/${fqdn}`;
+const letsencrypt = `/etc/letsencrypt/live/${conf.FQDN}`;
 const credentials = {
     key: fs.readFileSync(`${letsencrypt}/privkey.pem`, 'utf8'),
     cert: fs.readFileSync(`${letsencrypt}/cert.pem`, 'utf8'),
-    ca: fs.readFileSync(`${letsencrypt}/chain.pem`, 'utf8')
+    ca: fs.readFileSync(`${letsencrypt}/chain.pem`, 'utf8'),
 };
-console.log(`Loaded 'certificates' using ${letsencrypt}`);
+console.log(`Loaded 'certificates' using '${letsencrypt}'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -58,17 +59,16 @@ const exp = require('express');
 const xxx = exp();
 xxx.set('view engine', 'ejs');
 xxx.set('views', data_views);
-console.log(`Loaded 'EJS' using ${data_views}`);
+console.log(`Loaded 'express' using 'ejs=${data_views}'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 xxx.use((req, res, next) => {
-    if (req.path === '/' && !req.secure)
-        return res.redirect(`https://${req.headers.host.split(':')[0]}${req.url}`);
+    if (req.path === '/' && !req.secure) return res.redirect(`https://${req.headers.host.split(':')[0]}${req.url}`);
     next();
 });
-console.log(`Loaded 'http -> https'`);
+console.log(`Loaded 'redirect' using 'http -> https'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -78,87 +78,96 @@ const https = require('https');
 const httpsServer = https.createServer(credentials, xxx);
 const httpServer = http.createServer(xxx);
 const socket = require('socket.io')(httpsServer);
-console.log(`Loaded 'socket_io' using https`);
+console.log(`Loaded 'socket_io' using 'https'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const { formatInTimeZone } = require('date-fns-tz');
-const getTimestamp = (tz) => 
-    formatInTimeZone(new Date(), tz, "yyyy-MM-dd'T'HH:mm:ssXXX'Z'").replace(":00'Z", 'Z');
+const getTimestamp = (tz) => formatInTimeZone(new Date(), tz, "yyyy-MM-dd'T'HH:mm:ssXXX'Z'").replace(":00'Z", 'Z');
 
-const mqtt_content = {};
-function variablesRender () {
-	return { 
-		'weather/branna': mqtt_content['weather/branna'],
-		'sensors/radiation/cpm': mqtt_content['sensors/radiation/cpm']
-	};
+const variablesSet = {};
+function variablesGet() {
+    return variablesSet;
 }
-function variablesUpdate (topic, message) {
-	if (topic.startsWith ('sensors'))
-    	mqtt_content[topic] = { value: message.toString (), timestamp: getTimestamp (conf.TZ) };
-	else if (topic.startsWith ('weather'))
-    	mqtt_content[topic] = { ...JSON.parse(message.toString()), timestamp: getTimestamp (conf.TZ) };
-	else
-		return;
-    if (topic == 'weather/branna' || topic == 'sensors/radiation/cpm') {
-        console.log(`mqtt message received on '${topic}' with '${JSON.stringify(mqtt_content[topic])}'`);
-        socket.emit('update', variablesRender ());
+function variablesRender() {
+    return Object.fromEntries(vars.map((topic) => [topic, variablesSet[topic]]));
+}
+function variablesUpdate(topic, message) {
+    if (topic.startsWith('sensors')) variablesSet[topic] = { value: message.toString(), timestamp: getTimestamp(conf.TZ) };
+    else if (topic.startsWith('weather')) variablesSet[topic] = { ...JSON.parse(message.toString()), timestamp: getTimestamp(conf.TZ) };
+    else return;
+    if (vars.includes(topic)) {
+        console.log(`variables: '${topic}' --> '${JSON.stringify(variablesSet[topic])}'`);
+        socket.emit('update', variablesRender());
     }
 }
-console.log(`Loaded 'variables'`);
+console.log(`Loaded 'variables' using '${vars.join(', ')}'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const mqtt_client = require('mqtt').connect('mqtt://localhost');
-mqtt_client.on('connect', () => mqtt_client.subscribe(subs, () => {
-    console.log(`mqtt connected & subscribed for '${subs}'`);
-}));
+const mqtt_client = require('mqtt').connect(conf.MQTT);
+mqtt_client.on('connect', () =>
+    mqtt_client.subscribe(subs, () => {
+        console.log(`mqtt connected & subscribed for '${subs}'`);
+    })
+);
 mqtt_client.on('message', (topic, message) => {
-	variablesUpdate (topic, message);
+    variablesUpdate(topic, message);
 });
-console.log(`Loaded 'mqtt_subscriber' using 'mqtt:://localhost'`);
+console.log(`Loaded 'mqtt_subscriber' using '${conf.MQTT}'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
+
+const LOGS_INMEMORY_MAXSIZE = 8 * 1024 * 1024;
+const LOGS_DISPLAY_DEFAULT = 100;
 
 const morgan = require('morgan');
-xxx.use(morgan('combined'));
-// const accessLogStream = require('file-stream-rotator').getStream({
-//     date_format: 'YYYY-MM-DD',
-//     filename: path.join(logs, 'access-%DATE%.log'),
-//     frequency: 'daily',
-//     verbose: false,
-//     size: '1M',
-//     max_logs: 10,
-//     audit_file: path.join(logs, 'audit.json'),
-//     end_stream: false
-// });
-// xxx.use(morgan('combined', { stream: accessLogStream }));
+const memoryLogs = {
+    logs: [],
+    size: 0,
+    maxSize: LOGS_INMEMORY_MAXSIZE,
+    write: function (string) {
+        this.logs.push(string);
+        this.size += Buffer.byteLength(string, 'utf8');
+        while (this.size > this.maxSize && this.logs.length > 0) this.size -= Buffer.byteLength(this.logs.shift(), 'utf8');
+        return true;
+    },
+    getLogs: function () {
+        return this.logs;
+    },
+};
+const logStream = {
+    write: function (string) {
+        return memoryLogs.write(string);
+    },
+};
+xxx.use(morgan('combined', { stream: logStream }));
 const requestStats = {
-    totalRequests: 0,
-    requestsByRoute: {},
-    requestsByMethod: {},
-    requestsByStatus: {},
-    requestsByIp: {}
+    total: 0,
+    byRoute: {},
+    byMethod: {},
+    byStatus: {},
+    byIP: {},
 };
 xxx.use((req, res, next) => {
-    const originalEnd = res.end;
-    requestStats.totalRequests++;
-    requestStats.requestsByRoute[req.path] = (requestStats.requestsByRoute[req.path] || 0) + 1;
-    requestStats.requestsByMethod[req.method] = (requestStats.requestsByMethod[req.method] || 0) + 1;
+    const res_end = res.end;
+    requestStats.total++;
+    requestStats.byRoute[req.path] = (requestStats.byRoute[req.path] || 0) + 1;
+    requestStats.byMethod[req.method] = (requestStats.byMethod[req.method] || 0) + 1;
     const ip = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-    requestStats.requestsByIp[ip] = (requestStats.requestsByIp[ip] || 0) + 1;
+    requestStats.byIP[ip] = (requestStats.byIP[ip] || 0) + 1;
     res.end = function (...args) {
-        requestStats.requestsByStatus[res.statusCode] = (requestStats.requestsByStatus[res.statusCode] || 0) + 1;
-        originalEnd.apply(res, args);
+        requestStats.byStatus[res.statusCode] = (requestStats.byStatus[res.statusCode] || 0) + 1;
+        res_end.apply(res, args);
     };
     next();
 });
 xxx.get('/requests', (req, res) => {
-//    const mostRecentLog = fs.readdirSync(logs).filter(file => file.startsWith('access-')).sort().pop();
-//    const recentLogs = mostRecentLog ? fs.readFileSync(path.join(logs, mostRecentLog), 'utf8').split('\n').filter(Boolean).slice(-100) : [];
+    const limit = req.query.limit ? parseInt(req.query.limit) : LOGS_DISPLAY_DEFAULT;
+    const recentLogs = memoryLogs.getLogs().slice(-limit);
     res.send(`
     <html>
       <head>
@@ -178,64 +187,65 @@ xxx.get('/requests', (req, res) => {
         <div class="stats-container">
           <div class="stats-box">
             <h2>General</h2>
-            <p>Total Requests: ${requestStats.totalRequests}</p>
+            <p>Total Requests: ${requestStats.total}</p>
           </div>
           <div class="stats-box">
             <h2>Routes</h2>
             <table>
               <tr><th>Path</th><th>Count</th></tr>
-              ${Object.entries(requestStats.requestsByRoute)
-            .sort((a, b) => b[1] - a[1])
-            .map(([path, count]) => `<tr><td>${path}</td><td>${count}</td></tr>`)
-            .join('')}
+              ${Object.entries(requestStats.byRoute)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([path, count]) => `<tr><td>${path}</td><td>${count}</td></tr>`)
+                  .join('')}
             </table>
           </div>
           <div class="stats-box">
             <h2>Methods</h2>
             <table>
               <tr><th>Method</th><th>Count</th></tr>
-              ${Object.entries(requestStats.requestsByMethod)
-            .map(([method, count]) => `<tr><td>${method}</td><td>${count}</td></tr>`)
-            .join('')}
+              ${Object.entries(requestStats.byMethod)
+                  .map(([method, count]) => `<tr><td>${method}</td><td>${count}</td></tr>`)
+                  .join('')}
             </table>
           </div>
           <div class="stats-box">
             <h2>Status Codes</h2>
             <table>
               <tr><th>Status</th><th>Count</th></tr>
-              ${Object.entries(requestStats.requestsByStatus)
-            .map(([status, count]) => `<tr><td>${status}</td><td>${count}</td></tr>`)
-            .join('')}
+              ${Object.entries(requestStats.byStatus)
+                  .map(([status, count]) => `<tr><td>${status}</td><td>${count}</td></tr>`)
+                  .join('')}
             </table>
           </div>
           <div class="stats-box">
             <h2>IP Addresses</h2>
             <table>
               <tr><th>IP</th><th>Count</th></tr>
-              ${Object.entries(requestStats.requestsByIp)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 10)
-            .map(([ip, count]) => `<tr><td>${ip}</td><td>${count}</td></tr>`)
-            .join('')}
+              ${Object.entries(requestStats.byIP)
+                  .sort((a, b) => b[1] - a[1])
+                  .slice(0, 10)
+                  .map(([ip, count]) => `<tr><td>${ip}</td><td>${count}</td></tr>`)
+                  .join('')}
             </table>
           </div>
         </div>
-//        <h2>Recent Logs</h2>
-//        <pre>${recentLogs.join('\n')}</pre>
+    	  <h2>Recent Logs (${recentLogs.length})</h2>
+    	  <pre>
+		    ${recentLogs.join('')}
+          </pre>
       </body>
     </html>
   `);
 });
-// console.log(`Loaded 'morgan' on /requests using logs=${logs}`);
-console.log(`Loaded 'morgan' on /requests using in-memory`);
+console.log(`Loaded 'morgan' on '/requests' using 'in-memory-logs-maxsize=${LOGS_INMEMORY_MAXSIZE}'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 xxx.get('/', function (req, res) {
-    res.render('server-mainview', { 
-		vars: variablesRender ()
-	});
+    res.render('server-mainview', {
+        vars: variablesRender(),
+    });
 });
 console.log(`Loaded '/' using 'server-mainview'`);
 
@@ -243,19 +253,19 @@ console.log(`Loaded '/' using 'server-mainview'`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 xxx.use(exp.static('/dev/shm'));
-console.log(`Loaded 'static' using /dev/shm`);
+console.log(`Loaded 'static' using '/dev/shm'`);
 
 xxx.use('/static', exp.static(data_assets));
-console.log(`Loaded 'static' using /static -> ${data_assets}`);
+console.log(`Loaded 'static' using '/static -> ${data_assets}'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 xxx.get('/vars', function (req, res) {
     console.log(`/vars requested from '${req.headers['x-forwarded-for'] || req.connection.remoteAddress}'`);
-    res.json(mqtt_content);
+    res.json(variablesGet());
 });
-console.log(`Loaded 'vars/json' on /vars`);
+console.log(`Loaded 'vars/json' on '/vars'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -265,23 +275,23 @@ const snapshotsDir__ = '/opt/snapshots';
 let snapshotsList__ = [];
 function snapshotTimestampParser(filename) {
     const match = filename.match(/snapshot_(\d{14})\.jpg/);
-    if (match && match[1]) {
-        const timestampStr = match[1];
-        const isoString = `${timestampStr.substring(0, 4)}-${timestampStr.substring(4, 6)}-${timestampStr.substring(6, 8)}T` +
-            `${timestampStr.substring(8, 10)}:${timestampStr.substring(10, 12)}:${timestampStr.substring(12, 14)}.000Z`;
-        return new Date(isoString);
+    if (match?.[1]) {
+        const str = match[1];
+        return new Date(
+            `${str.substring(0, 4)}-${str.substring(4, 6)}-${str.substring(6, 8)}T` +
+                `${str.substring(8, 10)}:${str.substring(10, 12)}:${str.substring(12, 14)}.000Z`
+        );
     }
-    return null;
+    return undefined;
 }
 async function snapshotLoad() {
     try {
         await fs.promises.mkdir(snapshotsDir__, { recursive: true });
         const files = await fs.promises.readdir(snapshotsDir__);
         snapshotsList__ = files
-            .filter(file => file.match(/snapshot_\d{14}\.jpg/))
+            .filter((file) => file.match(/snapshot_\d{14}\.jpg/))
             .sort((a, b) => (snapshotTimestampParser(b) || 0) - (snapshotTimestampParser(a) || 0));
         console.log(`snapshot list loaded with ${snapshotsList__.length} existing files (with expiration of ${snapshotsTime / 60 / 60} hours)`);
-
     } catch (error) {
         console.error('Error loading snapshot list:', error);
         throw error;
@@ -289,16 +299,25 @@ async function snapshotLoad() {
 }
 async function snapshotCapture() {
     try {
-        const timestamp = (new Date()).toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '');
+        const now = new Date();
+        const timestamp =
+            now.getFullYear() +
+            String(now.getMonth() + 1).padStart(2, '0') +
+            String(now.getDate()).padStart(2, '0') +
+            String(now.getHours()).padStart(2, '0') +
+            String(now.getMinutes()).padStart(2, '0') +
+            String(now.getSeconds()).padStart(2, '0');
         const filename = `snapshot_${timestamp}.jpg`;
         const snapshotPath = path.join(snapshotsDir__, filename);
         const mainviewPath = '/dev/shm/snapshot.jpg';
         await new Promise((resolve, reject) => {
-            require('child_process').exec(`ffmpeg -y -rtsp_transport tcp -i '${conf.RTSP}' -vframes 1 -q:v 7.5 -compression_level 9 "${snapshotPath}"`,
+            require('child_process').exec(
+                `ffmpeg -y -rtsp_transport tcp -i '${conf.RTSP}' -vframes 1 -q:v 7.5 -compression_level 9 "${snapshotPath}"`,
                 (error) => {
                     if (error) reject(error);
                     else resolve();
-                });
+                }
+            );
         });
         await fs.promises.copyFile(snapshotPath, mainviewPath);
         snapshotsList__.unshift(filename);
@@ -308,13 +327,12 @@ async function snapshotCapture() {
     }
 }
 async function snapshotRebuild() {
-    if (snapshotsList__.length == 0)
-        return;
+    if (snapshotsList__.length == 0) return;
     const intervals = [15, 30, 45, 60];
     for (const minutes of intervals) {
-        const targetTime = new Date((new Date()).getTime() - minutes * 60 * 1000);
+        const targetTime = new Date(new Date().getTime() - minutes * 60 * 1000);
         const targetPath = `/dev/shm/snapshot_M${minutes}.jpg`;
-        let closest = null;
+        let closest = undefined;
         let closestDiff = Infinity;
         for (const file of snapshotsList__) {
             try {
@@ -332,7 +350,8 @@ async function snapshotRebuild() {
         }
         if (closest) {
             try {
-                await fs.promises.copyFile(path.join(snapshotsDir__, closest), targetPath);
+                const sourcePath = path.join(snapshotsDir__, closest);
+                await fs.promises.copyFile(sourcePath, targetPath);
             } catch (err) {
                 console.error(`Error creating snapshot for M${minutes}:`, err);
             }
@@ -341,7 +360,7 @@ async function snapshotRebuild() {
 }
 async function snapshotCleanup() {
     try {
-        const cleanupTime = new Date((new Date()).getTime() - snapshotsTime * 1000);
+        const cleanupTime = new Date(new Date().getTime() - snapshotsTime * 1000);
         const files = await fs.promises.readdir(snapshotsDir__);
         for (const file of files) {
             if (file.startsWith('snapshot_')) {
@@ -386,97 +405,87 @@ snapshotInitialise();
 //
 
 const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-function getFormattedDate (date) {
-	return `${date.substring(0, 4)} ${months[parseInt(date.substring(4, 6)) - 1]} ${parseInt(date.substring(6, 8))}`;
+function getFormattedDate(date) {
+    return `${date.substring(0, 4)} ${months[parseInt(date.substring(4, 6)) - 1]} ${parseInt(date.substring(6, 8))}`;
 }
-function getFormattedTime (time) {
-	return `${parseInt(time.substring(0, 2)).toString().padStart(2, '0')}:${parseInt(time.substring(2, 4)).toString().padStart(2, '0')}:${parseInt(time.substring(4, 6)).toString().padStart(2, '0')}`;
+function getFormattedTime(time) {
+    return `${parseInt(time.substring(0, 2)).toString().padStart(2, '0')}:${parseInt(time.substring(2, 4)).toString().padStart(2, '0')}:${parseInt(time.substring(4, 6)).toString().padStart(2, '0')}`;
 }
-function getSnapshotsListForDate (date) {
+function getSnapshotsListForDate(date) {
     return snapshotsList__
-        .filter(file => file.slice(9, 17) === date)
+        .filter((file) => file.slice(9, 17) === date)
         .sort((a, b) => b.localeCompare(a))
-        .map(file => ({ file, timeCode: file.slice(17, 23) }))
+        .map((file) => ({ file, timeCode: file.slice(17, 23) }))
         .map(({ file, timeCode }) => ({
             file,
-            timeFormatted: getFormattedTime (timeCode)
+            timeFormatted: getFormattedTime(timeCode),
         }));
 }
-function getSnapshotsListOfDates () {
-    return [...new Set(snapshotsList__.map(file => file.slice(9, 17)))]
-		.sort((a, b) => b.localeCompare(a))
-        .map(dateCode => ({
+function getSnapshotsListOfDates() {
+    return [...new Set(snapshotsList__.map((file) => file.slice(9, 17)))]
+        .sort((a, b) => b.localeCompare(a))
+        .map((dateCode) => ({
             dateCode,
-            dateFormatted: getFormattedDate (dateCode)
+            dateFormatted: getFormattedDate(dateCode),
         }));
 }
-function getSnapshotsImageFilename (file) {
-    if (snapshotsList__.includes(file))
-        return `/opt/snapshots/${file}`;
-	return undefined;
+function getSnapshotsImageFilename(file) {
+    if (snapshotsList__.includes(file)) return `/opt/snapshots/${file}`;
+    return undefined;
+}
+const sharp = require('sharp');
+const crypto = require('crypto');
+const thumbnailCache = {};
+const MAX_CACHE_ENTRIES = 50;
+async function getSnapshotsImageThumbnail(file, width) {
+    const sourcePath = `/dev/shm/${file}`;
+    if (!fs.existsSync(sourcePath)) return null;
+    const mtime = fs.statSync(sourcePath).mtime.getTime();
+    const cacheKey = crypto.createHash('md5').update(`${file}-${width}-${mtime}`).digest('hex');
+    if (!thumbnailCache[cacheKey]) {
+        const thumbnail = await sharp(sourcePath).resize(width).jpeg({ quality: 70 }).toBuffer();
+        thumbnailCache[cacheKey] = thumbnail;
+        const cacheKeys = Object.keys(thumbnailCache);
+        if (cacheKeys.length > MAX_CACHE_ENTRIES) cacheKeys.slice(0, cacheKeys.length - MAX_CACHE_ENTRIES).forEach((key) => delete thumbnailCache[key]);
+    }
+    return thumbnailCache[cacheKey];
 }
 
 //
 
 xxx.get('/snapshot/list', function (req, res) {
     return res.render('server-snapshot-list', {
-        entries: getSnapshotsListOfDates ()
+        entries: getSnapshotsListOfDates(),
     });
 });
 xxx.get('/snapshot/list/:date', function (req, res) {
     const date = req.params.date;
-	//
     return res.render('server-snapshot-date', {
-       	dateFormatted: getFormattedDate (date),
-       	entries: getSnapshotsListForDate (date)
+        dateFormatted: getFormattedDate(date),
+        entries: getSnapshotsListForDate(date),
     });
 });
 xxx.get('/snapshot/file/:file', function (req, res) {
-	const file = req.params.file;
-	//
-	const filename = getSnapshotsImageFilename (file);
-	if (!filename)
-        return res.status(404).send('Snapshot not found');
+    const file = req.params.file;
+    const filename = getSnapshotsImageFilename(file);
+    if (!filename) return res.status(404).send('Snapshot not found');
     return res.sendFile(filename);
 });
-
-//
-
-const sharp = require('sharp');
-const crypto = require('crypto');
-const thumbnailCache = {};
-const MAX_CACHE_ENTRIES = 50;
-
 xxx.get('/snapshot/thumb/:file', async (req, res) => {
     const file = req.params.file;
     const width = parseInt(req.query.w) || 200;
-    //
     try {
-        const sourcePath = `/dev/shm/${file}`;
-        if (!fs.existsSync(sourcePath))
-            return res.status(404).send('Thumbnail not found');
-        const mtime = fs.statSync(sourcePath).mtime.getTime();
-        const cacheKey = crypto.createHash('md5').update(`${file}-${width}-${mtime}`).digest('hex');
-        if (!thumbnailCache[cacheKey]) {
-        	const thumbnail = await sharp(sourcePath)
-            	.resize(width)
-            	.jpeg({ quality: 70 })
-            	.toBuffer();
-        	thumbnailCache[cacheKey] = thumbnail;
-        	const cacheKeys = Object.keys(thumbnailCache);
-        	if (cacheKeys.length > MAX_CACHE_ENTRIES)
-            	cacheKeys.slice(0, cacheKeys.length - MAX_CACHE_ENTRIES)
-                	.forEach(key => delete thumbnailCache[key]);
-		}
+        const imagedata = await getSnapshotsImageThumbnail(file, width);
+        if (imagedata == null) return res.status(404).send('Thumbnail not found');
         res.set('Content-Type', 'image/jpeg');
         res.set('Cache-Control', 'public, max-age=300');
-        res.send(thumbnailCache[cacheKey]);
+        return res.send(imagedata);
     } catch (error) {
         console.error('Error generating thumbnail:', error);
-        res.status(500).send('Error generating thumbnail');
+        return res.status(500).send('Error generating thumbnail');
     }
 });
-console.log(`Loaded 'snapshots' on /snapshot, with thumbnail cache-entries=${MAX_CACHE_ENTRIES}`);
+console.log(`Loaded 'snapshots' on '/snapshot', using 'thumbnail-cache-entries=${MAX_CACHE_ENTRIES}'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -488,17 +497,22 @@ const image_upload = multer({ dest: '/tmp' });
 const image_dataType = (filename) => filename.match(/^([^_]+)/)?.[1] || '';
 const image_dataVersion = (filename) => filename.match(/_v(\d+\.\d+\.\d+)/)?.[1] || '';
 const image_dataCompress = (data) => zlib.deflateSync(data);
-const image_dataManifest = (directory) => Object.values(fs.readdirSync(directory).reduce((images, filename) => {
-    const type = image_dataType(filename), version = image_dataVersion(filename);
-    if (!images[type] || images[type].version < version)
-        images[type] = { type, version, filename };
-    return images;
-}, {}));
+const image_dataManifest = (directory) =>
+    Object.values(
+        fs.readdirSync(directory).reduce((images, filename) => {
+            const type = image_dataType(filename),
+                version = image_dataVersion(filename);
+            if (!images[type] || images[type].version < version) images[type] = { type, version, filename };
+            return images;
+        }, {})
+    );
 
 xxx.get('/images/images.json', async (req, res) => {
-    const url_base = `http://${host}:${port}/images/`;
+    const url_base = `http://${conf.HOST}:${conf.PORT}/images/`;
     const manifest = image_dataManifest(data_images).map(({ filename, ...rest }) => ({ ...rest, url: url_base + filename }));
-    console.log(`/images manifest request: ${manifest.length} items, ${JSON.stringify(manifest).length} bytes, types = ${manifest.map(item => item.type).join(', ')}, version = ${req.query.version || 'unspecified'}`);
+    console.log(
+        `/images manifest request: ${manifest.length} items, ${JSON.stringify(manifest).length} bytes, types = ${manifest.map((item) => item.type).join(', ')}, version = ${req.query.version || 'unspecified'}`
+    );
     res.json(manifest);
 });
 xxx.put('/images', image_upload.single('image'), (req, res) => {
@@ -515,10 +529,15 @@ xxx.put('/images', image_upload.single('image'), (req, res) => {
         return res.status(409).send('File with this name already exists');
     }
     try {
-        const uploadedName = req.file.originalname, uploadedData = fs.readFileSync(req.file.path); fs.unlinkSync(req.file.path);
-        const compressedName = path.join(data_images, uploadedName) + '.zz', compressedData = image_dataCompress(uploadedData);
+        const uploadedName = req.file.originalname,
+            uploadedData = fs.readFileSync(req.file.path);
+        fs.unlinkSync(req.file.path);
+        const compressedName = path.join(data_images, uploadedName) + '.zz',
+            compressedData = image_dataCompress(uploadedData);
         fs.writeFileSync(compressedName, compressedData);
-        console.log(`/images upload succeeded: '${uploadedName}' (${uploadedData.length} bytes) --> '${compressedName}' (${compressedData.length} bytes) [${req.headers['x-forwarded-for'] || req.connection.remoteAddress}]`);
+        console.log(
+            `/images upload succeeded: '${uploadedName}' (${uploadedData.length} bytes) --> '${compressedName}' (${compressedData.length} bytes) [${req.headers['x-forwarded-for'] || req.connection.remoteAddress}]`
+        );
         res.send('File uploaded, compressed, and saved successfully.');
     } catch (error) {
         console.error(`/images upload failed: error <<<${error}>>> [${req.headers['x-forwarded-for'] || req.connection.remoteAddress}]`);
@@ -526,7 +545,8 @@ xxx.put('/images', image_upload.single('image'), (req, res) => {
     }
 });
 xxx.get('/images/:filename', (req, res) => {
-    const downloadName = req.params.filename, downloadPath = path.join(data_images, downloadName);
+    const downloadName = req.params.filename,
+        downloadPath = path.join(data_images, downloadName);
     try {
         res.set('Content-Type', 'application/octet-stream');
         res.send(fs.readFileSync(downloadPath));
@@ -536,7 +556,7 @@ xxx.get('/images/:filename', (req, res) => {
         res.status(404).send('File not found');
     }
 });
-console.log(`Loaded 'images' on /images`);
+console.log(`Loaded 'images' on '/images'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -560,7 +580,7 @@ xxx.get('/sets', (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-console.log(`Loaded 'sets' on /sets`);
+console.log(`Loaded 'sets' on '/sets'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -571,14 +591,14 @@ xxx.use(function (req, res) {
     console.error(`  User-Agent: ${req.headers['user-agent']}`);
     console.error(`  Referrer: ${req.headers['referer'] || 'none'}`);
     console.error(`  Route path: ${req.path}`);
-    res.status(404).send("not found");
+    res.status(404).send('not found');
 });
 
 httpServer.listen(80, function () {
-    console.log(`Loaded 'http' on ${httpServer.address().port}`);
+    console.log(`Loaded 'http' using 'port=${httpServer.address().port}'`);
 });
 httpsServer.listen(443, function () {
-    console.log(`Loaded 'https' on ${httpsServer.address().port}`);
+    console.log(`Loaded 'https' using 'port=${httpsServer.address().port}'`);
 });
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

@@ -10,11 +10,11 @@
     <h1>Snapshots</h1>
     <div class="item-list">
         <% entries.forEach(entry => {%>
-			<div class="item-entry">
-            	<a href="/snapshot/list/<%= entry.dateCode %>">
-                	<%= entry.dateFormatted %>
-            	</a>
-    		</div>
+            <div class="item-entry">
+                <a href="/snapshot/list/<%= entry.dateCode %>">
+                    <%= entry.dateFormatted %>
+                </a>
+            </div>
          <% }); %>
     </div>
 </body>
