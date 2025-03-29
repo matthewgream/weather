@@ -278,8 +278,12 @@ function snapshotTimestampParser(filename) {
     if (match?.[1]) {
         const str = match[1];
         return new Date(
-            `${str.substring(0, 4)}-${str.substring(4, 6)}-${str.substring(6, 8)}T` +
-                `${str.substring(8, 10)}:${str.substring(10, 12)}:${str.substring(12, 14)}.000Z`
+            parseInt(str.substring(0, 4)),
+            parseInt(str.substring(4, 6)) - 1,
+            parseInt(str.substring(6, 8)),
+            parseInt(str.substring(8, 10)),
+            parseInt(str.substring(10, 12)),
+            parseInt(str.substring(12, 14))
         );
     }
     return undefined;
@@ -309,19 +313,16 @@ async function snapshotCapture() {
             String(now.getSeconds()).padStart(2, '0');
         const filename = `snapshot_${timestamp}.jpg`;
         const snapshotPath = path.join(snapshotsDir__, filename);
-        const mainviewPath = '/dev/shm/snapshot.jpg';
+        const shmPath = path.join('/dev/shm', filename);
         await new Promise((resolve, reject) => {
-            require('child_process').exec(
-                `ffmpeg -y -rtsp_transport tcp -i '${conf.RTSP}' -vframes 1 -q:v 7.5 -compression_level 9 "${snapshotPath}"`,
-                (error) => {
-                    if (error) reject(error);
-                    else resolve();
-                }
-            );
+            require('child_process').exec(`ffmpeg -y -rtsp_transport tcp -i '${conf.RTSP}' -vframes 1 -q:v 7.5 -compression_level 9 "${shmPath}"`, (error) => {
+                if (error) reject(error);
+                else resolve();
+            });
         });
-        await fs.promises.copyFile(snapshotPath, mainviewPath);
+        await fs.promises.copyFile(shmPath, snapshotPath);
         snapshotsList__.unshift(filename);
-        console.log(`snapshot captured: ${filename}`);
+        console.log(`snapshot captured: ${filename} (--> /dev/shm, --> ${snapshotsDir__})`);
     } catch (error) {
         console.error('Error capturing snapshot:', error);
     }
@@ -329,9 +330,10 @@ async function snapshotCapture() {
 async function snapshotRebuild() {
     if (snapshotsList__.length == 0) return;
     const intervals = [15, 30, 45, 60];
+    const now = new Date();
+    let oldestNeededTimestamp = null;
     for (const minutes of intervals) {
-        const targetTime = new Date(new Date().getTime() - minutes * 60 * 1000);
-        const targetPath = `/dev/shm/snapshot_M${minutes}.jpg`;
+        const targetTime = new Date(now.getTime() - minutes * 60 * 1000);
         let closest = undefined;
         let closestDiff = Infinity;
         for (const file of snapshotsList__) {
@@ -350,11 +352,53 @@ async function snapshotRebuild() {
         }
         if (closest) {
             try {
-                const sourcePath = path.join(snapshotsDir__, closest);
-                await fs.promises.copyFile(sourcePath, targetPath);
+                const symlinkPath = `/dev/shm/snapshot_M${minutes}.jpg`;
+                const sourcePath = path.join('/dev/shm', closest);
+                if (minutes === 60) oldestNeededTimestamp = snapshotTimestampParser(closest);
+                try {
+                    fs.unlinkSync(symlinkPath);
+                } catch (err) {
+                    if (err.code !== 'ENOENT') console.error(`Error removing existing symlink for M${minutes}:`, err);
+                }
+                await fs.promises.symlink(sourcePath, symlinkPath);
+                //console.log(`snapshot (M${minutes}): ${symlinkPath} -> ${sourcePath}`);
             } catch (err) {
-                console.error(`Error creating snapshot for M${minutes}:`, err);
+                console.error(`Error creating symlink for snapshot(M${minutes}):`, err);
             }
+        }
+    }
+    if (snapshotsList__.length > 0) {
+        const symlinkPath = `/dev/shm/snapshot.jpg`;
+        const sourcePath = path.join('/dev/shm', snapshotsList__[0]);
+        try {
+            try {
+                fs.unlinkSync(symlinkPath);
+            } catch (err) {
+                if (err.code !== 'ENOENT') console.error(`Error removing existing symlink for current snapshot:`, err);
+            }
+            await fs.promises.symlink(sourcePath, symlinkPath);
+            //console.log(`snapshot (current): ${symlinkPath} -> ${sourcePath}`);
+        } catch (err) {
+            console.error(`Error creating symlink for snapshot(current):`, err);
+        }
+    }
+    if (oldestNeededTimestamp) {
+        try {
+            const files = await fs.promises.readdir('/dev/shm');
+            for (const file of files) {
+                if (file.match(/snapshot_\d{14}\.jpg/) && !file.startsWith('snapshot_M')) {
+                    try {
+                        const fileTime = snapshotTimestampParser(file);
+                        if (fileTime && fileTime.getTime() < oldestNeededTimestamp.getTime() - 5 * 60 * 1000)
+                            // Add 5-minute buffer to avoid removing files we might need
+                            await fs.promises.unlink(path.join('/dev/shm', file));
+                    } catch (err) {
+                        console.error(`Error processing file ${file} during cleanup:`, err);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error cleaning up old snapshots in /dev/shm:', error);
         }
     }
 }
