@@ -1,3 +1,5 @@
-cp collector.service /etc/systemd/system/archive_collector.service
-systemctl enable archive_collector
-systemctl start archive_collector
+cp collector.service /etc/systemd/system/archiver_collector.service
+systemctl enable archiver_collector
+systemctl start archiver_collector
+cp collector_snapshots.crontab /etc/cron.d/collector_snapshots
+/etc/init.d/cron reload
