@@ -1,0 +1,3 @@
+cp collector.service /etc/systemd/system/archive_collector.service
+systemctl enable archive_collector
+systemctl start archive_collector

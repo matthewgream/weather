@@ -28,7 +28,7 @@ function configLoad(configPath) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const configPath = path.join(__dirname, 'secrets.txt');
+const configPath = '/opt/weather/secrets.txt';
 const conf = configLoad(configPath);
 const subs = ['weather/#', 'sensors/#', 'snapshots/#'];
 const vars = ['weather/branna', 'sensors/radiation/cpm'];
@@ -276,7 +276,7 @@ console.log(`Loaded 'vars/json' on '/vars'`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const snapshotsTime = (24 * 2 + 2) * 60 * 60; // 2 days + 2 hours, in seconds
-const snapshotsDir__ = '/opt/snapshots';
+const snapshotsDir__ = '/opt/storage/snapshots';
 let snapshotsList__ = [];
 function snapshotTimestampParser(filename) {
     const match = filename.match(/snapshot_(\d{14})\.jpg/);
@@ -475,7 +475,7 @@ function getSnapshotsListOfDates() {
         }));
 }
 function getSnapshotsImageFilename(file) {
-    if (snapshotsList__.includes(file)) return `/opt/snapshots/${file}`;
+    if (snapshotsList__.includes(file)) return `${snapshotsDir__}/${file}`;
     return undefined;
 }
 const sharp = require('sharp');
