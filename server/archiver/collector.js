@@ -27,7 +27,7 @@ function configLoad(configPath) {
     }
 }
 
-const configPath = '/opt/weather/secrets.txt';
+const configPath = '/opt/weather/server/secrets.txt';
 const conf = configLoad(configPath);
 
 const config = {
