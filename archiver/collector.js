@@ -89,7 +89,7 @@ let currentDate = '';
 let currentFilePath = '';
 let writeStream = null;
 
-function getFilePath(dateString) {
+function __messageStoragePath(dateString) {
     const dirPath = path.join(config.storage.messages, dateString.substring(0, 6));
     if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
     return path.join(dirPath, `${dateString}.json`);
@@ -108,7 +108,7 @@ function setupWriteStream() {
             compressPreviousDay(previousDate);
         }
         currentDate = dateString;
-        currentFilePath = getFilePath(dateString);
+        currentFilePath = __messageStoragePath(dateString);
         console.log(`collector: messages: writing to ${currentFilePath}`);
         writeStream = fs.createWriteStream(currentFilePath, { flags: 'a' });
     }
@@ -116,7 +116,7 @@ function setupWriteStream() {
 }
 
 function compressPreviousDay(dateString) {
-    const filePath = getFilePath(dateString);
+    const filePath = __messageStoragePath(dateString);
     const gzipPath = `${filePath}.gz`;
     if (fs.existsSync(filePath)) {
         console.log(`collector: messages: compress previous day's file: ${filePath}`);
@@ -188,6 +188,17 @@ console.log(`Loaded 'archiver/messages' using 'path=${config.storage.messages}'`
 
 let __snapshotReceiveImagedata = null;
 
+function __snapshotStoragePath(filename) {
+    const match = filename.match(/snapshot_(\d{14})\.jpg/);
+    if (match?.[1]) {
+        const timestamp = match[1];
+        const dirPath = path.join(config.storage.snapshots, timestamp.substring(0, 8));
+        if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
+        return path.join(dirPath, filename);
+    }
+    return undefined;
+}
+
 function storeSnapshotImagedata(message) {
     __snapshotReceiveImagedata = message;
 }
@@ -201,8 +212,8 @@ function storeSnapshotMetadata(message) {
     const metadata = JSON.parse(message.toString());
     const filename = metadata.filename;
     console.log(`collector: snapshots: [${timestamp}] received, filename='${filename}'`);
-    const snapshotPath = path.join(config.storage.snapshots, filename);
-    // fs.writeFileSync(snapshotPath, __snapshotReceiveImagedata);
+    const snapshotPath = __snapshotStoragePath(filename);
+    if (snapshotPath) fs.writeFileSync(snapshotPath, __snapshotReceiveImagedata);
     __snapshotReceiveImagedata = null;
 }
 

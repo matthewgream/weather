@@ -1,8 +1,10 @@
 third_party
 node_modules
 build
-[sS]ecrets*
 package-lock.json
 .theia
 server/assets/js/.prettierrc.json
 eslint.config.mjs
+[sS]ecrets*
+*.key
+*.secrets

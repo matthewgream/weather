@@ -1,8 +1,7 @@
 [Unit]
 Description=Snapshots Publisher
 Wants=network-online.target
-After=network-online.target mosquitto.service
-Requires=mosquitto.service
+After=network-online.target
 
 [Service]
 Type=simple
