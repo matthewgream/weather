@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 const fs = require('fs');
-const path = require('path');
 const { exec } = require('child_process');
 const mqtt = require('mqtt');
 
@@ -37,14 +36,24 @@ console.log(
 // Connect to MQTT
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const mqtt_client = mqtt.connect(conf.MQTT, {
-    clientId: 'snapshots-publisher-' + Math.random().toString(16).substring(2, 8),
-});
-mqtt_client.on('connect', () => {
-    console.log(`MQTT connected to ${conf.MQTT}`);
-    snapshotBegin();
-});
-console.log(`Loaded 'mqtt_publisher' using '${conf.MQTT}'`);
+let mqtt_client = null;
+
+function mqttBegin() {
+    mqtt_client = mqtt.connect(conf.MQTT, {
+        clientId: 'snapshots-publisher-' + Math.random().toString(16).substring(2, 8),
+    });
+    mqtt_client.on('connect', () => {
+        console.log(`MQTT connected to ${conf.MQTT}`);
+    });
+}
+function mqttEnd() {
+    if (mqtt_client) {
+        mqtt_client.end();
+        mqtt_client = null;
+    }
+}
+
+console.log(`Loaded 'mqtt' using '${conf.MQTT}'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // Snapshot capture and publish
@@ -103,17 +112,19 @@ async function snapshotCapture() {
             });
         });
         const imageBuffer = Buffer.concat(chunks);
-        mqtt_client.publish('snapshots/imagedata', imageBuffer, { retain: false });
-        mqtt_client.publish(
-            'snapshots/metadata',
-            JSON.stringify({
-                filename,
-                timestamp,
-                size: imageBuffer.length,
-            }),
-            { retain: false }
-        );
-        console.log(`snapshot publisher: published '${filename}' (${imageBuffer.length} bytes)`);
+        if (mqtt_client) {
+            mqtt_client.publish('snapshots/imagedata', imageBuffer, { retain: false });
+            mqtt_client.publish(
+                'snapshots/metadata',
+                JSON.stringify({
+                    filename,
+                    timestamp,
+                    size: imageBuffer.length,
+                }),
+                { retain: false }
+            );
+            console.log(`snapshot publisher: published '${filename}' (${imageBuffer.length} bytes)`);
+        }
     } catch (error) {
         console.error('Error capturing and publishing snapshot:', error);
     }
@@ -124,9 +135,9 @@ let snapshotSkippedNow = 0;
 let snapshotSkippedAll = 0;
 async function snapshotExecute() {
     if (snapshotActive) {
-        console.log(`snapshot publisher: capture still active (${snapshotSkippedNow} / ${snapshotSkippedAll}), skipping this cycle`);
         snapshotSkippedNow++;
         snapshotSkippedAll++;
+        console.log(`snapshot publisher: capture still active (${snapshotSkippedNow} / ${snapshotSkippedAll}), skipping this cycle`);
         return;
     }
     try {
@@ -152,8 +163,10 @@ console.log(`Loaded 'snapshot' using interval=30s`);
 
 process.on('SIGINT', () => {
     console.log('snapshot publisher: stopping ...');
-    mqtt_client.end();
+    mqttEnd();
     process.exit(0);
 });
 
+snapshotBegin();
+mqttBegin();
 console.log('snapshot publisher: started');
