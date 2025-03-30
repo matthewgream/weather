@@ -187,7 +187,7 @@ function createViewTextSummary(vars) {
     const date = new Date();
     const formattedTime = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Stockholm' });
     timeinfo += `Time <span class="value">${formattedTime}</span>`;
-    if (daylight.isDST) timeinfo += ` (DST)`;
+    if (daylight.isDST) timeinfo += ` (dst)`;
     if (daylight.isDaytime && daylight.sunset)
         timeinfo += `, sunset <span class="value">${daylight.sunset}</span>, dusk <span class="value">${daylight.civilDusk}</span>`;
     else if (!daylight.isDaytime && daylight.sunrise)

@@ -479,20 +479,63 @@ function getSnapshotsImageFilename(file) {
 }
 const sharp = require('sharp');
 const crypto = require('crypto');
-const thumbnailCache = {};
-const MAX_CACHE_ENTRIES = 50;
+const cacheEntries = {};
+const MAX_CACHE_ENTRIES = 32;
+const CACHE_TTL = 24 * 60 * 60 * 1000;
+const cacheDetails = {};
+function cacheInsert(key, value) {
+    const now = Date.now();
+    cacheEntries[key] = value;
+    cacheDetails[key] = {
+        added: now,
+        lastAccessed: now
+    };
+    cacheCleanup();
+}
+function cacheRetrieve(key) {
+    const entry = cacheEntries[key];
+    if (entry)
+        cacheDetails[key].lastAccessed = Date.now();
+    return entry;
+}
+function cacheCleanup() {
+    const now = Date.now();
+    const cacheKeys = Object.keys(cacheEntries);
+    if (cacheKeys.length <= MAX_CACHE_ENTRIES) {
+        cacheKeys.forEach(key => {
+            if (now - cacheDetails[key].added > CACHE_TTL) {
+                delete cacheEntries[key];
+                delete cacheDetails[key];
+            }
+        });
+        return;
+    }
+    const sortedKeys = cacheKeys.sort((a, b) => cacheDetails[a].lastAccessed - cacheDetails[b].lastAccessed);
+    let keysToRemove = sortedKeys.filter(key => now - cacheDetails[key].added > CACHE_TTL);
+    if (cacheKeys.length - keysToRemove.length > MAX_CACHE_ENTRIES) {
+        const targetSize = Math.floor(MAX_CACHE_ENTRIES * 0.9);
+        const additionalToRemove = cacheKeys.length - keysToRemove.length - targetSize;
+        if (additionalToRemove > 0)
+            keysToRemove = keysToRemove.concat(sortedKeys.filter(key => !keysToRemove.includes(key)).slice(0, additionalToRemove));
+    }
+    keysToRemove.forEach(key => {
+        delete cacheEntries[key];
+        delete cacheDetails[key];
+    });
+}
+
+
 async function getSnapshotsImageThumbnail(file, width) {
     const sourcePath = `/dev/shm/${file}`;
     if (!fs.existsSync(sourcePath)) return null;
     const mtime = fs.statSync(sourcePath).mtime.getTime();
     const cacheKey = crypto.createHash('md5').update(`${file}-${width}-${mtime}`).digest('hex');
-    if (!thumbnailCache[cacheKey]) {
-        const thumbnail = await sharp(sourcePath).resize(width).jpeg({ quality: 70 }).toBuffer();
-        thumbnailCache[cacheKey] = thumbnail;
-        const cacheKeys = Object.keys(thumbnailCache);
-        if (cacheKeys.length > MAX_CACHE_ENTRIES) cacheKeys.slice(0, cacheKeys.length - MAX_CACHE_ENTRIES).forEach((key) => delete thumbnailCache[key]);
-    }
-    return thumbnailCache[cacheKey];
+    const cachedThumbnail = cacheRetrieve(cacheKey);
+    if (cachedThumbnail)
+        return cachedThumbnail;
+    const thumbnail = await sharp(sourcePath).resize(width).jpeg({ quality: 70 }).toBuffer();
+    cacheInsert(cacheKey, thumbnail);
+    return thumbnail;
 }
 
 //
