@@ -1,5 +1,0 @@
-SHELL=/bin/sh
-PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
-0 2 * * * root /bin/bash -c '/opt/weather/server/archiver/collector_snapshots_fetcher.sh $(date -d "yesterday" +\%Y\%m\%d)'
-0 4 * * * root /bin/bash -c '/opt/weather/server/archiver/collector_snapshots_fetcher.sh $(date -d "yesterday" +\%Y\%m\%d)'
-# 0 6 * * * root /bin/bash -c '/opt/weather/server/archiver/collector_snapshots_timelapse.sh $(date -d "yesterday" +\%Y\%m\%d)'

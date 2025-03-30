@@ -1,5 +1,11 @@
 cp collector.service /etc/systemd/system/archiver-collector.service
+systemctl daemon-reload
 systemctl enable archiver-collector
 systemctl start archiver-collector
-cp collector_snapshots.crontab /etc/cron.d/collector-snapshots
-/etc/init.d/cron reload
+
+cp collector-snapshots-fetcher.service /etc/systemd/system/archiver-collector-snapshots-fetcher.service
+cp collector-snapshots-fetcher.timer /etc/systemd/system/archiver-collector-snapshots-fetcher.timer
+systemctl daemon-reload
+systemctl enable archiver-collector-snapshots-fetcher.timer
+systemctl start archiver-collector-snapshots-fetcher.timer
+
