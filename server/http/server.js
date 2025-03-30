@@ -96,7 +96,7 @@ function variablesRender() {
 function variablesUpdate(topic, message) {
     if (topic.startsWith('sensors')) variablesSet[topic] = { value: message.toString(), timestamp: getTimestamp(conf.TZ) };
     else if (topic.startsWith('weather')) variablesSet[topic] = { ...JSON.parse(message.toString()), timestamp: getTimestamp(conf.TZ) };
-	else return;
+    else return;
     if (vars.includes(topic)) {
         console.log(`variables: '${topic}' --> '${JSON.stringify(variablesSet[topic])}'`);
         socket.emit('update', variablesRender());
@@ -107,19 +107,18 @@ console.log(`Loaded 'variables' using '${vars.join(', ')}'`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const mqtt_client = require('mqtt').connect(conf.MQTT);
+const mqtt_client = require('mqtt').connect(conf.MQTT, {
+    clientId: 'server-http-' + Math.random().toString(16).substring(2, 8),
+});
 mqtt_client.on('connect', () =>
     mqtt_client.subscribe(subs, () => {
         console.log(`mqtt connected & subscribed for '${subs}'`);
     })
 );
 mqtt_client.on('message', (topic, message) => {
-    if (topic === 'snapshots/imagedata')
-        snapshotReceiveImagedata(message);
-    else if (topic === 'snapshots/metadata')
-        snapshotReceiveMetadata(message);
-    else
-        variablesUpdate(topic, message);
+    if (topic === 'snapshots/imagedata') snapshotReceiveImagedata(message);
+    else if (topic === 'snapshots/metadata') snapshotReceiveMetadata(message);
+    else variablesUpdate(topic, message);
 });
 console.log(`Loaded 'mqtt_subscriber' using '${conf.MQTT}'`);
 
@@ -276,7 +275,7 @@ console.log(`Loaded 'vars/json' on '/vars'`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const snapshotsTime = (24 * 2 + 2) * 60 * 60; // 2 days + 2 hours, in seconds
-const snapshotsDir__ = '/opt/storage/snapshots';
+const snapshotsDir__ = conf.STORAGE + '/snapshots';
 let snapshotsList__ = [];
 function snapshotTimestampParser(filename) {
     const match = filename.match(/snapshot_(\d{14})\.jpg/);

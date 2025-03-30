@@ -35,17 +35,17 @@ const config = {
         broker: conf.MQTT,
         username: '',
         password: '',
-        clientId: 'archiver-' + Math.random().toString(16).substring(2, 8),
+        clientId: 'archiver-collector-' + Math.random().toString(16).substring(2, 8),
         topics: ['weather/#', 'sensors/#', 'snapshots/#'],
     },
     storage: {
-        messages: '/opt/storage/messages',
-        snapshot: '/opt/storage/snapshots',
+        messages: conf.STORAGE + '/messages',
+        snapshots: conf.STORAGE + '/snapshots',
     },
 };
 
 if (!fs.existsSync(config.storage.messages)) fs.mkdirSync(config.storage.messages, { recursive: true });
-if (!fs.existsSync(config.storage.snapshot)) fs.mkdirSync(config.storage.snapshot, { recursive: true });
+if (!fs.existsSync(config.storage.snapshots)) fs.mkdirSync(config.storage.snapshots, { recursive: true });
 
 console.log(
     `Loaded 'config' using '${configPath}': ${Object.entries(conf)
@@ -201,7 +201,7 @@ function storeSnapshotMetadata(message) {
     const metadata = JSON.parse(message.toString());
     const filename = metadata.filename;
     console.log(`collector: snapshots: [${timestamp}] received, filename='${filename}'`);
-    const snapshotPath = path.join(config.storage.snapshot, filename);
+    const snapshotPath = path.join(config.storage.snapshots, filename);
     // fs.writeFileSync(snapshotPath, __snapshotReceiveImagedata);
     __snapshotReceiveImagedata = null;
 }
@@ -215,7 +215,7 @@ function startSnapshot() {}
 
 function stopSnapshot() {}
 
-console.log(`Loaded 'archiver/snapshots' using 'path=${config.storage.snapshot}'`);
+console.log(`Loaded 'archiver/snapshots' using 'path=${config.storage.snapshots}'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------

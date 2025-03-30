@@ -37,7 +37,9 @@ console.log(
 // Connect to MQTT
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const mqtt_client = mqtt.connect(conf.MQTT);
+const mqtt_client = mqtt.connect(conf.MQTT, {
+    clientId: 'snapshots-publisher-' + Math.random().toString(16).substring(2, 8),
+});
 mqtt_client.on('connect', () => {
     console.log(`MQTT connected to ${conf.MQTT}`);
     snapshotBegin();
