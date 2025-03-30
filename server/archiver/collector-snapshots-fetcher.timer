@@ -1,5 +1,5 @@
 [Unit]
-Description=Weather Archiver Snapshots Fetcher
+Description=Weather Archiver Collector Snapshots Fetcher
 
 [Timer]
 OnCalendar=*-*-* 02:00:00

@@ -1,5 +1,5 @@
 [Unit]
-Description=Run Weather Daily Script
+Description=Weather Daily Script
 
 [Timer]
 OnCalendar=daily

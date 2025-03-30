@@ -1,5 +1,5 @@
 [Unit]
-Description=Daily Weather Script
+Description=Weather Daily Script
 After=network.target
 
 [Service]
