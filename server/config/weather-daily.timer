@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Weather Daily Script
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=30m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

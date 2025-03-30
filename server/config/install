@@ -1,0 +1,8 @@
+cp weather-daily.* weather-server.* /etc/systemd/system
+systemctl daemon-reload
+systemctl enable weather-daily.timer
+systemctl enable weather-server.service
+systemctl start weather-daily.timer
+systemctl start weather-server.service
+systemctl|grep weather
+systemctl list-timers --all |grep weather

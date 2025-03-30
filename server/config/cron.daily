@@ -1,8 +1,0 @@
-#!/bin/sh
-
-if [ -f /opt/weather/server/scripts/daily ]; then
-        /bin/sh /opt/weather/server/scripts/daily &
-fi
-
-exit 0
-

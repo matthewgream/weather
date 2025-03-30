@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Weather Script
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /opt/weather/server/scripts/daily
+SuccessExitStatus=0
+
+[Install]
+WantedBy=multi-user.target
