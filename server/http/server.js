@@ -488,21 +488,20 @@ function cacheInsert(key, value) {
     cacheEntries[key] = value;
     cacheDetails[key] = {
         added: now,
-        lastAccessed: now
+        lastAccessed: now,
     };
     cacheCleanup();
 }
 function cacheRetrieve(key) {
     const entry = cacheEntries[key];
-    if (entry)
-        cacheDetails[key].lastAccessed = Date.now();
+    if (entry) cacheDetails[key].lastAccessed = Date.now();
     return entry;
 }
 function cacheCleanup() {
     const now = Date.now();
     const cacheKeys = Object.keys(cacheEntries);
     if (cacheKeys.length <= MAX_CACHE_ENTRIES) {
-        cacheKeys.forEach(key => {
+        cacheKeys.forEach((key) => {
             if (now - cacheDetails[key].added > CACHE_TTL) {
                 delete cacheEntries[key];
                 delete cacheDetails[key];
@@ -511,19 +510,17 @@ function cacheCleanup() {
         return;
     }
     const sortedKeys = cacheKeys.sort((a, b) => cacheDetails[a].lastAccessed - cacheDetails[b].lastAccessed);
-    let keysToRemove = sortedKeys.filter(key => now - cacheDetails[key].added > CACHE_TTL);
+    let keysToRemove = sortedKeys.filter((key) => now - cacheDetails[key].added > CACHE_TTL);
     if (cacheKeys.length - keysToRemove.length > MAX_CACHE_ENTRIES) {
         const targetSize = Math.floor(MAX_CACHE_ENTRIES * 0.9);
         const additionalToRemove = cacheKeys.length - keysToRemove.length - targetSize;
-        if (additionalToRemove > 0)
-            keysToRemove = keysToRemove.concat(sortedKeys.filter(key => !keysToRemove.includes(key)).slice(0, additionalToRemove));
+        if (additionalToRemove > 0) keysToRemove = keysToRemove.concat(sortedKeys.filter((key) => !keysToRemove.includes(key)).slice(0, additionalToRemove));
     }
-    keysToRemove.forEach(key => {
+    keysToRemove.forEach((key) => {
         delete cacheEntries[key];
         delete cacheDetails[key];
     });
 }
-
 
 async function getSnapshotsImageThumbnail(file, width) {
     const sourcePath = `/dev/shm/${file}`;
@@ -531,8 +528,7 @@ async function getSnapshotsImageThumbnail(file, width) {
     const mtime = fs.statSync(sourcePath).mtime.getTime();
     const cacheKey = crypto.createHash('md5').update(`${file}-${width}-${mtime}`).digest('hex');
     const cachedThumbnail = cacheRetrieve(cacheKey);
-    if (cachedThumbnail)
-        return cachedThumbnail;
+    if (cachedThumbnail) return cachedThumbnail;
     const thumbnail = await sharp(sourcePath).resize(width).jpeg({ quality: 70 }).toBuffer();
     cacheInsert(cacheKey, thumbnail);
     return thumbnail;

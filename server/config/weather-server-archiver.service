@@ -1,0 +1,16 @@
+[Unit]
+Description=Weather Server Archiver HTTP
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/opt/weather/server/http/server-archiver.js
+ExecReload=kill -HUP $MAINPID
+KillMode=process
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+
