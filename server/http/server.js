@@ -30,7 +30,7 @@ function configLoad(configPath) {
 
 const configPath = path.join(__dirname, 'secrets.txt');
 const conf = configLoad(configPath);
-const subs = ['weather/#', 'sensors/#'];
+const subs = ['weather/#', 'sensors/#', 'snapshots/#'];
 const vars = ['weather/branna', 'sensors/radiation/cpm'];
 const data_views = conf.DATA + '/http';
 const data_images = conf.DATA + '/images';
@@ -96,7 +96,7 @@ function variablesRender() {
 function variablesUpdate(topic, message) {
     if (topic.startsWith('sensors')) variablesSet[topic] = { value: message.toString(), timestamp: getTimestamp(conf.TZ) };
     else if (topic.startsWith('weather')) variablesSet[topic] = { ...JSON.parse(message.toString()), timestamp: getTimestamp(conf.TZ) };
-    else return;
+	else return;
     if (vars.includes(topic)) {
         console.log(`variables: '${topic}' --> '${JSON.stringify(variablesSet[topic])}'`);
         socket.emit('update', variablesRender());
@@ -114,7 +114,12 @@ mqtt_client.on('connect', () =>
     })
 );
 mqtt_client.on('message', (topic, message) => {
-    variablesUpdate(topic, message);
+    if (topic === 'snapshots/imagedata')
+        snapshotReceiveImagedata(message);
+    else if (topic === 'snapshots/metadata')
+        snapshotReceiveMetadata(message);
+    else
+        variablesUpdate(topic, message);
 });
 console.log(`Loaded 'mqtt_subscriber' using '${conf.MQTT}'`);
 
@@ -301,30 +306,27 @@ async function snapshotLoad() {
         throw error;
     }
 }
-async function snapshotCapture() {
+let __snapshotReceiveImagedata = null;
+function snapshotReceiveImagedata(message) {
+    __snapshotReceiveImagedata = message;
+}
+function snapshotReceiveMetadata(message) {
     try {
-        const now = new Date();
-        const timestamp =
-            now.getFullYear() +
-            String(now.getMonth() + 1).padStart(2, '0') +
-            String(now.getDate()).padStart(2, '0') +
-            String(now.getHours()).padStart(2, '0') +
-            String(now.getMinutes()).padStart(2, '0') +
-            String(now.getSeconds()).padStart(2, '0');
-        const filename = `snapshot_${timestamp}.jpg`;
-        const snapshotPath = path.join(snapshotsDir__, filename);
+        if (!__snapshotReceiveImagedata) {
+            console.error('Received snapshot metadata but no image data is available');
+            return;
+        }
+        const metadata = JSON.parse(message.toString());
+        const filename = metadata.filename;
         const shmPath = path.join('/dev/shm', filename);
-        await new Promise((resolve, reject) => {
-            require('child_process').exec(`ffmpeg -y -rtsp_transport tcp -i '${conf.RTSP}' -vframes 1 -q:v 7.5 -compression_level 9 "${shmPath}"`, (error) => {
-                if (error) reject(error);
-                else resolve();
-            });
-        });
-        await fs.promises.copyFile(shmPath, snapshotPath);
+        const snapshotPath = path.join(snapshotsDir__, filename);
+        fs.writeFileSync(shmPath, __snapshotReceiveImagedata);
+        fs.writeFileSync(snapshotPath, __snapshotReceiveImagedata);
         snapshotsList__.unshift(filename);
-        console.log(`snapshot captured: ${filename} (--> /dev/shm, --> ${snapshotsDir__})`);
+        __snapshotReceiveImagedata = null;
+        console.log(`snapshot received: ${filename} (--> /dev/shm, --> ${snapshotsDir__})`);
     } catch (error) {
-        console.error('Error capturing snapshot:', error);
+        console.error('Error processing snapshot metadata:', error);
     }
 }
 async function snapshotRebuild() {
@@ -429,7 +431,6 @@ async function snapshotCleanup() {
     }
 }
 async function snapshotUpdate() {
-    await snapshotCapture();
     snapshotRebuild();
     snapshotCleanup();
 }
