@@ -310,7 +310,7 @@ async function getSnapshotsImageThumbnail(file, width) {
     if (!fs.existsSync(filePath)) return null;
     const mtime = fs.statSync(filePath).mtime.getTime();
     const cacheKey = crypto.createHash('md5').update(`${file}-${width}-${mtime}`).digest('hex');
-    const cachedThumbnail = cacheRetreive(cacheKey);
+    const cachedThumbnail = cacheRetrieve(cacheKey);
     if (cachedThumbnail) return cachedThumbnail;
     const thumbnail = await sharp(filePath).resize(width).jpeg({ quality: 70 }).toBuffer();
     cacheInsert(cacheKey, thumbnail);
