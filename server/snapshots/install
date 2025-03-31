@@ -1,3 +1,0 @@
-cp publisher.service /etc/systemd/system/snapshots-publisher.service
-systemctl enable snapshots-publisher
-systemctl start snapshots-publisher
