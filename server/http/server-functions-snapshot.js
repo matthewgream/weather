@@ -264,10 +264,10 @@ class SnapshotThumbnailsManager {
     //     delete this.cacheEntries[key];
     //     delete this.cacheDetails[key];
     //   }
-    //   clear() {
-    //     this.cacheEntries = {};
-    //     this.cacheDetails = {};
-    //   }
+    clear() {
+        this.cacheEntries = {};
+        this.cacheDetails = {};
+    }
     //   size() {
     //     return Object.keys(this.cacheEntries).length;
     //   }
@@ -309,11 +309,137 @@ class SnapshotThumbnailsManager {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+class TimelapseFileManager {
+    constructor({ directory }) {
+        this.timelapseDir = directory;
+        this.timelapseCache = [];
+        this.isInitialized = false;
+        this.watcher = null;
+        this.expiryTime = 30 * 60 * 1000;
+        this.cleanupInterval = setInterval(() => this.checkCacheExpiry(), this.expiryTime);
+        this.lastAccessed = Date.now();
+        this.initializeCache();
+    }
+    initializeCache() {
+        try {
+            this.timelapseCache = this.readTimelapseFiles();
+            this.isInitialized = true;
+            this.setupWatcher();
+            console.log(`TimelapseFileManager(${this.timelapseDir}): initialized with ${this.timelapseCache.length} entries`);
+        } catch (error) {
+            console.error(`TimelapseFileManager(${this.timelapseDir}): failed to initialize:`, error);
+        }
+    }
+    readTimelapseFiles() {
+        try {
+            return fs
+                .readdirSync(this.timelapseDir)
+                .filter((file) => file.startsWith('timelapse_') && file.endsWith('.mp4'))
+                .sort((a, b) => b.localeCompare(a))
+                .map((file) => ({ file }));
+        } catch (error) {
+            console.error(`TimelapseFileManager(${this.timelapseDir}): error reading directory:`, error);
+            return [];
+        }
+    }
+    setupWatcher() {
+        this.closeWatcher();
+        const watcher = chokidar.watch(this.timelapseDir, {
+            persistent: true,
+            ignoreInitial: true,
+            depth: 0,
+            awaitWriteFinish: {
+                stabilityThreshold: 2000,
+                pollInterval: 100,
+            },
+            ignored: /(^|[\/\\])\../, // Ignore dotfiles
+        });
+        watcher.on('add', (filePath) => {
+            const fileName = path.basename(filePath);
+            if (fileName.startsWith('timelapse_') && fileName.endsWith('.mp4')) this.updateCacheWithNewFile(fileName, filePath);
+        });
+        watcher.on('unlink', (filePath) => {
+            const fileName = path.basename(filePath);
+            if (fileName.startsWith('timelapse_') && fileName.endsWith('.mp4')) this.removeFileFromCache(fileName);
+        });
+        watcher.on('error', (error) => {
+            console.error(`TimelapseFileManager(${this.timelapseDir}): watcher error: ${error}`);
+        });
+        this.watcher = watcher;
+    }
+    updateCacheWithNewFile(fileName, filePath) {
+        const dateCode = fileName.slice(10, 18);
+        const existingIndex = this.timelapseCache.findIndex((item) => item.file === fileName);
+        if (existingIndex !== -1) {
+            this.timelapseCache[existingIndex] = {
+                file: fileName,
+                dateCode,
+                filePath,
+                fileSizeBytes: fs.statSync(filePath).size,
+            };
+            console.log(`TimelapseFileManager(${this.timelapseDir}): updated file: ${fileName}`);
+        } else {
+            this.timelapseCache.push({
+                file: fileName,
+                dateCode,
+                filePath,
+                fileSizeBytes: fs.statSync(filePath).size,
+            });
+            this.timelapseCache.sort((a, b) => b.file.localeCompare(a.file));
+            console.log(`TimelapseFileManager(${this.timelapseDir}): adding new file: ${fileName}`);
+        }
+    }
+    removeFileFromCache(fileName) {
+        const initialLength = this.timelapseCache.length;
+        this.timelapseCache = this.timelapseCache.filter((item) => item.file !== fileName);
+        if (initialLength !== this.timelapseCache.length) console.log(`TimelapseFileManager(${this.timelapseDir}): removed file: ${fileName}`);
+    }
+    getListOfFiles() {
+        if (!this.isInitialized) this.initializeCache();
+        this.lastAccessed = Date.now();
+        return this.timelapseCache;
+    }
+    checkCacheExpiry() {
+        const now = Date.now();
+        if (now - this.lastAccessed > this.expiryTime && this.isInitialized) {
+            console.log(`TimelapseFileManager(${this.timelapseDir}): flushing (inactivity timeout)`);
+            this.closeWatcher();
+            this.timelapseCache = [];
+            this.isInitialized = false;
+        }
+    }
+    closeWatcher() {
+        if (this.watcher) {
+            try {
+                this.watcher.close();
+                console.log(`TimelapseFileManager(${this.timelapseDir}): watcher closed`);
+            } catch (error) {
+                console.error(`TimelapseFileManager(${this.timelapseDir}): watcher error (on close):`, error);
+            }
+            this.watcher = null;
+        }
+    }
+    dispose() {
+        if (this.cleanupInterval) {
+            clearInterval(this.cleanupInterval);
+            this.cleanupInterval = null;
+        }
+        this.closeWatcher();
+        this.timelapseCache = [];
+        this.isInitialized = false;
+        console.log(`TimelapseFileManager(${this.timelapseDir}): disposed`);
+    }
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 module.exports = {
     debugSnapshotFunctions,
     SnapshotDirectoryManager,
     SnapshotContentsManager,
     SnapshotThumbnailsManager,
+    TimelapseFileManager,
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

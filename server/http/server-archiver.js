@@ -24,19 +24,14 @@ function configLoad(configPath) {
         return {};
     }
 }
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
 const configPath = '/opt/weather/server/secrets.txt';
 const conf = configLoad(configPath);
+const configList = Object.entries(conf)
+    .map(([k, v]) => k.toLowerCase() + '=' + v)
+    .join(', ');
 const data_views = conf.DATA + '/http';
 const data_assets = conf.DATA + '/assets';
-console.log(
-    `Loaded 'config' using '${configPath}': ${Object.entries(conf)
-        .map(([k, v]) => k.toLowerCase() + '=' + v)
-        .join(', ')}`
-);
+console.log(`Loaded 'config' using '${configPath}': ${configList}`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -70,129 +65,15 @@ console.log(`Loaded 'redirect' using 'http -> https'`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const LOGS_INMEMORY_MAXSIZE = 8 * 1024 * 1024;
-const LOGS_DISPLAY_DEFAULT = 100;
-
-const morgan = require('morgan');
-const memoryLogs = {
-    logs: [],
-    size: 0,
-    maxSize: LOGS_INMEMORY_MAXSIZE,
-    write: function (string) {
-        this.logs.push(string);
-        this.size += Buffer.byteLength(string, 'utf8');
-        while (this.size > this.maxSize && this.logs.length > 0) this.size -= Buffer.byteLength(this.logs.shift(), 'utf8');
-        return true;
-    },
-    getLogs: function () {
-        return this.logs;
-    },
-};
-const logStream = {
-    write: function (string) {
-        return memoryLogs.write(string);
-    },
-};
-xxx.use(morgan('combined', { stream: logStream }));
-const requestStats = {
-    total: 0,
-    byRoute: {},
-    byMethod: {},
-    byStatus: {},
-    byIP: {},
-};
-xxx.use((req, res, next) => {
-    const res_end = res.end;
-    requestStats.total++;
-    requestStats.byRoute[req.path] = (requestStats.byRoute[req.path] || 0) + 1;
-    requestStats.byMethod[req.method] = (requestStats.byMethod[req.method] || 0) + 1;
-    const ip = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-    requestStats.byIP[ip] = (requestStats.byIP[ip] || 0) + 1;
-    res.end = function (...args) {
-        requestStats.byStatus[res.statusCode] = (requestStats.byStatus[res.statusCode] || 0) + 1;
-        res_end.apply(res, args);
-    };
-    next();
-});
-xxx.get('/requests', (req, res) => {
-    const limit = req.query.limit ? parseInt(req.query.limit) : LOGS_DISPLAY_DEFAULT;
-    const recentLogs = memoryLogs.getLogs().slice(-limit);
-    res.send(`
-    <html>
-      <head>
-        <title>Server Stats</title>
-        <style>
-          body { font-family: Arial, sans-serif; margin: 20px; }
-          h1, h2 { color: #333; }
-          .stats-container { display: flex; flex-wrap: wrap; }
-          .stats-box { background: #f5f5f5; border-radius: 5px; padding: 15px; margin: 10px; min-width: 200px; }
-          table { border-collapse: collapse; width: 100%; }
-          th, td { text-align: left; padding: 8px; border-bottom: 1px solid #ddd; }
-          tr:hover { background-color: #f1f1f1; }
-          pre { background: #f8f8f8; border: 1px solid #ddd; border-radius: 3px; max-height: 500px; overflow: auto; padding: 10px; }
-        </style>
-      </head>
-      <body>
-        <div class="stats-container">
-          <div class="stats-box">
-            <h2>General</h2>
-            <p>Total Requests: ${requestStats.total}</p>
-          </div>
-          <div class="stats-box">
-            <h2>Routes</h2>
-            <table>
-              <tr><th>Path</th><th>Count</th></tr>
-              ${Object.entries(requestStats.byRoute)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([path, count]) => `<tr><td>${path}</td><td>${count}</td></tr>`)
-                  .join('')}
-            </table>
-          </div>
-          <div class="stats-box">
-            <h2>Methods</h2>
-            <table>
-              <tr><th>Method</th><th>Count</th></tr>
-              ${Object.entries(requestStats.byMethod)
-                  .map(([method, count]) => `<tr><td>${method}</td><td>${count}</td></tr>`)
-                  .join('')}
-            </table>
-          </div>
-          <div class="stats-box">
-            <h2>Status Codes</h2>
-            <table>
-              <tr><th>Status</th><th>Count</th></tr>
-              ${Object.entries(requestStats.byStatus)
-                  .map(([status, count]) => `<tr><td>${status}</td><td>${count}</td></tr>`)
-                  .join('')}
-            </table>
-          </div>
-          <div class="stats-box">
-            <h2>IP Addresses</h2>
-            <table>
-              <tr><th>IP</th><th>Count</th></tr>
-              ${Object.entries(requestStats.byIP)
-                  .sort((a, b) => b[1] - a[1])
-                  .slice(0, 10)
-                  .map(([ip, count]) => `<tr><td>${ip}</td><td>${count}</td></tr>`)
-                  .join('')}
-            </table>
-          </div>
-        </div>
-    	  <h2>Recent Logs (${recentLogs.length})</h2>
-    	  <pre>
-		    ${recentLogs.join('')}
-          </pre>
-      </body>
-    </html>
-  `);
-});
-console.log(`Loaded 'morgan' on '/requests' using 'in-memory-logs-maxsize=${LOGS_INMEMORY_MAXSIZE}'`);
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
 xxx.use('/static', exp.static(data_assets));
 console.log(`Loaded 'static' using '/static -> ${data_assets}'`);
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+const requestStatsManager = require('./server-functions-diagnostics');
+requestStatsManager().setup(xxx);
+console.log(`Loaded 'diagnostics' on '/requests'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -204,6 +85,7 @@ const snapshotThumbnailsCacheSize = 2048;
 const snapshotThumbnailsCacheTtl = 60 * 60 * 1000;
 const snapshotThumbnailsWidthDefault = 200;
 const snapshotDirectory = conf.STORAGE + '/snapshots';
+const timelapseDirectory = conf.STORAGE + '/timelapse';
 
 function getFormattedDate(date) {
     const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -219,7 +101,7 @@ function getThumbnailKey(file, width) {
     return crypto.createHash('md5').update(`${file}-${width}-${mtime}`).digest('hex');
 }
 
-const { SnapshotThumbnailsManager, SnapshotDirectoryManager, SnapshotContentsManager } = require('./server-functions-snapshot.js');
+const { SnapshotThumbnailsManager, SnapshotDirectoryManager, SnapshotContentsManager, TimelapseFileManager } = require('./server-functions-snapshot.js');
 const snapshotThumbnailsManager = new SnapshotThumbnailsManager({
     maxEntries: snapshotThumbnailsCacheSize,
     ttl: snapshotThumbnailsCacheTtl,
@@ -230,10 +112,14 @@ const snapshotDirectoryManager = new SnapshotDirectoryManager({
 const snapshotContentsManager = new SnapshotContentsManager({
     directory: snapshotDirectory,
 });
+const timelapseFileManager = new TimelapseFileManager({
+    directory: timelapseDirectory,
+});
 process.on('SIGTERM', () => {
     snapshotDirectoryManager.dispose();
     snapshotContentsManager.dispose();
     snapshotThumbnailsManager.dispose();
+    timelapseFileManager.dispose();
 });
 
 function getSnapshotListOfDates() {
@@ -247,11 +133,16 @@ function getSnapshotListForDate(date) {
         entries: snapshotContentsManager.getListForDate(date).map(({ file }) => ({ file, timeFormatted: getFormattedTime(file.slice(17, 23)) })),
     };
 }
+function getTimelapseListOfFiles() {
+    return {
+        entries: timelapseFileManager.getListOfFiles().map(({ file }) => ({ file, dateFormatted: getFormattedDate(file.slice(10, 18)) })),
+    };
+}
 function getSnapshotImageFilename(file) {
-    const match = file.match(/snapshot_(\d{8})\d{6}\.jpg/);
+    const match = file.match(/snapshot_(\d{8})\d{6}\.jpg$/);
     if (!match?.[1]) return undefined;
-    const dateDir = match[1];
-    const filePath = path.join(snapshotDirectory, dateDir, file);
+    const date = match[1];
+    const filePath = path.join(snapshotDirectory, date, file);
     if (!fs.existsSync(filePath)) return null;
     return filePath;
 }
@@ -271,8 +162,20 @@ async function getSnapshotImageThumbnail(file, width) {
     return thumbnail;
 }
 
+function getTimelpaseVideoFilename(file) {
+    const match = file.match(/timelapse_(\d{8})\.mp4$/);
+    if (!match?.[1]) return undefined;
+    const date = match[1];
+    const filePath = path.join(timelapseDirectory, file);
+    if (!fs.existsSync(filePath)) return null;
+    return filePath;
+}
+
 xxx.get('/snapshot/list', function (req, res) {
-    return res.render('server-snapshot-list', getSnapshotListOfDates());
+    return res.render('server-snapshot-list', {
+        snapshotList: getSnapshotListOfDates(),
+        timelapseList: getTimelapseListOfFiles(),
+    });
 });
 xxx.get('/snapshot/list/:date', function (req, res) {
     return res.render('server-snapshot-date', getSnapshotListForDate(req.params.date));
@@ -281,6 +184,12 @@ xxx.get('/snapshot/file/:file', function (req, res) {
     const file = req.params.file;
     const filename = getSnapshotImageFilename(file);
     if (!filename) return res.status(404).send('Snapshot not found');
+    return res.sendFile(filename);
+});
+xxx.get('/timelapse/file/:file', function (req, res) {
+    const file = req.params.file;
+    const filename = getTimelpaseVideoFilename(file);
+    if (!filename) return res.status(404).send('Timelapse not found');
     return res.sendFile(filename);
 });
 xxx.get('/snapshot/thumb/:file', async (req, res) => {
@@ -306,6 +215,7 @@ console.log(`Loaded 'snapshots' on '/snapshot', using 'thumbnail-cache-entries=$
 xxx.get('/', function (req, res) {
     return res.redirect('/snapshot/list');
 });
+console.log(`Loaded '/' using '/snapshot/list'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------

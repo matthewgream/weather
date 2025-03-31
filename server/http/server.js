@@ -24,22 +24,17 @@ function configLoad(configPath) {
         return {};
     }
 }
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
 const configPath = '/opt/weather/server/secrets.txt';
 const conf = configLoad(configPath);
+const configList = Object.entries(conf)
+    .map(([k, v]) => k.toLowerCase() + '=' + v)
+    .join(', ');
 const subs = ['weather/#', 'sensors/#', 'snapshots/#'];
 const vars = ['weather/branna', 'sensors/radiation/cpm'];
 const data_views = conf.DATA + '/http';
 const data_images = conf.DATA + '/images';
 const data_assets = conf.DATA + '/assets';
-console.log(
-    `Loaded 'config' using '${configPath}': ${Object.entries(conf)
-        .map(([k, v]) => k.toLowerCase() + '=' + v)
-        .join(', ')}`
-);
+console.log(`Loaded 'config' using '${configPath}': ${configList}`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -69,6 +64,22 @@ xxx.use((req, res, next) => {
     next();
 });
 console.log(`Loaded 'redirect' using 'http -> https'`);
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+xxx.use(exp.static('/dev/shm'));
+console.log(`Loaded 'static' using '/dev/shm'`);
+
+xxx.use('/static', exp.static(data_assets));
+console.log(`Loaded 'static' using '/static -> ${data_assets}'`);
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+const requestStatsManager = require('./server-functions-diagnostics');
+requestStatsManager().setup(xxx);
+console.log(`Loaded 'diagnostics' on '/requests'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -125,142 +136,12 @@ console.log(`Loaded 'mqtt_subscriber' using '${conf.MQTT}'`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const LOGS_INMEMORY_MAXSIZE = 8 * 1024 * 1024;
-const LOGS_DISPLAY_DEFAULT = 100;
-
-const morgan = require('morgan');
-const memoryLogs = {
-    logs: [],
-    size: 0,
-    maxSize: LOGS_INMEMORY_MAXSIZE,
-    write: function (string) {
-        this.logs.push(string);
-        this.size += Buffer.byteLength(string, 'utf8');
-        while (this.size > this.maxSize && this.logs.length > 0) this.size -= Buffer.byteLength(this.logs.shift(), 'utf8');
-        return true;
-    },
-    getLogs: function () {
-        return this.logs;
-    },
-};
-const logStream = {
-    write: function (string) {
-        return memoryLogs.write(string);
-    },
-};
-xxx.use(morgan('combined', { stream: logStream }));
-const requestStats = {
-    total: 0,
-    byRoute: {},
-    byMethod: {},
-    byStatus: {},
-    byIP: {},
-};
-xxx.use((req, res, next) => {
-    const res_end = res.end;
-    requestStats.total++;
-    requestStats.byRoute[req.path] = (requestStats.byRoute[req.path] || 0) + 1;
-    requestStats.byMethod[req.method] = (requestStats.byMethod[req.method] || 0) + 1;
-    const ip = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-    requestStats.byIP[ip] = (requestStats.byIP[ip] || 0) + 1;
-    res.end = function (...args) {
-        requestStats.byStatus[res.statusCode] = (requestStats.byStatus[res.statusCode] || 0) + 1;
-        res_end.apply(res, args);
-    };
-    next();
-});
-xxx.get('/requests', (req, res) => {
-    const limit = req.query.limit ? parseInt(req.query.limit) : LOGS_DISPLAY_DEFAULT;
-    const recentLogs = memoryLogs.getLogs().slice(-limit);
-    res.send(`
-    <html>
-      <head>
-        <title>Server Stats</title>
-        <style>
-          body { font-family: Arial, sans-serif; margin: 20px; }
-          h1, h2 { color: #333; }
-          .stats-container { display: flex; flex-wrap: wrap; }
-          .stats-box { background: #f5f5f5; border-radius: 5px; padding: 15px; margin: 10px; min-width: 200px; }
-          table { border-collapse: collapse; width: 100%; }
-          th, td { text-align: left; padding: 8px; border-bottom: 1px solid #ddd; }
-          tr:hover { background-color: #f1f1f1; }
-          pre { background: #f8f8f8; border: 1px solid #ddd; border-radius: 3px; max-height: 500px; overflow: auto; padding: 10px; }
-        </style>
-      </head>
-      <body>
-        <div class="stats-container">
-          <div class="stats-box">
-            <h2>General</h2>
-            <p>Total Requests: ${requestStats.total}</p>
-          </div>
-          <div class="stats-box">
-            <h2>Routes</h2>
-            <table>
-              <tr><th>Path</th><th>Count</th></tr>
-              ${Object.entries(requestStats.byRoute)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([path, count]) => `<tr><td>${path}</td><td>${count}</td></tr>`)
-                  .join('')}
-            </table>
-          </div>
-          <div class="stats-box">
-            <h2>Methods</h2>
-            <table>
-              <tr><th>Method</th><th>Count</th></tr>
-              ${Object.entries(requestStats.byMethod)
-                  .map(([method, count]) => `<tr><td>${method}</td><td>${count}</td></tr>`)
-                  .join('')}
-            </table>
-          </div>
-          <div class="stats-box">
-            <h2>Status Codes</h2>
-            <table>
-              <tr><th>Status</th><th>Count</th></tr>
-              ${Object.entries(requestStats.byStatus)
-                  .map(([status, count]) => `<tr><td>${status}</td><td>${count}</td></tr>`)
-                  .join('')}
-            </table>
-          </div>
-          <div class="stats-box">
-            <h2>IP Addresses</h2>
-            <table>
-              <tr><th>IP</th><th>Count</th></tr>
-              ${Object.entries(requestStats.byIP)
-                  .sort((a, b) => b[1] - a[1])
-                  .slice(0, 10)
-                  .map(([ip, count]) => `<tr><td>${ip}</td><td>${count}</td></tr>`)
-                  .join('')}
-            </table>
-          </div>
-        </div>
-    	  <h2>Recent Logs (${recentLogs.length})</h2>
-    	  <pre>
-		    ${recentLogs.join('')}
-          </pre>
-      </body>
-    </html>
-  `);
-});
-console.log(`Loaded 'morgan' on '/requests' using 'in-memory-logs-maxsize=${LOGS_INMEMORY_MAXSIZE}'`);
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
 xxx.get('/', function (req, res) {
     res.render('server-mainview', {
         vars: variablesRender(),
     });
 });
 console.log(`Loaded '/' using 'server-mainview'`);
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-xxx.use(exp.static('/dev/shm'));
-console.log(`Loaded 'static' using '/dev/shm'`);
-
-xxx.use('/static', exp.static(data_assets));
-console.log(`Loaded 'static' using '/static -> ${data_assets}'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
