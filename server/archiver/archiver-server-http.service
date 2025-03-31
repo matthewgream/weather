@@ -1,5 +1,5 @@
 [Unit]
-Description=Weather Server Archiver HTTP
+Description=Weather Archiver Server HTTP
 Wants=network-online.target
 After=network-online.target
 

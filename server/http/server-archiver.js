@@ -200,154 +200,95 @@ console.log(`Loaded 'static' using '/static -> ${data_assets}'`);
 const sharp = require('sharp');
 const crypto = require('crypto');
 
-const snapshotsDir__ = conf.STORAGE + '/snapshots';
-
-const cacheEntries = {};
-const MAX_CACHE_ENTRIES = 2048;
-const CACHE_TTL = 24 * 60 * 60 * 1000;
-const cacheDetails = {};
-function cacheInsert(key, value) {
-    const now = Date.now();
-    cacheEntries[key] = value;
-    cacheDetails[key] = {
-        added: now,
-        lastAccessed: now,
-    };
-    cacheCleanup();
-}
-function cacheRetrieve(key) {
-    const entry = cacheEntries[key];
-    if (entry) cacheDetails[key].lastAccessed = Date.now();
-    return entry;
-}
-function cacheCleanup() {
-    const now = Date.now();
-    const cacheKeys = Object.keys(cacheEntries);
-    if (cacheKeys.length <= MAX_CACHE_ENTRIES) {
-        cacheKeys.forEach((key) => {
-            if (now - cacheDetails[key].added > CACHE_TTL) {
-                delete cacheEntries[key];
-                delete cacheDetails[key];
-            }
-        });
-        return;
-    }
-    const sortedKeys = cacheKeys.sort((a, b) => cacheDetails[a].lastAccessed - cacheDetails[b].lastAccessed);
-    let keysToRemove = sortedKeys.filter((key) => now - cacheDetails[key].added > CACHE_TTL);
-    if (cacheKeys.length - keysToRemove.length > MAX_CACHE_ENTRIES) {
-        const targetSize = Math.floor(MAX_CACHE_ENTRIES * 0.9);
-        const additionalToRemove = cacheKeys.length - keysToRemove.length - targetSize;
-        if (additionalToRemove > 0) keysToRemove = keysToRemove.concat(sortedKeys.filter((key) => !keysToRemove.includes(key)).slice(0, additionalToRemove));
-    }
-    keysToRemove.forEach((key) => {
-        delete cacheEntries[key];
-        delete cacheDetails[key];
-    });
-}
-
-const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const snapshotThumbnailsCacheSize = 2048;
+const snapshotThumbnailsCacheTtl = 60 * 60 * 1000;
+const snapshotThumbnailsWidthDefault = 200;
+const snapshotDirectory = conf.STORAGE + '/snapshots';
 
 function getFormattedDate(date) {
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    if (!date || date.length < 8) return 'Invalid date';
     return `${date.substring(0, 4)} ${months[parseInt(date.substring(4, 6)) - 1]} ${parseInt(date.substring(6, 8))}`;
 }
 function getFormattedTime(time) {
+    if (!time || time.length < 6) return 'Invalid time';
     return `${parseInt(time.substring(0, 2)).toString().padStart(2, '0')}:${parseInt(time.substring(2, 4)).toString().padStart(2, '0')}:${parseInt(time.substring(4, 6)).toString().padStart(2, '0')}`;
 }
-
-function getSnapshotsListOfDates() {
-    try {
-        const dates = fs
-            .readdirSync(snapshotsDir__)
-            .filter((item) => fs.statSync(path.join(snapshotsDir__, item)).isDirectory() && /^\d{8}$/.test(item))
-            .sort((a, b) => b.localeCompare(a))
-            .map((dateCode) => ({
-                dateCode,
-                dateFormatted: getFormattedDate(dateCode),
-            }));
-        return dates;
-    } catch (error) {
-        console.error('Error reading snapshot dates:', error);
-        return [];
-    }
+function getThumbnailKey(file, width) {
+    const mtime = fs.statSync(file).mtime.getTime();
+    return crypto.createHash('md5').update(`${file}-${width}-${mtime}`).digest('hex');
 }
 
-function getSnapshotsListForDate(date) {
-    try {
-        const dateDir = path.join(snapshotsDir__, date);
-        return !fs.existsSync(dateDir)
-            ? []
-            : fs
-                  .readdirSync(dateDir)
-                  .filter((file) => file.startsWith('snapshot_') && file.endsWith('.jpg'))
-                  .sort((a, b) => b.localeCompare(a))
-                  .map((file) => {
-                      const timeCode = file.slice(17, 23); // Extract time portion from filename
-                      return {
-                          file,
-                          timeFormatted: getFormattedTime(timeCode),
-                      };
-                  });
-    } catch (error) {
-        console.error(`Error reading snapshots for date ${date}:`, error);
-        return [];
-    }
-}
+const { SnapshotThumbnailsManager, SnapshotDirectoryManager, SnapshotContentsManager } = require('./server-functions-snapshot.js');
+const snapshotThumbnailsManager = new SnapshotThumbnailsManager({
+    maxEntries: snapshotThumbnailsCacheSize,
+    ttl: snapshotThumbnailsCacheTtl,
+});
+const snapshotDirectoryManager = new SnapshotDirectoryManager({
+    directory: snapshotDirectory,
+});
+const snapshotContentsManager = new SnapshotContentsManager({
+    directory: snapshotDirectory,
+});
+process.on('SIGTERM', () => {
+    snapshotDirectoryManager.dispose();
+    snapshotContentsManager.dispose();
+    snapshotThumbnailsManager.dispose();
+});
 
-function getSnapshotsImageFilename(file) {
+function getSnapshotListOfDates() {
+    return {
+        entries: snapshotDirectoryManager.getListOfDates().map(({ dateCode }) => ({ dateCode, dateFormatted: getFormattedDate(dateCode) })),
+    };
+}
+function getSnapshotListForDate(date) {
+    return {
+        dateFormatted: getFormattedDate(date),
+        entries: snapshotContentsManager.getListForDate(date).map(({ file }) => ({ file, timeFormatted: getFormattedTime(file.slice(17, 23)) })),
+    };
+}
+function getSnapshotImageFilename(file) {
     const match = file.match(/snapshot_(\d{8})\d{6}\.jpg/);
-    if (!match || !match[1]) return undefined;
+    if (!match?.[1]) return undefined;
     const dateDir = match[1];
-    const filePath = path.join(snapshotsDir__, dateDir, file);
+    const filePath = path.join(snapshotDirectory, dateDir, file);
     if (!fs.existsSync(filePath)) return null;
     return filePath;
 }
 
-async function getSnapshotsImageThumbnail(file, width) {
+async function getSnapshotImageThumbnail(file, width) {
     const match = file.match(/snapshot_(\d{8})\d{6}\.jpg/);
-    if (!match || !match[1]) return null;
+    if (!match?.[1]) return null;
     const dateDir = match[1];
-    const filePath = path.join(snapshotsDir__, dateDir, file);
+    const filePath = path.join(snapshotDirectory, dateDir, file);
     if (!fs.existsSync(filePath)) return null;
-    const mtime = fs.statSync(filePath).mtime.getTime();
-    const cacheKey = crypto.createHash('md5').update(`${file}-${width}-${mtime}`).digest('hex');
-    const cachedThumbnail = cacheRetrieve(cacheKey);
-    if (cachedThumbnail) return cachedThumbnail;
-    const thumbnail = await sharp(filePath).resize(width).jpeg({ quality: 70 }).toBuffer();
-    cacheInsert(cacheKey, thumbnail);
+    const key = getThumbnailKey(filePath, width);
+    let thumbnail = snapshotThumbnailsManager.retrieve(key);
+    if (!thumbnail) {
+        thumbnail = await sharp(filePath).resize(width).jpeg({ quality: 70 }).toBuffer();
+        snapshotThumbnailsManager.insert(key, thumbnail);
+    }
     return thumbnail;
 }
 
-xxx.get('/', function (req, res) {
-    return res.redirect('/snapshot/list');
-});
-
 xxx.get('/snapshot/list', function (req, res) {
-    return res.render('server-snapshot-list', {
-        entries: getSnapshotsListOfDates(),
-    });
+    return res.render('server-snapshot-list', getSnapshotListOfDates());
 });
-
 xxx.get('/snapshot/list/:date', function (req, res) {
-    const date = req.params.date;
-    return res.render('server-snapshot-date', {
-        dateFormatted: getFormattedDate(date),
-        entries: getSnapshotsListForDate(date),
-    });
+    return res.render('server-snapshot-date', getSnapshotListForDate(req.params.date));
 });
-
 xxx.get('/snapshot/file/:file', function (req, res) {
     const file = req.params.file;
-    const filename = getSnapshotsImageFilename(file);
-    if (filename == null) return res.status(404).send('Snapshot not found');
+    const filename = getSnapshotImageFilename(file);
+    if (!filename) return res.status(404).send('Snapshot not found');
     return res.sendFile(filename);
 });
-
 xxx.get('/snapshot/thumb/:file', async (req, res) => {
     const file = req.params.file;
-    const width = parseInt(req.query.w) || 200;
+    const width = parseInt(req.query.w) || snapshotThumbnailsWidthDefault;
     try {
-        const imagedata = await getSnapshotsImageThumbnail(file, width);
-        if (imagedata == null) return res.status(404).send('Thumbnail not found');
+        const imagedata = await getSnapshotImageThumbnail(file, width);
+        if (!imagedata) return res.status(404).send('Thumbnail not found');
         res.set('Content-Type', 'image/jpeg');
         res.set('Cache-Control', 'public, max-age=300');
         return res.send(imagedata);
@@ -357,7 +298,14 @@ xxx.get('/snapshot/thumb/:file', async (req, res) => {
     }
 });
 
-console.log(`Loaded 'snapshots' on '/snapshot', using 'thumbnail-cache-entries=${MAX_CACHE_ENTRIES}'`);
+console.log(`Loaded 'snapshots' on '/snapshot', using 'thumbnail-cache-entries=${snapshotThumbnailsCacheSize}'`);
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+xxx.get('/', function (req, res) {
+    return res.redirect('/snapshot/list');
+});
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
