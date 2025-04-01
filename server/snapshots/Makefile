@@ -15,11 +15,14 @@ clean:
 format:
 	clang-format -i $(TARGET).c
 
-install:
+install: $(TARGET)
 	cp $(TARGET).service /etc/systemd/system/snapshots-$(TARGET).service
 	systemctl daemon-reload
 	systemctl enable snapshots-$(TARGET)
 	systemctl start snapshots-$(TARGET)
+
+test: $(TARGET)
+	nice -10 ./publisher ../secrets.txt
 
 .PHONY: all clean format
 

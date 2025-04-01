@@ -10,6 +10,9 @@ ExecReload=kill -HUP $MAINPID
 KillMode=process
 Restart=on-failure
 RestartSec=5s
+Nice=-10
+CPUSchedulingPolicy=fifo
+CPUSchedulingPriority=50
 
 [Install]
 WantedBy=multi-user.target

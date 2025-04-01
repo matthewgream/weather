@@ -30,9 +30,8 @@
 #include <unistd.h>
 
 #define SNAPSHOT_INTERVAL 30
-#define MAX_BUFFER_SIZE 5 * 1024 * 1024 // 5MB max for image data
 
-volatile bool running = true;
+#define MAX_BUFFER_SIZE 5 * 1024 * 1024 // 5MB
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -50,7 +49,7 @@ bool config_load(int argc, const char **argv) {
         path = argv[1];
     FILE *file = fopen(path, "r");
     if (file == NULL) {
-        fprintf(stderr, "Config: could not load '%s', using defaults (which may not work correctly)\n", path);
+        fprintf(stderr, "config: could not load '%s', using defaults (which may not work correctly)\n", path);
         return false;
     }
     char line[MAX_CONFIG_LINE];
@@ -115,8 +114,8 @@ bool mqtt_begin(void) {
     }
     printf("mqtt: connecting to '%s' (host='%s', port=%d, ssl=%s)\n", config_mqtt_broker, host, port,
            use_ssl ? "true" : "false");
-    char client_id[32];
-    snprintf(client_id, sizeof(client_id), "snapshots-publisher-%06X", rand() & 0xFFFFFF);
+    char client_id[32 + 1];
+    snprintf(client_id, sizeof(client_id) - 1, "snapshots-publisher-%06X", rand() & 0xFFFFFF);
     mosquitto_lib_init();
     mosq = mosquitto_new(client_id, true, NULL);
     if (!mosq) {
@@ -155,24 +154,21 @@ void mqtt_end(void) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-bool snapshot_active = false;
-int snapshot_skipped_now = 0;
-int snapshot_skipped_all = 0;
+unsigned char snapshot_buffer[MAX_BUFFER_SIZE]; // will exist in the child, but better than repeated mallocs
+int snapshot_skipped = 0;
 
 bool snapshot_capture(void) {
-    time_t now = time(NULL);
-    struct tm *timeinfo = localtime(&now);
-    char timestamp[15];
-    strftime(timestamp, sizeof(timestamp), "%Y%m%d%H%M%S", timeinfo);
-    char filename[32];
-    snprintf(filename, sizeof(filename), "snapshot_%s.jpg", timestamp);
+
+    time_t time_entry = time(NULL);
+    struct tm *timeinfo = localtime(&time_entry);
+
     int pipefd[2];
     if (pipe(pipefd) == -1) {
         perror("pipe");
         return false;
     }
     pid_t pid = fork();
-    if (pid == -1) {
+    if (pid == -1) { // Error
         perror("fork");
         close(pipefd[0]);
         close(pipefd[1]);
@@ -187,25 +183,21 @@ bool snapshot_capture(void) {
             close(devnull);
         }
         close(pipefd[1]);
-        execlp("ffmpeg", "ffmpeg", "-y", "-loglevel", "quiet", // Suppress ffmpeg logs
-               "-rtsp_transport", "tcp", "-i", config_rtsp_url, "-vframes", "1", "-q:v", "6", "-pix_fmt", "yuv420p",
-               "-chroma_sample_location", "center", "-f", "image2pipe", "-", NULL);
+        execlp("ffmpeg", "ffmpeg", "-y", "-loglevel", "quiet", "-rtsp_transport", "tcp", "-i", config_rtsp_url,
+               "-vframes", "1", "-q:v", "6", "-pix_fmt", "yuvj420p", "-chroma_sample_location", "center", "-f",
+               "image2pipe", "-", NULL);
         perror("execlp");
         exit(EXIT_FAILURE);
     }
-    close(pipefd[1]); // Parent process
-    unsigned char *buffer = malloc(MAX_BUFFER_SIZE);
-    if (!buffer) {
-        perror("malloc");
-        close(pipefd[0]);
-        return false;
-    }
+    // Parent process
+    close(pipefd[1]);
     size_t total_bytes = 0;
     ssize_t bytes_read;
-    while ((bytes_read = read(pipefd[0], buffer + total_bytes, MAX_BUFFER_SIZE - total_bytes)) > 0) {
+    while ((bytes_read = read(pipefd[0], snapshot_buffer + total_bytes, MAX_BUFFER_SIZE - total_bytes)) > 0) {
         total_bytes += bytes_read;
         if (total_bytes >= MAX_BUFFER_SIZE) {
-            fprintf(stderr, "publisher: image too large for buffer\n");
+            fprintf(stderr, "publisher: ffmpeg image too large for buffer\n");
+            total_bytes = 0;
             break;
         }
     }
@@ -214,46 +206,56 @@ bool snapshot_capture(void) {
     waitpid(pid, &status, 0);
     if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
         fprintf(stderr, "publisher: ffmpeg exited with status %d\n", WEXITSTATUS(status));
-        free(buffer);
         return false;
     }
+
+    if (total_bytes == 0) {
+        return false;
+    }
+
+    time_t total_time = time(NULL) - time_entry;
+    char timestamp[15 + 1];
+    strftime(timestamp, sizeof(timestamp) - 1, "%Y%m%d%H%M%S", timeinfo);
+    char filename[32 + 1];
+    snprintf(filename, sizeof(filename) - 1, "snapshot_%s.jpg", timestamp);
+
     char metadata[256];
     snprintf(metadata, sizeof(metadata), "{\"filename\":\"%s\",\"timestamp\":\"%s\",\"size\":%zu}", filename, timestamp,
              total_bytes);
-
-    if (mosq && total_bytes > 0) {
-        int result = mosquitto_publish(mosq, NULL, "snapshots/imagedata", total_bytes, buffer, 0, false);
-        if (result != MOSQ_ERR_SUCCESS)
-            fprintf(stderr, "mqtt: imagedata publish error: %s\n", mosquitto_strerror(result));
-        result = mosquitto_publish(mosq, NULL, "snapshots/metadata", strlen(metadata), metadata, 0, false);
-        if (result != MOSQ_ERR_SUCCESS)
-            fprintf(stderr, "mqtt: metadata publish error: %s\n", mosquitto_strerror(result));
-        printf("publisher: published '%s' (%zu bytes)\n", filename, total_bytes);
+    int result = mosquitto_publish(mosq, NULL, "snapshots/imagedata", total_bytes, snapshot_buffer, 0, false);
+    if (result != MOSQ_ERR_SUCCESS) {
+        fprintf(stderr, "mqtt: imagedata publish error: %s\n", mosquitto_strerror(result));
+        return false;
     }
-    free(buffer);
+    result = mosquitto_publish(mosq, NULL, "snapshots/metadata", strlen(metadata), metadata, 0, false);
+    if (result != MOSQ_ERR_SUCCESS) {
+        fprintf(stderr, "mqtt: metadata publish error: %s\n", mosquitto_strerror(result));
+        return false;
+    }
+    printf("publisher: published '%s' (%zu bytes) [%ld seconds]\n", filename, total_bytes, total_time);
+
     return true;
 }
 
-void snapshot_execute(void) {
-    if (snapshot_active) {
-        snapshot_skipped_now++;
-        snapshot_skipped_all++;
-        printf("publisher: capture still active (%d / %d), skipping this cycle\n", snapshot_skipped_now,
-               snapshot_skipped_all);
-        return;
-    }
-    snapshot_active = true;
-    if (!snapshot_capture())
-        fprintf(stderr, "publisher: snapshot capture error\n");
-    snapshot_active = false;
-    snapshot_skipped_now = 0;
-}
-
-void snapshot_runner(void) {
+void snapshot_execute(volatile bool *running) {
     printf("publisher: executing (interval=%d seconds)\n", SNAPSHOT_INTERVAL);
-    while (running) {
-        snapshot_execute();
-        for (int i = 0; i < SNAPSHOT_INTERVAL && running; i++)
+    while (*running) {
+        const time_t time_entry = time(NULL);
+        if (!snapshot_capture()) {
+            fprintf(stderr, "publisher: capture error, will retry\n");
+        }
+        const time_t time_leave = time(NULL);
+        time_t next = time_entry + SNAPSHOT_INTERVAL;
+        int skipped = 0;
+        while (next < time_leave) {
+            skipped++;
+            next += SNAPSHOT_INTERVAL;
+        }
+        if (skipped) {
+            snapshot_skipped += skipped;
+            printf("publisher: capture skipped (%d now / %d all)\n", skipped, snapshot_skipped);
+        }
+        while (*running && time(NULL) < next)
             sleep(1);
     }
 }
@@ -261,10 +263,7 @@ void snapshot_runner(void) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-void cleanup(void) {
-    running = false;
-    mqtt_end();
-}
+volatile bool running = true;
 
 void signal_handler(int sig) {
     printf("publisher: stopping\n");
@@ -282,11 +281,12 @@ int main(int argc, const char **argv) {
     }
     if (!mqtt_begin()) {
         fprintf(stderr, "publisher: failed to connect to MQTT\n");
-        cleanup();
+        mqtt_end();
         return EXIT_FAILURE;
     }
-    snapshot_runner();
-    cleanup();
+    snapshot_execute(&running);
+    mqtt_end();
+    printf("publisher: stopped\n");
     return EXIT_SUCCESS;
 }
 

@@ -198,7 +198,6 @@ class DiagnosticsManager {
             const limit = req.query.limit ? parseInt(req.query.limit) : self.defaultLogLimit;
             return res.send(self.requestStats.generateStatsPage(limit, self.memoryLogs));
         });
-        console.log(`Loaded 'diagnostics' on '${route}' using 'in-memory-logs-maxsize=${this.memoryLogs.maxSize}'`);
         return this;
     }
     setup(app, route = '/requests') {
