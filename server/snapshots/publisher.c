@@ -20,7 +20,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <mosquitto.h>
-#include <pthread.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -30,19 +29,20 @@
 #include <time.h>
 #include <unistd.h>
 
-#define CONFIG_FILE_DEFAULT "secrets.txt"
-#define MAX_CONFIG_LINE 256
-#define MAX_CONFIG_VALUE 512
 #define SNAPSHOT_INTERVAL 30
 #define MAX_BUFFER_SIZE 5 * 1024 * 1024 // 5MB max for image data
-
-char mqtt_broker[MAX_CONFIG_VALUE] = "";
-char rtsp_url[MAX_CONFIG_VALUE] = "";
 
 volatile bool running = true;
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
+
+#define CONFIG_FILE_DEFAULT "secrets.txt"
+#define MAX_CONFIG_LINE 256
+#define MAX_CONFIG_VALUE 512
+
+char config_mqtt_broker[MAX_CONFIG_VALUE] = "";
+char config_rtsp_url[MAX_CONFIG_VALUE] = "";
 
 bool config_load(int argc, const char **argv) {
     const char *path = CONFIG_FILE_DEFAULT;
@@ -71,15 +71,15 @@ bool config_load(int argc, const char **argv) {
             while (end > value && isspace(*end))
                 *end-- = '\0';
             if (strcmp(key, "MQTT") == 0) {
-                strncpy(mqtt_broker, value, sizeof(mqtt_broker) - 1);
+                strncpy(config_mqtt_broker, value, sizeof(config_mqtt_broker) - 1);
             } else if (strcmp(key, "RTSP") == 0) {
-                strncpy(rtsp_url, value, sizeof(rtsp_url) - 1);
+                strncpy(config_rtsp_url, value, sizeof(config_rtsp_url) - 1);
             }
         }
     }
     fclose(file);
-    printf("config: '%s': mqtt=%s, rtsp=%s\n", path, mqtt_broker, rtsp_url);
-    return (mqtt_broker[0] != '\0' && rtsp_url[0] != '\0');
+    printf("config: '%s': mqtt=%s, rtsp=%s\n", path, config_mqtt_broker, config_rtsp_url);
+    return (config_mqtt_broker[0] != '\0' && config_rtsp_url[0] != '\0');
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -96,28 +96,28 @@ void mqtt_connect_callback(struct mosquitto *mosq, void *obj, int result) {
 }
 
 bool mqtt_begin(void) {
-
     char host[MAX_CONFIG_VALUE] = "";
     int port = 1883;
     bool use_ssl = false;
-    if (strncmp(mqtt_broker, "mqtt://", 7) == 0) {
-        strncpy(host, mqtt_broker + 7, sizeof(host) - 1);
-    } else if (strncmp(mqtt_broker, "mqtts://", 8) == 0) {
-        strncpy(host, mqtt_broker + 8, sizeof(host) - 1);
+    if (strncmp(config_mqtt_broker, "mqtt://", 7) == 0) {
+        strncpy(host, config_mqtt_broker + 7, sizeof(host) - 1);
+    } else if (strncmp(config_mqtt_broker, "mqtts://", 8) == 0) {
+        strncpy(host, config_mqtt_broker + 8, sizeof(host) - 1);
         use_ssl = true;
         port = 8883; // Default secure MQTT port
     } else {
-        strncpy(host, mqtt_broker, sizeof(host) - 1);
+        strncpy(host, config_mqtt_broker, sizeof(host) - 1);
     }
     char *port_str = strchr(host, ':');
     if (port_str) {
         *port_str = '\0'; // Terminate host string at colon
         port = atoi(port_str + 1);
     }
-    printf("mqtt: connecting to '%s' (host='%s', port=%d, ssl=%s)\n", mqtt_broker, host, port,
+    printf("mqtt: connecting to '%s' (host='%s', port=%d, ssl=%s)\n", config_mqtt_broker, host, port,
            use_ssl ? "true" : "false");
     char client_id[32];
     snprintf(client_id, sizeof(client_id), "snapshots-publisher-%06X", rand() & 0xFFFFFF);
+    mosquitto_lib_init();
     mosq = mosquitto_new(client_id, true, NULL);
     if (!mosq) {
         fprintf(stderr, "mqtt: error creating client instance\n");
@@ -149,6 +149,7 @@ void mqtt_end(void) {
         mosquitto_destroy(mosq);
         mosq = NULL;
     }
+    mosquitto_lib_cleanup();
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -157,7 +158,6 @@ void mqtt_end(void) {
 bool snapshot_active = false;
 int snapshot_skipped_now = 0;
 int snapshot_skipped_all = 0;
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
 bool snapshot_capture(void) {
     time_t now = time(NULL);
@@ -188,7 +188,7 @@ bool snapshot_capture(void) {
         }
         close(pipefd[1]);
         execlp("ffmpeg", "ffmpeg", "-y", "-loglevel", "quiet", // Suppress ffmpeg logs
-               "-rtsp_transport", "tcp", "-i", rtsp_url, "-vframes", "1", "-q:v", "6", "-pix_fmt", "yuv420p",
+               "-rtsp_transport", "tcp", "-i", config_rtsp_url, "-vframes", "1", "-q:v", "6", "-pix_fmt", "yuv420p",
                "-chroma_sample_location", "center", "-f", "image2pipe", "-", NULL);
         perror("execlp");
         exit(EXIT_FAILURE);
@@ -235,35 +235,27 @@ bool snapshot_capture(void) {
 }
 
 void snapshot_execute(void) {
-    pthread_mutex_lock(&mutex);
     if (snapshot_active) {
         snapshot_skipped_now++;
         snapshot_skipped_all++;
         printf("publisher: capture still active (%d / %d), skipping this cycle\n", snapshot_skipped_now,
                snapshot_skipped_all);
-        pthread_mutex_unlock(&mutex);
         return;
     }
     snapshot_active = true;
-    pthread_mutex_unlock(&mutex);
     if (!snapshot_capture())
         fprintf(stderr, "publisher: snapshot capture error\n");
-    pthread_mutex_lock(&mutex);
     snapshot_active = false;
     snapshot_skipped_now = 0;
-    pthread_mutex_unlock(&mutex);
 }
 
-void *snapshot_thread(void *arg) {
+void snapshot_runner(void) {
     printf("publisher: executing (interval=%d seconds)\n", SNAPSHOT_INTERVAL);
-    snapshot_execute();
     while (running) {
+    	snapshot_execute();
         for (int i = 0; i < SNAPSHOT_INTERVAL && running; i++)
             sleep(1);
-        if (running)
-            snapshot_execute();
     }
-    return NULL;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -272,8 +264,6 @@ void *snapshot_thread(void *arg) {
 void cleanup(void) {
     running = false;
     mqtt_end();
-    mosquitto_lib_cleanup();
-    pthread_mutex_destroy(&mutex);
 }
 
 void signal_handler(int sig) {
@@ -290,22 +280,12 @@ int main(int argc, const char **argv) {
         fprintf(stderr, "publisher: failed to load config\n");
         return EXIT_FAILURE;
     }
-    mosquitto_lib_init();
     if (!mqtt_begin()) {
         fprintf(stderr, "publisher: failed to connect to MQTT\n");
         cleanup();
         return EXIT_FAILURE;
     }
-    pthread_t thread_id;
-    if (pthread_create(&thread_id, NULL, snapshot_thread, NULL) != 0) {
-        fprintf(stderr, "publisher: failed to create publisher\n");
-        cleanup();
-        return EXIT_FAILURE;
-    }
-    printf("publisher: started\n");
-    while (running)
-        sleep(1);
-    pthread_join(thread_id, NULL);
+    snapshot_runner ();
     cleanup();
     return EXIT_SUCCESS;
 }
