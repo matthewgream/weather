@@ -1,7 +1,7 @@
 
 CC = gcc
-CFLAGS = -O6 -Wall
-LDFLAGS = -lmosquitto -lpthread
+CFLAGS = -O6 -Wall -pedantic
+LDFLAGS = -lmosquitto
 TARGET = publisher
 
 $(TARGET): $(TARGET).c

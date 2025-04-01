@@ -106,7 +106,7 @@ bool mqtt_begin(void) {
         use_ssl = true;
         port = 8883; // Default secure MQTT port
     } else {
-        strncpy(host, config_mqtt_broker, sizeof(host) - 1);
+        strcpy(host, config_mqtt_broker);
     }
     char *port_str = strchr(host, ':');
     if (port_str) {
@@ -252,7 +252,7 @@ void snapshot_execute(void) {
 void snapshot_runner(void) {
     printf("publisher: executing (interval=%d seconds)\n", SNAPSHOT_INTERVAL);
     while (running) {
-    	snapshot_execute();
+        snapshot_execute();
         for (int i = 0; i < SNAPSHOT_INTERVAL && running; i++)
             sleep(1);
     }
@@ -285,7 +285,7 @@ int main(int argc, const char **argv) {
         cleanup();
         return EXIT_FAILURE;
     }
-    snapshot_runner ();
+    snapshot_runner();
     cleanup();
     return EXIT_SUCCESS;
 }
