@@ -2,6 +2,8 @@
 Description=Weather Archiver Collector
 Wants=network-online.target
 After=network-online.target
+Requires=archiver-storage.service
+After=archiver-storage.service
 
 [Service]
 Type=simple

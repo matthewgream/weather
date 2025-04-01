@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh /opt/weather/server/scripts/daily
+ExecStart=/usr/bin/bash /opt/weather/server/scripts/daily
 SuccessExitStatus=0
 Nice=+10
 

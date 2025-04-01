@@ -1,0 +1,12 @@
+[Unit]
+Description=Weather Archiver Storage
+Requires=opt-storage-usb1.mount
+After=opt-storage-usb1.mount
+
+[Service]
+Type=oneshot
+ExecStart=/bin/true
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

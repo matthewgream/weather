@@ -9,6 +9,7 @@ const path = require('path');
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+const configPath = process.argv[2] || 'secrets.txt';
 function configLoad(configPath) {
     try {
         const items = {};
@@ -24,7 +25,6 @@ function configLoad(configPath) {
         return {};
     }
 }
-const configPath = '/opt/weather/server/secrets.txt';
 const conf = configLoad(configPath);
 const configList = Object.entries(conf)
     .map(([k, v]) => k.toLowerCase() + '=' + v)

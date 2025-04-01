@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "lzma-native": "^8.0.6",
     "mqtt": "^5.10.4",
     "rimraf": "^6.0.1"
   },

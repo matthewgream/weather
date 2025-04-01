@@ -1,7 +1,0 @@
-
-- avahi (multicast DNS)
-- mosquitto (MQTT broker)
-- ecowitt2mqtt (translate ecowitt to MQTT)
-- nodejs (for weather server)
-- python3 (for ecowitt2mqtt)
-

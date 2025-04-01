@@ -5,15 +5,18 @@
 
 const fs = require('fs');
 const path = require('path');
-const zlib = require('zlib');
 const mqtt = require('mqtt');
+const rimraf = require('rimraf');
 
-const REPORT_PERIOD_DEFAULT = 15;
+const REPORT_PERIOD_DEFAULT = 15; // report output every this many minutes
+
+const NUMBER_OF_DAYS_BACKWARDS_TIMELAPSE = 1; // make timelapse after this many days
+const NUMBER_OF_DAYS_BACKWARDS_SNAPSHOTS = 28; // delete after this many days
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const configPath = '/opt/weather/server/secrets.txt';
+const configPath = process.argv[2] || 'secrets.txt';
 
 function configLoad(configPath) {
     try {
@@ -26,7 +29,7 @@ function configLoad(configPath) {
             });
         return items;
     } catch {
-        console.warn(`Could not load '${configPath}', using defaults (which may not work correctly)`);
+        console.warn(`config: could not load '${configPath}', using defaults (which may not work correctly)`);
         return {};
     }
 }
@@ -45,26 +48,15 @@ const config = {
         timelapse: conf.STORAGE + '/timelapse',
     },
 };
-if (!fs.existsSync(config.storage.messages)) fs.mkdirSync(config.storage.messages, { recursive: true });
-if (!fs.existsSync(config.storage.snapshots)) fs.mkdirSync(config.storage.snapshots, { recursive: true });
 const configList = Object.entries(conf)
     .map(([k, v]) => k.toLowerCase() + '=' + v)
     .join(', ');
+
 console.log(`Loaded 'config' using '${configPath}': ${configList}`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function formatSize(bytes) {
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    let size = bytes;
-    let unitIndex = 0;
-    while (size >= 1024 && unitIndex < units.length - 1) {
-        size /= 1024;
-        unitIndex++;
-    }
-    return `${size.toFixed(1)}${units[unitIndex]}`;
-}
 function formatFileSize(bytes) {
     if (bytes === 0) return '0 B';
     const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -83,10 +75,9 @@ function getTimestamp() {
         String(now.getSeconds()).padStart(2, '0')
     );
 }
-
 function getDatestring() {
     const now = new Date();
-    return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+    return now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0');
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -118,8 +109,8 @@ class ReportCounter {
         }
         this.lastUpdateTimes[key].lastTime = now;
         if (first) {
-            if (key) console.log(`collector: ${this.name}: [${timestamp}] received '${key}'`);
-            else console.log(`collector: ${this.name}: [${timestamp}] received`);
+            if (key) console.log(`${this.name}: [${timestamp}] received '${key}'`);
+            else console.log(`${this.name}: [${timestamp}] received`);
         }
     }
     reportSummary() {
@@ -137,87 +128,86 @@ class ReportCounter {
                     else return str;
                 })
                 .join(', ');
-            console.log(`collector: ${this.name}: [${timestamp}] received (${elapsed} mins) ${countStr}`);
+            console.log(`${this.name}: [${timestamp}] received (${elapsed} mins) ${countStr}`);
         }
         this.lastReportTime = now;
     }
-    stop() {
+    end() {
         if (this.intervalId) {
             clearInterval(this.intervalId);
             this.intervalId = null;
         }
     }
 }
+
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const checkInterval = 60 * 1000;
+const lzma = require('lzma-native');
 
-let currentDate = '';
-let currentFilePath = '';
-let writeStream = null;
-
-function __messageStoragePath(dateString) {
+const __messageCheckInterval = 60 * 1000;
+let __messageInterval = null;
+let __messageCurrentDate = '';
+let __messageCurrentPath = '';
+let __messageCurrentStream = null;
+function __messageFilePath(dateString) {
     const dirPath = path.join(config.storage.messages, dateString.substring(0, 6));
     if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
     return path.join(dirPath, `${dateString}.json`);
 }
-
-function messageWriteStreamSetup() {
+function __messageCompressedName(filePath) {
+    return `${filePath}.xz`;
+}
+function __messageCompressStream() {
+    return lzma.createCompressor({ preset: 9 });
+}
+function __messageCompressFile(dateString) {
+    const filePath = __messageFilePath(dateString);
+    if (!fs.existsSync(filePath)) return;
+    console.log(`messages: ${dateString}: compress begin [${filePath}]`);
+    try {
+        const compressedPath = __messageCompressedName(filePath);
+        const originalSize = fs.statSync(filePath).size;
+        const readStream = fs.createReadStream(filePath);
+        const writeStream = fs.createWriteStream(compressedPath);
+        readStream.pipe(__messageCompressStream()).pipe(writeStream); // Maximum compression level
+        writeStream.on('finish', () => {
+            const compressedSize = fs.statSync(compressedPath).size;
+            console.log(
+                `messages: ${dateString}: compress complete (${formatFileSize(originalSize)} → ${formatFileSize(compressedSize)}, ${(originalSize / compressedSize).toFixed(2)}:1)`
+            );
+            fs.unlinkSync(filePath);
+        });
+        writeStream.on('error', (err) => console.error(`messages: ${dateString}: compress error (stream): ${err}`));
+    } catch (err) {
+        console.error(`messages: ${dateString}: compress error (process): ${err}`);
+    }
+}
+function __messageWriteStream() {
     const dateString = getDatestring();
-    if (dateString !== currentDate) {
-        if (writeStream) {
-            writeStream.end();
-            writeStream = null;
+    if (dateString !== __messageCurrentDate) {
+        if (__messageCurrentStream) {
+            __messageCurrentStream.end();
+            __messageCurrentStream = null;
         }
-        const previousDate = currentDate;
+        const previousDate = __messageCurrentDate;
         if (previousDate) {
-            console.log(`collector: messages: date changed: ${previousDate} -> ${dateString}`);
-            messageCompressPreviousDay(previousDate);
+            console.log(`messages: rollover: ${previousDate} -> ${dateString}`);
+            __messageCompressFile(previousDate);
         }
-        currentDate = dateString;
-        currentFilePath = __messageStoragePath(dateString);
-        console.log(`collector: messages: writing to ${currentFilePath}`);
-        writeStream = fs.createWriteStream(currentFilePath, { flags: 'a' });
+        __messageCurrentDate = dateString;
+        __messageCurrentPath = __messageFilePath(dateString);
+        console.log(`messages: writing to ${__messageCurrentPath}`);
+        __messageCurrentStream = fs.createWriteStream(__messageCurrentPath, { flags: 'a' });
     }
-    return writeStream;
+    return __messageCurrentStream;
 }
 
-function messageCompressPreviousDay(dateString) {
-    const filePath = __messageStoragePath(dateString);
-    const gzipPath = `${filePath}.gz`;
-    if (fs.existsSync(filePath)) {
-        console.log(`collector: messages: compress previous day's file: ${filePath}`);
-        try {
-            const originalSize = fs.statSync(filePath).size;
-            const readableOriginalSize = formatFileSize(originalSize);
-            const readStream = fs.createReadStream(filePath);
-            const writeStream = fs.createWriteStream(gzipPath);
-            const gzip = zlib.createGzip({ level: 9 }); // Maximum compression level
-            readStream.pipe(gzip).pipe(writeStream);
-            writeStream.on('finish', () => {
-                const compressedSize = fs.statSync(gzipPath).size;
-                const readableCompressedSize = formatFileSize(compressedSize);
-                const compressionRatio = (originalSize / compressedSize).toFixed(2);
-                console.log(`collector: messages: compression stats: ${readableOriginalSize} → ${readableCompressedSize} (${compressionRatio}:1 ratio)`);
-                fs.unlink(filePath, (err) => {
-                    if (err) console.error(`collector: messages: error removing original file: ${err}`);
-                    else console.log(`collector: messages: compress complete, original file removed: ${filePath}`);
-                });
-            });
-            writeStream.on('error', (err) => {
-                console.error(`collector: messages: error compressing file: ${err}`);
-            });
-        } catch (err) {
-            console.error(`collector: messages: error setting up compression: ${err}`);
-        }
-    }
-}
+const __messageReport = new ReportCounter('messages');
 
-const messageReport = new ReportCounter('messages');
 function messageStore(topic, payload) {
-    messageReport.update(topic);
-    const stream = messageWriteStreamSetup();
+    __messageReport.update(topic);
+    const stream = __messageWriteStream();
     let parsedPayload;
     let isJson = false;
     try {
@@ -236,18 +226,20 @@ function messageStore(topic, payload) {
 }
 
 function messageBegin() {
-    messageWriteStreamSetup();
-    setInterval(() => {
-        messageWriteStreamSetup();
-    }, checkInterval);
+    if (!fs.existsSync(config.storage.messages)) fs.mkdirSync(config.storage.messages, { recursive: true });
+    __messageWriteStream();
+    __messageInterval = setInterval(() => {
+        __messageWriteStream();
+    }, __messageCheckInterval);
 }
 
 function messageEnd() {
-    if (writeStream) {
-        writeStream.end();
-        writeStream = null;
+    if (__messageCurrentStream) {
+        __messageCurrentStream.end();
+        __messageCurrentStream = null;
     }
-    messageReport.stop();
+    if (__messageInterval) clearInterval(__messageInterval);
+    __messageReport.end();
 }
 
 console.log(`Loaded 'archiver/messages' using 'path=${config.storage.messages}'`);
@@ -256,144 +248,67 @@ console.log(`Loaded 'archiver/messages' using 'path=${config.storage.messages}'`
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 let __snapshotReceiveImagedata = null;
-
+let timelapseTimer = null;
 function __snapshotStoragePath(filename) {
     const match = filename.match(/snapshot_(\d{14})\.jpg/);
     if (match?.[1]) {
-        const timestamp = match[1];
-        const dirPath = path.join(config.storage.snapshots, timestamp.substring(0, 8));
+        const dirPath = path.join(config.storage.snapshots, match[1].substring(0, 8));
         if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
         return path.join(dirPath, filename);
     }
     return undefined;
 }
-
-function snapshotStoreImagedata(message) {
+function __snapshotStoreImagedata(message) {
     __snapshotReceiveImagedata = message;
 }
-
-const snapshotReport = new ReportCounter('snapshots');
-function snapshotStoreMetadata(message) {
+function __snapshotStoreMetadata(message) {
     if (!__snapshotReceiveImagedata) {
-        console.error('collector: snapshots: error, received snapshot metadata but no image data is available');
+        console.error('snapshots: error, received snapshot metadata but no image data is available');
         return;
     }
     const metadata = JSON.parse(message.toString());
     const filename = metadata.filename;
-    snapshotReport.update();
     const snapshotPath = __snapshotStoragePath(filename);
     if (snapshotPath) fs.writeFileSync(snapshotPath, __snapshotReceiveImagedata);
     __snapshotReceiveImagedata = null;
 }
-
-function snapshotStore(type, message) {
-    if (type == 'imagedata') return snapshotStoreImagedata(message);
-    else if (type == 'metadata') return snapshotStoreMetadata(message);
-}
-
-async function snapshotCleanup(dateDir, snapshotDirPath) {
-    const rimraf = require('rimraf');
-
-    if (fs.existsSync(snapshotDirPath)) {
-        console.log(`Maintenance: Cleaning up snapshots for ${dateDir}`);
-        try {
-            const getDirectorySize = (dirPath) => {
-                let totalSize = 0;
-                for (const item of fs.readdirSync(dirPath)) {
-                    const itemPath = path.join(dirPath, item);
-                    const stats = fs.statSync(itemPath);
-                    totalSize += stats.isDirectory() ? getDirectorySize(itemPath) : stats.size;
-                }
-                return totalSize;
-            };
-            const sizeBefore = getDirectorySize(snapshotDirPath);
-            const formattedSize = formatSize(sizeBefore);
-            await new Promise((resolve, reject) => {
-                rimraf(snapshotDirPath, (err) => {
-                    if (err) {
-                        reject(err);
-                    } else {
-                        resolve();
-                    }
-                });
-            });
-            console.log(`Maintenance: Successfully removed ${formattedSize} of snapshots for ${dateDir}`);
-            return { dateDir, deleted: true, size: formattedSize };
-        } catch (error) {
-            console.error(`Maintenance: Error deleting snapshots for ${dateDir}: ${error.message}`);
-            throw error;
-        }
-    } else {
-        console.log(`Maintenance: No snapshots directory found for ${dateDir}`);
-        return { dateDir, deleted: false };
-    }
-}
-
-const NUMBER_OF_DAYS_BACKWARDS_SNAPSHOTS = 28;
-
-function snapshotMaintain() {
-    console.log('Starting snapshot maintenance process...');
-
+function getCutoffDate(days) {
     const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - NUMBER_OF_DAYS_BACKWARDS_SNAPSHOTS);
-    const cutoffDateStr = cutoffDate.toISOString().slice(0, 10).replace(/-/g, '');
-
-    console.log(`Maintenance cutoff date: ${cutoffDateStr} (will prune directories older than this)`);
-
-    let dateDirs;
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    return cutoffDate.toISOString().slice(0, 10).replace(/-/g, '');
+}
+function getTimelapseFilename(prefix) {
+    return path.join(config.storage.timelapse, `timelapse_${prefix}.mp4`);
+}
+function getSnapshotDirectory(prefix) {
+    return path.join(config.storage.snapshots, prefix);
+}
+function getCutoffDirectories(cutoffDateStr) {
     try {
-        dateDirs = fs
+        return fs
             .readdirSync(config.storage.snapshots)
-            .filter((item) => {
-                return fs.statSync(path.join(config.storage.snapshots, item)).isDirectory() && /^\d{8}$/.test(item) && item < cutoffDateStr;
-            })
+            .filter((item) => fs.statSync(path.join(config.storage.snapshots, item)).isDirectory() && /^\d{8}$/.test(item) && item < cutoffDateStr)
             .sort();
     } catch (error) {
-        console.error(`Error reading snapshot directories: ${error.message}`);
-        return;
+        console.error(`snapshots: error reading directories: ${error.message}`);
+        return [];
     }
-
-    if (dateDirs.length === 0) {
-        console.log('No snapshot directories older than 14 days found.');
-        return;
-    }
-
-    console.log(`Found ${dateDirs.length} snapshot directories older than 14 days to process.`);
-
-    const processPromises = dateDirs.map(async (dateDir) => {
-        const timelapseFilePath = path.join(config.storage.timelapse, `timelapse_${dateDir}.mp4`);
-        const snapshotDirPath = path.join(config.storage.snapshots, dateDir);
-        if (!fs.existsSync(timelapseFilePath)) {
-            console.log(`Maintenance: No timelapse found for ${dateDir}, generating...`);
-            try {
-                await snapshotToTimelapse(dateDir);
-                console.log(`Maintenance: Successfully generated timelapse for ${dateDir}`);
-                await snapshotCleanup(dateDir, snapshotDirPath);
-            } catch (error) {
-                console.error(`Maintenance: Failed to generate timelapse for ${dateDir}: ${error.message}`);
-            }
-        } else {
-            await snapshotCleanup(dateDir, snapshotDirPath);
-        }
-    });
-    Promise.all(processPromises)
-        .then(() => {
-            console.log('Snapshot maintenance process completed.');
-        })
-        .catch((error) => {
-            console.error(`Error during snapshot maintenance: ${error.message}`);
-        });
 }
-
-function snapshotToTimelapse(prefix) {
+function msUntilNextTimelapseCheck() {
+    const now = new Date();
+    const target = new Date(now);
+    target.setHours(6, 0, 0, 0);
+    if (now >= target) target.setDate(target.getDate() + 1);
+    return target - now;
+}
+function __snapshotToTimelapse(prefix) {
     return new Promise((resolve, reject) => {
         const timeBegin = Math.floor(Date.now() / 1000);
-        console.log(`Starting timelapse processing for ${prefix} at ${new Date().toISOString()}`);
+        console.log(`snapshots: timelapse: ${prefix} begin at ${new Date().toISOString()}`);
 
-        const snapshotsSrc = path.join(config.storage.snapshots, prefix);
-        const timelapseFile = path.join(config.storage.timelapse, `timelapse_${prefix}.mp4`);
+        const snapshotsSrc = getSnapshotDirectory(prefix);
+        const timelapseFile = getTimelapseFilename(prefix);
         const snapshotsFile = path.join('/tmp', `filelist_${prefix}.txt`);
-        if (!fs.existsSync(config.storage.timelapse)) fs.mkdirSync(config.storage.timelapse, { recursive: true });
         if (fs.existsSync(timelapseFile)) fs.unlinkSync(timelapseFile);
 
         const prepTimeBegin = Math.floor(Date.now() / 1000);
@@ -405,31 +320,27 @@ function snapshotToTimelapse(prefix) {
                 .sort()
                 .map((file) => path.join(snapshotsSrc, file));
         } catch (error) {
-            console.error(`Error reading snapshot directory: ${error.message}`);
+            console.error(`snapshots: timelapse: error reading directories: ${error.message}`);
             return reject(error);
         }
 
         if (files.length === 0) {
-            console.warn(`No snapshots found for prefix ${prefix}`);
+            console.warn(`snapshots: timelapse: ${prefix} no files found`);
             return resolve({
                 status: 'warning',
                 message: `No snapshots found for prefix ${prefix}`,
             });
         }
 
-        const fileListContent = files.map((file) => `file '${file}'`).join('\n');
-        fs.writeFileSync(snapshotsFile, fileListContent);
+        fs.writeFileSync(snapshotsFile, files.map((file) => `file '${file}'`).join('\n'));
         const snapshotsNumb = files.length;
         let snapshotsBytes = 0;
-        files.forEach((file) => {
-            snapshotsBytes += fs.statSync(file).size;
-        });
-        const snapshotsSize = formatSize(snapshotsBytes);
+        files.forEach((file) => (snapshotsBytes += fs.statSync(file).size));
+        const snapshotsSize = formatFileSize(snapshotsBytes);
 
-        const prepTimeEnd = Math.floor(Date.now() / 1000);
-        const prepTimeOverall = prepTimeEnd - prepTimeBegin;
-        console.log(`Generating from ${prefix} yielded ${snapshotsNumb} files with ${snapshotsSize} size`);
-        console.log(`[preparation: ${prepTimeOverall} seconds]`);
+        const preparationTime = Math.floor(Date.now() / 1000) - prepTimeBegin;
+        console.log(`snapshots: timelapse: ${prefix}: generation yielded ${snapshotsNumb} files with ${snapshotsSize} size`);
+        console.log(`snapshots: timelapse: ${prefix}: [preparation: ${preparationTime} seconds]`);
 
         const encodeTimeBegin = Math.floor(Date.now() / 1000);
 
@@ -437,36 +348,34 @@ function snapshotToTimelapse(prefix) {
         const ffmpegPreset = 'slow';
         const ffmpegCrf = 31;
         const ffmpegOpt = '';
-        const ffmpegCodec = `-c:v libx265 -crf ${ffmpegCrf}`;
-        const ffmpegCmd = `ffmpeg -f concat -safe 0 -i ${snapshotsFile} ${ffmpegCodec} -preset ${ffmpegPreset} -r ${ffmpegFps} ${ffmpegOpt} ${timelapseFile}`;
+        const ffmpegCodec = `-c:v libx265 -x265-params log-level=1 -crf ${ffmpegCrf}`;
+        const ffmpegCmd = `ffmpeg -hide_banner -loglevel warning -f concat -safe 0 -i ${snapshotsFile} ${ffmpegCodec} -preset ${ffmpegPreset} -r ${ffmpegFps} ${ffmpegOpt} ${timelapseFile}`;
 
-        const { exec } = require('childProcess');
-        console.log(`Executing command: ${ffmpegCmd}`);
+        const { exec } = require('child_process');
+        console.log(`snapshots: timelapse: ${prefix}: Executing command: ${ffmpegCmd}`);
 
         const ffmpegProcess = exec(ffmpegCmd, (error) => {
             if (error) {
-                console.error(`ffmpeg error: ${error.message}`);
+                console.error(`snapshots: timelapse: ${prefix}: ffmpeg error: ${error.message}`);
                 if (fs.existsSync(snapshotsFile)) fs.unlinkSync(snapshotsFile);
                 return reject(error);
             }
 
-            const encodeTimeEnd = Math.floor(Date.now() / 1000);
-            const encodeTimeOverall = encodeTimeEnd - encodeTimeBegin;
-            console.log(`[encoding: ${(snapshotsNumb / encodeTimeOverall).toFixed(2)} frames per second (real time)]`);
+            const encodingTime = Math.floor(Date.now() / 1000) - encodeTimeBegin;
+            console.log(`snapshots: timelapse: ${prefix}: [encoding: ${encodingTime} seconds, ${(snapshotsNumb / encodingTime).toFixed(2)} FPS]`);
 
-            const timeEnd = Math.floor(Date.now() / 1000);
-            const timeOverall = timeEnd - timeBegin;
-            console.log(`Completed processing at ${new Date().toISOString()}`);
-            console.log(`[execution: ${timeOverall} seconds]`);
+            const executionTime = Math.floor(Date.now() / 1000) - timeBegin;
+            console.log(`snapshots: timelapse: ${prefix}: Completed processing at ${new Date().toISOString()}`);
+            console.log(`snapshots: timelapse: ${prefix}: [execution: ${executionTime} seconds]`);
 
             const timelapseStats = fs.statSync(timelapseFile);
             const timelapseBytes = timelapseStats.size;
-            const timelapseSize = formatSize(timelapseBytes);
+            const timelapseSize = formatFileSize(timelapseBytes);
             const compressionRatio = (snapshotsBytes / timelapseBytes).toFixed(2);
 
-            console.log(`Processed ${snapshotsNumb} files with size ${snapshotsSize}`);
-            console.log(`Generated '${timelapseFile}' with size ${timelapseSize}`);
-            console.log(`Compression ratio: ${compressionRatio}:1`);
+            console.log(`snapshots: timelapse: ${prefix}: Processed ${snapshotsNumb} files with size ${snapshotsSize}`);
+            console.log(`snapshots: timelapse: ${prefix}: Generated '${timelapseFile}' with size ${timelapseSize}`);
+            console.log(`snapshots: timelapse: ${prefix}: Compression ratio: ${compressionRatio}:1`);
 
             if (fs.existsSync(snapshotsFile)) fs.unlinkSync(snapshotsFile);
 
@@ -478,81 +387,109 @@ function snapshotToTimelapse(prefix) {
                 timelapseFile,
                 timelapseSize,
                 compressionRatio,
-                executionTime: timeOverall,
+                executionTime,
             });
         });
 
         if (ffmpegProcess && ffmpegProcess.stderr)
             ffmpegProcess.stderr.on('data', (data) => {
-                console.log(`ffmpeg: ${data.toString().trim()}`);
+                console.log(`snapshots: timelapse: ${prefix}: ffmpeg: ${data.toString().trim()}`);
             });
     });
 }
 
-function msUntilNextTimelapseCheck() {
-    const now = new Date();
-    const target = new Date(now);
-    target.setHours(6, 0, 0, 0);
-    if (now >= target) target.setDate(target.getDate() + 1);
-    return target - now;
+const __snapshotReport = new ReportCounter('snapshots');
+
+function snapshotStore(type, message) {
+    if (type == 'imagedata') return __snapshotStoreImagedata(message);
+    else if (type == 'metadata') {
+        __snapshotReport.update();
+        return __snapshotStoreMetadata(message);
+    }
 }
 
-let timelapseTimer = null;
+async function snapshotCleanup(dateDir, snapshotDirPath) {
+    if (!fs.existsSync(snapshotDirPath)) return { dateDir, deleted: false };
+    try {
+        const getDirectorySize = (dirPath) => {
+            let totalSize = 0;
+            fs.readdirSync(dirPath).forEach((item) => {
+                const itemPath = path.join(dirPath, item);
+                const stats = fs.statSync(itemPath);
+                totalSize += stats.isDirectory() ? getDirectorySize(itemPath) : stats.size;
+            });
+            return totalSize;
+        };
+        const sizeBefore = getDirectorySize(snapshotDirPath);
+        const formattedSize = formatFileSize(sizeBefore);
+        await new Promise((resolve, reject) => {
+            rimraf(snapshotDirPath, (err) => {
+                if (err) reject(err);
+                else resolve();
+            });
+        });
+        console.log(`snapshots: cleanup: ${dateDir}, removed ${formattedSize} snapshots`);
+        return { dateDir, deleted: true, size: formattedSize };
+    } catch (error) {
+        console.error(`snapshots: cleanup: ${dateDir}, error processing: ${error.message}`);
+        throw error;
+    }
+}
 
-const NUMBER_OF_DAYS_BACKWARDS_TIMELAPSE = 1;
+async function snapshotMaintain() {
+    const cutoffDays = NUMBER_OF_DAYS_BACKWARDS_SNAPSHOTS;
+    const cutoffDateStr = getCutoffDate(cutoffDays);
+    const dateDirs = getCutoffDirectories(cutoffDateStr);
 
-function timelapseFromSnapshot() {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - NUMBER_OF_DAYS_BACKWARDS_TIMELAPSE);
-    const cutoffDateString = cutoffDate.toISOString().slice(0, 10).replace(/-/g, '');
-    const snapshotBasePath = config.storage.snapshots;
-    const snapshotDirs = fs
-        .readdirSync(snapshotBasePath)
-        .filter((dir) => fs.statSync(path.join(snapshotBasePath, dir)).isDirectory() && dir <= cutoffDateString);
-    console.log(`Timelapse check: Found ${snapshotDirs.length} snapshot directories older than ${NUMBER_OF_DAYS_BACKWARDS_TIMELAPSE} days`);
-    for (const dirPrefix of snapshotDirs) {
-        const timelapseFilePath = path.join(config.storage.timelapse, `timelapse_${dirPrefix}.mp4`);
-        if (!fs.existsSync(timelapseFilePath)) {
-            console.log(`Timelapse check: Generating timelapse for directory: ${dirPrefix}`);
-            snapshotToTimelapse(dirPrefix)
-                .then((result) => {
-                    console.log(`Successfully generated timelapse for ${dirPrefix}`);
-                    console.log(result);
-                })
-                .catch((error) => {
-                    console.error(`Failed to generate timelapse for ${dirPrefix}: ${error.message}`);
-                });
-        } else {
-            console.log(`Timelapse check: Timelapse already exists for ${dirPrefix}`);
+    console.log(`snapshots: maintenance: ${dateDirs.length} directories older than ${cutoffDateStr} (${cutoffDays} days) to cleanup`);
+    for (const dateDir of dateDirs) {
+        try {
+            if (fs.existsSync(getTimelapseFilename(dateDir))) await snapshotCleanup(dateDir, getSnapshotDirectory(dateDir));
+            else console.warning(`snapshots: maintenance: cannot discard ${dateDir} due to lack of timelapse`);
+        } catch (dirError) {
+            console.error(`snapshots: maintenance: error on maintenance for ${dateDir}: ${dirError.message}`);
         }
     }
+    if (dateDirs.length > 0) console.log('snapshots: maintenance: complete');
+}
+
+async function snapshotToTimelapse() {
+    const cutoffDays = NUMBER_OF_DAYS_BACKWARDS_TIMELAPSE;
+    const cutoffDateStr = getCutoffDate(cutoffDays);
+    const dateDirs = getCutoffDirectories(cutoffDateStr).filter((dir) => !fs.existsSync(getTimelapseFilename(dir)));
+
+    console.log(`snapshots: timelapse: ${dateDirs.length} directories older than ${cutoffDateStr} (${cutoffDays} days) to process`);
+    for (const dateDir of dateDirs) {
+        try {
+            console.log(`snapshots: timelapse: generating timelapse for: ${dateDir}`);
+            const result = await __snapshotToTimelapse(dateDir);
+            console.log(`snapshots: timelapse: generated timelapse for ${dateDir}: ${result}`);
+        } catch (error) {
+            console.error(`snapshots: timelapse: error generating timelapse for ${dateDir}: ${error.message}`);
+        }
+    }
+    if (dateDirs.length > 0) console.log('snapshots: timelapse: complete');
+
     snapshotMaintain();
 }
-function timelapseBegin() {
-    if (!config.storage.timelapse) config.storage.timelapse = path.join(config.storage.base || '/opt/storage', 'timelapse');
+
+function snapshotBegin() {
+    if (!fs.existsSync(config.storage.snapshots)) fs.mkdirSync(config.storage.snapshots, { recursive: true });
     if (!fs.existsSync(config.storage.timelapse)) fs.mkdirSync(config.storage.timelapse, { recursive: true });
     const timeToNextCheck = msUntilNextTimelapseCheck();
-    console.log(`Timelapse service started. Next check in ${Math.floor(timeToNextCheck / 1000 / 60)} minutes`);
     timelapseTimer = setTimeout(() => {
-        timelapseFromSnapshot();
-        timelapseTimer = setInterval(timelapseFromSnapshot, 24 * 60 * 60 * 1000);
+        snapshotToTimelapse();
+        timelapseTimer = setInterval(snapshotToTimelapse, 24 * 60 * 60 * 1000);
     }, timeToNextCheck);
+    console.log(`snapshots: timelapse: next check in ${Math.floor(timeToNextCheck / 1000 / 60)} minutes`);
 }
-function timelapseEnd() {
+function snapshotEnd() {
     if (timelapseTimer) {
         clearTimeout(timelapseTimer);
         clearInterval(timelapseTimer);
         timelapseTimer = null;
-        console.log('Timelapse service stopped');
     }
-}
-
-function snapshotBegin() {
-    timelapseBegin();
-}
-function snapshotEnd() {
-    timelapseEnd();
-    snapshotReport.stop();
+    __snapshotReport.end();
 }
 
 console.log(`Loaded 'archiver/snapshots' using 'path=${config.storage.snapshots}, path=${config.storage.timelapse}'`);
@@ -562,17 +499,16 @@ console.log(`Loaded 'archiver/snapshots' using 'path=${config.storage.snapshots}
 
 const archiverFunctions = {
     message: {
-        start: messageBegin,
-        stop: messageEnd,
+        begin: messageBegin,
+        end: messageEnd,
         process: (topic, message) => messageStore(topic, message.toString()),
     },
     snapshot: {
-        start: snapshotBegin,
-        stop: snapshotEnd,
+        begin: snapshotBegin,
+        end: snapshotEnd,
         process: (topic, message) => snapshotStore(topic.split('/')[1], message),
     },
 };
-
 const archiverConfig = {
     message: {
         enabled: true,
@@ -586,14 +522,14 @@ const archiverConfig = {
 
 function archiverBegin() {
     Object.entries(archiverConfig)
-        .filter(([type, config]) => config.enabled && archiverFunctions[type]?.start)
-        .forEach(([type]) => archiverFunctions[type].start());
+        .filter(([type, config]) => config.enabled && archiverFunctions[type]?.begin)
+        .forEach(([type]) => archiverFunctions[type].begin());
 }
 function archiverEnd() {
     Object.entries(archiverConfig)
         .reverse()
-        .filter(([type, config]) => config.enabled && archiverFunctions[type]?.stop)
-        .forEach(([type]) => archiverFunctions[type].stop());
+        .filter(([type, config]) => config.enabled && archiverFunctions[type]?.end)
+        .forEach(([type]) => archiverFunctions[type].end());
 }
 function archiverProcess(topic, message) {
     Object.entries(archiverConfig)
@@ -601,21 +537,32 @@ function archiverProcess(topic, message) {
         .forEach(([type]) => archiverFunctions[type].process(topic, message));
 }
 
-function store(topic, message) {
-    try {
-        archiverProcess(topic, message);
-    } catch (error) {
-        console.error(`collector: error processing message with 'topic=${topic}', error:`, error);
-    }
-}
-
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 let client = null;
 
+function mqttReceive(topic, message) {
+    try {
+        archiverProcess(topic, message);
+    } catch (error) {
+        console.error(`mqtt: receive error for message with 'topic=${topic}', error:`, error);
+    }
+}
+
+function mqttSubscribe() {
+    if (client) {
+        config.mqtt.topics.forEach((topic) =>
+            client.subscribe(topic, (err) => {
+                if (err) console.error(`mqtt: error subscribing to ${topic}:`, err);
+                else console.log(`mqtt: subscribed to ${topic}`);
+            })
+        );
+    }
+}
+
 function mqttBegin() {
-    console.log(`collector: mqtt: connecting to broker at ${config.mqtt.broker}`);
+    console.log(`mqtt: connecting to broker at ${config.mqtt.broker}`);
 
     const options = {
         clientId: config.mqtt.clientId,
@@ -626,35 +573,26 @@ function mqttBegin() {
     }
 
     client = mqtt.connect(config.mqtt.broker, options);
-    if (!client) return;
 
-    client.on('connect', () => {
-        console.log('collector: mqtt: connected');
-        config.mqtt.topics.forEach((topic) => {
-            client.subscribe(topic, (err) => {
-                if (err) console.error(`collector: mqtt: error subscribing to ${topic}:`, err);
-                else console.log(`collector: mqtt: subscribed to ${topic}`);
-            });
+    if (client) {
+        client.on('connect', () => {
+            console.log('mqtt: connected');
+            mqttSubscribe();
         });
-    });
-    client.on('message', (topic, message) => {
-        store(topic, message);
-    });
-    client.on('error', (err) => {
-        console.error('collector: mqtt: client error:', err);
-    });
-    client.on('offline', () => {
-        console.warn('collector: mqtt: client offline');
-    });
-    client.on('reconnect', () => {
-        console.log('collector: mqtt: client reconnecting');
-    });
+        client.on('message', (topic, message) => {
+            mqttReceive(topic, message);
+        });
+        client.on('error', (err) => console.error('mqtt: client error:', err));
+        client.on('offline', () => console.warn('mqtt: client offline'));
+        client.on('reconnect', () => console.log('mqtt: client reconnect'));
+    }
 }
 
 function mqttEnd() {
-    if (!client) return;
-    client.end();
-    client = null;
+    if (client) {
+        client.end();
+        client = null;
+    }
 }
 
 console.log(`Loaded 'mqtt' using 'broker=${config.mqtt.broker}'`);
@@ -665,11 +603,11 @@ console.log(`Loaded 'mqtt' using 'broker=${config.mqtt.broker}'`);
 function collectorBegin() {
     archiverBegin();
     mqttBegin();
-    console.log(`collector: started`);
+    console.log(`started`);
 }
 
 function collectorEnd() {
-    console.log(`collector: stopping`);
+    console.log(`stopping`);
     mqttEnd();
     archiverEnd();
     process.exit(0);
@@ -679,8 +617,8 @@ process.on('SIGINT', () => {
     collectorEnd();
 });
 
+//snapshotToTimelapse();
 collectorBegin();
-console.log(`press CTRL+C to exit`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------

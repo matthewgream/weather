@@ -1,10 +1,12 @@
 [Unit]
 Description=Weather Archiver Collector Snapshots Fetcher
 After=network.target
+Requires=archiver-storage.service
+After=archiver-storage.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c '/opt/weather/server/archiver/collector_snapshots_fetcher.sh $(date -d "yesterday" +%Y%m%d)'
+ExecStart=/bin/bash -c '/opt/weather/server/archiver/collector-snapshots-fetcher.sh $(date -d "yesterday" +%Y%m%d)'
 SuccessExitStatus=0
 
 [Install]

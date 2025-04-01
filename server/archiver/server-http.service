@@ -2,6 +2,8 @@
 Description=Weather Archiver Server HTTP
 Wants=network-online.target
 After=network-online.target
+Requires=archiver-storage.service
+After=archiver-storage.service
 
 [Service]
 Type=simple
@@ -10,6 +12,9 @@ ExecReload=kill -HUP $MAINPID
 KillMode=process
 Restart=on-failure
 RestartSec=5s
+TimeoutStopSec=10s
+KillSignal=SIGTERM
+SendSIGKILL=yes
 
 [Install]
 WantedBy=multi-user.target

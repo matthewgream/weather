@@ -9,7 +9,7 @@ if [ -z "$PREFIX" ]; then
     exit 1
 fi
 
-CFG="/opt/weather/server/archiver/collector_snapshots_fetcher.secrets"
+CFG="/opt/weather/server/archiver/collector-snapshots-fetcher.secrets"
 if [ -f "$CFG" ]; then
     source "$CFG"
 else
