@@ -260,10 +260,10 @@ function getWeatherInterpretation (location_data, data) {
 
     // Radiation Interpretation
     if (radiation !== null) {
-        if (radiation <= 20) {
-            // Background radiation in Sweden normally ranges from 5-20 CPM
+        if (radiation <= 30) {
+            // Background radiation in Sweden normally ranges from 5-30 CPM
             // Normal background radiation - no specific condition
-        } else if (radiation > 20 && radiation <= 50) {
+        } else if (radiation > 30 && radiation <= 50) {
             results.conditions.push('slightly elevated radiation');
             results.phenomena.push('above normal background radiation');
         } else if (radiation > 50 && radiation <= 100) {

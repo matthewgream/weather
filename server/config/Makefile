@@ -7,7 +7,7 @@ SYSTEMD_DIR = /etc/systemd/system
 define install_systemd_service
 	-systemctl stop $(1) 2>/dev/null || true
 	-systemctl disable $(1) 2>/dev/null || true
-	cp $(2).service $(SYSTEMD_DIR)/$(1)
+	cp $(2).service $(SYSTEMD_DIR)/$(1).service
 	systemctl daemon-reload
 	systemctl enable $(1)
 	systemctl start $(1) || echo "Warning: Failed to start $(1)"
