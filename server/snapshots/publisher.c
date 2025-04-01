@@ -29,7 +29,8 @@
 #include <time.h>
 #include <unistd.h>
 
-#define SNAPSHOT_INTERVAL 30
+#define MQTT_BROKER_DEFAULT "mqtt://localhost"
+#define SNAPSHOT_INTERVAL_DEFAULT 30
 
 #define MAX_BUFFER_SIZE 5 * 1024 * 1024 // 5MB
 
@@ -40,8 +41,9 @@
 #define MAX_CONFIG_LINE 256
 #define MAX_CONFIG_VALUE 512
 
-char config_mqtt_broker[MAX_CONFIG_VALUE] = "";
+char config_mqtt_broker[MAX_CONFIG_VALUE] = MQTT_BROKER_DEFAULT;
 char config_rtsp_url[MAX_CONFIG_VALUE] = "";
+int config_snapshot_interval = SNAPSHOT_INTERVAL_DEFAULT;
 
 bool config_load(int argc, const char **argv) {
     const char *path = CONFIG_FILE_DEFAULT;
@@ -73,12 +75,15 @@ bool config_load(int argc, const char **argv) {
                 strncpy(config_mqtt_broker, value, sizeof(config_mqtt_broker) - 1);
             } else if (strcmp(key, "RTSP") == 0) {
                 strncpy(config_rtsp_url, value, sizeof(config_rtsp_url) - 1);
+            } else if (strcmp(key, "SNAPSHOT_INTERVAL") == 0) {
+                config_snapshot_interval = atoi(value);
             }
         }
     }
     fclose(file);
-    printf("config: '%s': mqtt=%s, rtsp=%s\n", path, config_mqtt_broker, config_rtsp_url);
-    return (config_mqtt_broker[0] != '\0' && config_rtsp_url[0] != '\0');
+    printf("config: '%s': mqtt=%s, rtsp=%s, interval=%d\n", path, config_mqtt_broker, config_rtsp_url,
+           config_snapshot_interval);
+    return (config_rtsp_url[0] != '\0');
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -86,7 +91,8 @@ bool config_load(int argc, const char **argv) {
 
 struct mosquitto *mosq = NULL;
 
-void mqtt_connect_callback(struct mosquitto *mosq, void *obj, int result) {
+void mqtt_connect_callback(struct mosquitto *mosq __attribute__((unused)), void *obj __attribute__((unused)),
+                           int result) {
     if (result != 0) {
         fprintf(stderr, "mqtt: connect failed: %s\n", mosquitto_connack_string(result));
         return;
@@ -154,7 +160,7 @@ void mqtt_end(void) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-unsigned char snapshot_buffer[MAX_BUFFER_SIZE]; // will exist in the child, but better than repeated mallocs
+unsigned char snapshot_buffer[MAX_BUFFER_SIZE];
 int snapshot_skipped = 0;
 
 bool snapshot_capture(void) {
@@ -238,18 +244,18 @@ bool snapshot_capture(void) {
 }
 
 void snapshot_execute(volatile bool *running) {
-    printf("publisher: executing (interval=%d seconds)\n", SNAPSHOT_INTERVAL);
+    printf("publisher: executing (interval=%d seconds)\n", config_snapshot_interval);
     while (*running) {
         const time_t time_entry = time(NULL);
         if (!snapshot_capture()) {
             fprintf(stderr, "publisher: capture error, will retry\n");
         }
         const time_t time_leave = time(NULL);
-        time_t next = time_entry + SNAPSHOT_INTERVAL;
+        time_t next = time_entry + config_snapshot_interval;
         int skipped = 0;
         while (next < time_leave) {
             skipped++;
-            next += SNAPSHOT_INTERVAL;
+            next += config_snapshot_interval;
         }
         if (skipped) {
             snapshot_skipped += skipped;
@@ -265,7 +271,7 @@ void snapshot_execute(volatile bool *running) {
 
 volatile bool running = true;
 
-void signal_handler(int sig) {
+void signal_handler(int sig __attribute__((unused))) {
     printf("publisher: stopping\n");
     running = false;
 }

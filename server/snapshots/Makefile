@@ -1,6 +1,6 @@
 
 CC = gcc
-CFLAGS = -O6 -Wall -pedantic
+CFLAGS = -O6 -Wall -Wpedantic -Wextra
 LDFLAGS = -lmosquitto
 TARGET = publisher
 
@@ -22,7 +22,7 @@ install: $(TARGET)
 	systemctl start snapshots-$(TARGET)
 
 test: $(TARGET)
-	nice -10 ./publisher ../secrets.txt
+	./publisher ../secrets.txt
 
 .PHONY: all clean format
 
