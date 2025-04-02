@@ -147,6 +147,8 @@ function __snapshotToTimelapse(prefix) {
             const encodingTime = Math.floor(Date.now() / 1000) - encodeTimeBegin;
             console.log(`snapshots: timelapse: ${prefix}: encode finished (${encodingTime} seconds, ${(snapshotsNumb / encodingTime).toFixed(2)} FPS)`);
 
+            const timelapseStats = fs.statSync(timelapseFile);
+            if (fs.existsSync(snapshotsFile)) fs.unlinkSync(snapshotsFile);
             const timelapseBytes = timelapseStats.size;
             const timelapseSize = formatFileSize(timelapseBytes);
             const compressionRatio = (snapshotsBytes / timelapseBytes).toFixed(2);
@@ -154,9 +156,6 @@ function __snapshotToTimelapse(prefix) {
             console.log(
                 `snapshots: timelapse: ${prefix}: encode complete: snapshots='${snapshotsNumb}', size=${snapshotsSize} --> timelapse='${timelapseFile}', size=${timelapseSize} (${compressionRatio}:1)`
             );
-
-            const timelapseStats = fs.statSync(timelapseFile);
-            if (fs.existsSync(snapshotsFile)) fs.unlinkSync(snapshotsFile);
 
             resolve({
                 status: 'success',
