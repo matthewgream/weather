@@ -10,21 +10,7 @@ const path = require('path');
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const configPath = process.argv[2] || 'secrets.txt';
-function configLoad(configPath) {
-    try {
-        const items = {};
-        fs.readFileSync(configPath, 'utf8')
-            .split('\n')
-            .forEach((line) => {
-                const [key, value] = line.split('=').map((s) => s.trim());
-                if (key && value) items[key] = value;
-            });
-        return items;
-    } catch (err) {
-        console.warn(`Could not load '${configPath}', using defaults (which may not work correctly)`);
-        return {};
-    }
-}
+const { configLoad } = require('./server-functions.js');
 const conf = configLoad(configPath);
 const configList = Object.entries(conf)
     .map(([k, v]) => k.toLowerCase() + '=' + v)
@@ -78,14 +64,17 @@ console.log(`Loaded 'diagnostics' on '/requests'`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const sharp = require('sharp');
-const crypto = require('crypto');
-
+const { SnapshotThumbnailsManager, SnapshotDirectoryManager, SnapshotContentsManager, SnapshotTimelapseManager } = require('./server-functions-snapshot.js');
 const snapshotThumbnailsCacheSize = 2048;
 const snapshotThumbnailsCacheTtl = 60 * 60 * 1000;
 const snapshotThumbnailsWidthDefault = 200;
 const snapshotDirectory = conf.STORAGE + '/snapshots';
 const timelapseDirectory = conf.STORAGE + '/timelapse';
+
+//
+
+const sharp = require('sharp');
+const crypto = require('crypto');
 
 function getFormattedDate(date) {
     const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -101,7 +90,6 @@ function getThumbnailKey(file, width) {
     return crypto.createHash('md5').update(`${file}-${width}-${mtime}`).digest('hex');
 }
 
-const { SnapshotThumbnailsManager, SnapshotDirectoryManager, SnapshotContentsManager, TimelapseFileManager } = require('./server-functions-snapshot.js');
 const snapshotThumbnailsManager = new SnapshotThumbnailsManager({
     maxEntries: snapshotThumbnailsCacheSize,
     ttl: snapshotThumbnailsCacheTtl,
@@ -112,15 +100,17 @@ const snapshotDirectoryManager = new SnapshotDirectoryManager({
 const snapshotContentsManager = new SnapshotContentsManager({
     directory: snapshotDirectory,
 });
-const timelapseFileManager = new TimelapseFileManager({
+const snapshotTimelapseManager = new SnapshotTimelapseManager({
     directory: timelapseDirectory,
 });
 process.on('SIGTERM', () => {
     snapshotDirectoryManager.dispose();
     snapshotContentsManager.dispose();
     snapshotThumbnailsManager.dispose();
-    timelapseFileManager.dispose();
+    snapshotTimelapseManager.dispose();
 });
+
+//
 
 function getSnapshotListOfDates() {
     return {
@@ -135,7 +125,7 @@ function getSnapshotListForDate(date) {
 }
 function getTimelapseListOfFiles() {
     return {
-        entries: timelapseFileManager.getListOfFiles().map(({ file }) => ({ file, dateFormatted: getFormattedDate(file.slice(10, 18)) })),
+        entries: snapshotTimelapseManager.getListOfFiles().map(({ file }) => ({ file, dateFormatted: getFormattedDate(file.slice(10, 18)) })),
     };
 }
 function getSnapshotImageFilename(file) {
@@ -165,11 +155,12 @@ async function getSnapshotImageThumbnail(file, width) {
 function getTimelpaseVideoFilename(file) {
     const match = file.match(/timelapse_(\d{8})\.mp4$/);
     if (!match?.[1]) return undefined;
-    const date = match[1];
     const filePath = path.join(timelapseDirectory, file);
     if (!fs.existsSync(filePath)) return null;
     return filePath;
 }
+
+//
 
 xxx.get('/snapshot/list', function (req, res) {
     return res.render('server-snapshot-list', {

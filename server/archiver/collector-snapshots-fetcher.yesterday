@@ -1,0 +1,3 @@
+#!/bin/bash
+YESTERDAY=$(date -d "yesterday" +%Y%m%d)
+/opt/weather/server/archiver/collector-snapshots-fetcher.sh "$YESTERDAY"

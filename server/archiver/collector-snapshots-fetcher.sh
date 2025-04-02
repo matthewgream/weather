@@ -67,14 +67,14 @@ for i in "${!files_to_download[@]}"; do
     current_count=$((current_count + 1))
     echo -n "Downloading file $current_count/$total_count ($(numfmt --to=iec-i --suffix=B --format="%.2f" $current_size)/$(numfmt --to=iec-i --suffix=B --format="%.2f" $total_size)): $filename ... "
     ssh -i "$SSH_KEY" -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "cat $REMOTE_DIR/$filename" > "$LOCAL_DIR/$PREFIX/$filename"
-    if [ $? -eq 0 ]; then
-        echo "Done"
+    code=$?
+    progress_percent=$(( (current_size * 100) / total_size ))
+    if [ $code -eq 0 ]; then
+        echo "done ($progress_percent% complete)"
         current_size=$((current_size + filesize))
     else
-        echo "Failed"
+        echo "failed ($progress_percent% complete)"
     fi
-    progress_percent=$(( (current_size * 100) / total_size ))
-    echo "Progress: $progress_percent% complete"
 done
 
 

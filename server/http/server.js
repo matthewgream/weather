@@ -10,21 +10,7 @@ const path = require('path');
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const configPath = process.argv[2] || 'secrets.txt';
-function configLoad(configPath) {
-    try {
-        const items = {};
-        fs.readFileSync(configPath, 'utf8')
-            .split('\n')
-            .forEach((line) => {
-                const [key, value] = line.split('=').map((s) => s.trim());
-                if (key && value) items[key] = value;
-            });
-        return items;
-    } catch (err) {
-        console.warn(`Could not load '${configPath}', using defaults (which may not work correctly)`);
-        return {};
-    }
-}
+const { configLoad } = require('./server-functions.js');
 const conf = configLoad(configPath);
 const configList = Object.entries(conf)
     .map(([k, v]) => k.toLowerCase() + '=' + v)
@@ -131,29 +117,28 @@ mqtt_client.on('message', (topic, message) => {
     else if (topic === 'snapshots/metadata') snapshotReceiveMetadata(message);
     else variablesUpdate(topic, message);
 });
-console.log(`Loaded 'mqtt_subscriber' using '${conf.MQTT}'`);
+console.log(`Loaded 'mqtt:subscriber' using '${conf.MQTT}'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-xxx.get('/', function (req, res) {
-    res.render('server-mainview', {
-        vars: variablesRender(),
-    });
+/*
+const { createProxyMiddleware } = require('http-proxy-middleware');
+const TARGET_SERVER = 'http://workshop.local:80';
+const snapshotProxy = createProxyMiddleware({
+    target: TARGET_SERVER,
+    changeOrigin: true,
+    onProxyRes: (proxyRes, req, res) => {
+        console.log(`Proxied ${req.method} ${req.path} -> ${TARGET_SERVER} [${proxyRes.statusCode}]`);
+    },
+    onError: (err, req, res) => {
+        console.error('Proxy error:', err);
+        res.status(500).send('Proxy error occurred');
+    }
 });
-console.log(`Loaded '/' using 'server-mainview'`);
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-xxx.get('/vars', function (req, res) {
-    console.log(`/vars requested from '${req.headers['x-forwarded-for'] || req.connection.remoteAddress}'`);
-    res.json(variablesGet());
-});
-console.log(`Loaded 'vars/json' on '/vars'`);
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
+app.use('/snapshot/list', snapshotProxy);
+app.use('/snapshot/file', snapshotProxy);
+*/
 
 const snapshotsTime = (24 * 2 + 2) * 60 * 60; // 2 days + 2 hours, in seconds
 const snapshotsDir__ = conf.STORAGE + '/snapshots';
@@ -471,6 +456,8 @@ const image_dataManifest = (directory) =>
         }, {})
     );
 
+//
+
 xxx.get('/images/images.json', async (req, res) => {
     const url_base = `http://${conf.HOST}:${conf.PORT}/images/`;
     const manifest = image_dataManifest(data_images).map(({ filename, ...rest }) => ({ ...rest, url: url_base + filename }));
@@ -545,6 +532,25 @@ xxx.get('/sets', (req, res) => {
     }
 });
 console.log(`Loaded 'sets' on '/sets'`);
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+xxx.get('/vars', function (req, res) {
+    console.log(`/vars requested from '${req.headers['x-forwarded-for'] || req.connection.remoteAddress}'`);
+    res.json(variablesGet());
+});
+console.log(`Loaded 'vars' on '/vars'`);
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+xxx.get('/', function (req, res) {
+    res.render('server-mainview', {
+        vars: variablesRender(),
+    });
+});
+console.log(`Loaded '/' using 'server-mainview'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------

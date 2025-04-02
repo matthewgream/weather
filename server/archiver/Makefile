@@ -5,9 +5,9 @@ TARGET=collector.js
 ##
 
 prettier:
-	prettier --write $(TARGET)
+	prettier --write *.js
 lint:
-	eslint $(TARGET)
+	eslint *.js
 test:
 	node $(TARGET)
 .PHONY: prettier lint test

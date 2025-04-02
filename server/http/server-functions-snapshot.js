@@ -186,9 +186,9 @@ class SnapshotContentsManager {
         const numToClose = this.watchers.size - this.maxWatchers + 1; // +1 for the new one
         for (let i = 0; i < numToClose; i++) {
             if (i < entries.length) {
-                const [dateToClose] = entries[i];
+                const [date] = entries[i];
                 console.log(`SnapshotContentsManager(${this.snapshotsDir}): (date=${date}) watcher closed (limit reached)`);
-                this.closeWatcher(dateToClose);
+                this.closeWatcher(date);
             }
         }
     }
@@ -275,12 +275,10 @@ class SnapshotThumbnailsManager {
         const now = Date.now();
         const cacheKeys = Object.keys(this.cacheEntries);
         if (cacheKeys.length <= this.cacheLimit) {
-            let expiredCount = 0;
             cacheKeys.forEach((key) => {
                 if (now - this.cacheDetails[key].added > this.cacheTimeout) {
                     delete this.cacheEntries[key];
                     delete this.cacheDetails[key];
-                    expiredCount++;
                 }
             });
             return;
@@ -309,7 +307,7 @@ class SnapshotThumbnailsManager {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-class TimelapseFileManager {
+class SnapshotTimelapseManager {
     constructor({ directory }) {
         this.timelapseDir = directory;
         this.timelapseCache = [];
@@ -325,9 +323,9 @@ class TimelapseFileManager {
             this.timelapseCache = this.readTimelapseFiles();
             this.isInitialized = true;
             this.setupWatcher();
-            console.log(`TimelapseFileManager(${this.timelapseDir}): initialized with ${this.timelapseCache.length} entries`);
+            console.log(`SnapshotTimelapseManager(${this.timelapseDir}): initialized with ${this.timelapseCache.length} entries`);
         } catch (error) {
-            console.error(`TimelapseFileManager(${this.timelapseDir}): failed to initialize:`, error);
+            console.error(`SnapshotTimelapseManager(${this.timelapseDir}): failed to initialize:`, error);
         }
     }
     readTimelapseFiles() {
@@ -338,7 +336,7 @@ class TimelapseFileManager {
                 .sort((a, b) => b.localeCompare(a))
                 .map((file) => ({ file }));
         } catch (error) {
-            console.error(`TimelapseFileManager(${this.timelapseDir}): error reading directory:`, error);
+            console.error(`SnapshotTimelapseManager(${this.timelapseDir}): error reading directory:`, error);
             return [];
         }
     }
@@ -363,7 +361,7 @@ class TimelapseFileManager {
             if (fileName.startsWith('timelapse_') && fileName.endsWith('.mp4')) this.removeFileFromCache(fileName);
         });
         watcher.on('error', (error) => {
-            console.error(`TimelapseFileManager(${this.timelapseDir}): watcher error: ${error}`);
+            console.error(`SnapshotTimelapseManager(${this.timelapseDir}): watcher error: ${error}`);
         });
         this.watcher = watcher;
     }
@@ -377,7 +375,7 @@ class TimelapseFileManager {
                 filePath,
                 fileSizeBytes: fs.statSync(filePath).size,
             };
-            console.log(`TimelapseFileManager(${this.timelapseDir}): updated file: ${fileName}`);
+            console.log(`SnapshotTimelapseManager(${this.timelapseDir}): updated file: ${fileName}`);
         } else {
             this.timelapseCache.push({
                 file: fileName,
@@ -386,13 +384,13 @@ class TimelapseFileManager {
                 fileSizeBytes: fs.statSync(filePath).size,
             });
             this.timelapseCache.sort((a, b) => b.file.localeCompare(a.file));
-            console.log(`TimelapseFileManager(${this.timelapseDir}): adding new file: ${fileName}`);
+            console.log(`SnapshotTimelapseManager(${this.timelapseDir}): adding new file: ${fileName}`);
         }
     }
     removeFileFromCache(fileName) {
         const initialLength = this.timelapseCache.length;
         this.timelapseCache = this.timelapseCache.filter((item) => item.file !== fileName);
-        if (initialLength !== this.timelapseCache.length) console.log(`TimelapseFileManager(${this.timelapseDir}): removed file: ${fileName}`);
+        if (initialLength !== this.timelapseCache.length) console.log(`SnapshotTimelapseManager(${this.timelapseDir}): removed file: ${fileName}`);
     }
     getListOfFiles() {
         if (!this.isInitialized) this.initializeCache();
@@ -402,7 +400,7 @@ class TimelapseFileManager {
     checkCacheExpiry() {
         const now = Date.now();
         if (now - this.lastAccessed > this.expiryTime && this.isInitialized) {
-            console.log(`TimelapseFileManager(${this.timelapseDir}): flushing (inactivity timeout)`);
+            console.log(`SnapshotTimelapseManager(${this.timelapseDir}): flushing (inactivity timeout)`);
             this.closeWatcher();
             this.timelapseCache = [];
             this.isInitialized = false;
@@ -412,9 +410,9 @@ class TimelapseFileManager {
         if (this.watcher) {
             try {
                 this.watcher.close();
-                console.log(`TimelapseFileManager(${this.timelapseDir}): watcher closed`);
+                console.log(`SnapshotTimelapseManager(${this.timelapseDir}): watcher closed`);
             } catch (error) {
-                console.error(`TimelapseFileManager(${this.timelapseDir}): watcher error (on close):`, error);
+                console.error(`SnapshotTimelapseManager(${this.timelapseDir}): watcher error (on close):`, error);
             }
             this.watcher = null;
         }
@@ -427,7 +425,7 @@ class TimelapseFileManager {
         this.closeWatcher();
         this.timelapseCache = [];
         this.isInitialized = false;
-        console.log(`TimelapseFileManager(${this.timelapseDir}): disposed`);
+        console.log(`SnapshotTimelapseManager(${this.timelapseDir}): disposed`);
     }
 }
 
@@ -439,7 +437,7 @@ module.exports = {
     SnapshotDirectoryManager,
     SnapshotContentsManager,
     SnapshotThumbnailsManager,
-    TimelapseFileManager,
+    SnapshotTimelapseManager,
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
