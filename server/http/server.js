@@ -161,157 +161,6 @@ function snapshotTimestampParser(filename) {
     }
     return undefined;
 }
-async function snapshotLoad() {
-    try {
-        await fs.promises.mkdir(snapshotsDir__, { recursive: true });
-        const files = await fs.promises.readdir(snapshotsDir__);
-        snapshotsList__ = files
-            .filter((file) => file.match(/snapshot_\d{14}\.jpg/))
-            .sort((a, b) => (snapshotTimestampParser(b) || 0) - (snapshotTimestampParser(a) || 0));
-        console.log(`snapshot list loaded with ${snapshotsList__.length} existing files (with expiration of ${snapshotsTime / 60 / 60} hours)`);
-    } catch (error) {
-        console.error('Error loading snapshot list:', error);
-        throw error;
-    }
-}
-let __snapshotReceiveImagedata = null;
-function snapshotReceiveImagedata(message) {
-    __snapshotReceiveImagedata = message;
-}
-function snapshotReceiveMetadata(message) {
-    try {
-        if (!__snapshotReceiveImagedata) {
-            console.error('Received snapshot metadata but no image data is available');
-            return;
-        }
-        const metadata = JSON.parse(message.toString());
-        const filename = metadata.filename;
-        const shmPath = path.join('/dev/shm', filename);
-        const snapshotPath = path.join(snapshotsDir__, filename);
-        fs.writeFileSync(shmPath, __snapshotReceiveImagedata);
-        fs.writeFileSync(snapshotPath, __snapshotReceiveImagedata);
-        snapshotsList__.unshift(filename);
-        __snapshotReceiveImagedata = null;
-        console.log(`snapshot received: ${filename} (--> /dev/shm, --> ${snapshotsDir__})`);
-    } catch (error) {
-        console.error('Error processing snapshot metadata:', error);
-    }
-}
-async function preGenerateThumbnails(sourcePath, targetFilename) {
-    try {
-        await getSnapshotsImageThumbnail(targetFilename, THUMBNAIL_WIDTH);
-        if (targetFilename === 'snapshot.jpg') await getSnapshotsImageThumbnail(targetFilename, MAIN_CAMERA_WIDTH);
-    } catch (error) {
-        console.error(`Error pre-generating thumbnails for ${targetFilename}:`, error);
-    }
-}
-async function snapshotRebuild() {
-    if (snapshotsList__.length == 0) return;
-    const intervals = [15, 30, 45, 60];
-    const now = new Date();
-    let oldestNeededTimestamp = null;
-    const closestSnapshots = {};
-    for (const minutes of intervals) {
-        const targetTime = new Date(now.getTime() - minutes * 60 * 1000);
-        let closest = undefined;
-        let closestDiff = Infinity;
-        for (const file of snapshotsList__) {
-            try {
-                const fileTime = snapshotTimestampParser(file);
-                if (fileTime) {
-                    const diff = Math.abs(targetTime - fileTime);
-                    if (diff < closestDiff) {
-                        closestDiff = diff;
-                        closest = file;
-                    }
-                }
-            } catch (err) {
-                console.error(`Error comparing snapshot ${file}:`, err);
-            }
-        }
-        if (closest) {
-            closestSnapshots[minutes] = closest;
-            if (minutes === 60) oldestNeededTimestamp = snapshotTimestampParser(closest);
-        }
-    }
-    async function makelink(sourcePath, targetFilename) {
-        await preGenerateThumbnails(sourcePath, targetFilename);
-        try {
-            const symlinkPath = `/dev/shm/${targetFilename}`;
-            try {
-                fs.unlinkSync(symlinkPath);
-            } catch (err) {
-                if (err.code !== 'ENOENT') console.error(`Error removing symlink for ${symlinkPath}:`, err);
-            }
-            await fs.promises.symlink(sourcePath, symlinkPath);
-        } catch (err) {
-            console.error(`Error creating symlink for ${symlinkPath}:`, err);
-        }
-    }
-    for (const minutes of intervals)
-        if (closestSnapshots[minutes]) await makelink(path.join('/dev/shm', closestSnapshots[minutes]), `snapshot_M${minutes}.jpg`);
-    if (snapshotsList__.length > 0) await makelink(path.join('/dev/shm', snapshotsList__[0]), 'snapshot.jpg');
-    if (oldestNeededTimestamp) {
-        try {
-            const files = await fs.promises.readdir('/dev/shm');
-            for (const file of files) {
-                if (file.match(/snapshot_\d{14}\.jpg/) && !file.startsWith('snapshot_M')) {
-                    try {
-                        const fileTime = snapshotTimestampParser(file);
-                        if (fileTime && fileTime.getTime() < oldestNeededTimestamp.getTime() - 5 * 60 * 1000)
-                            await fs.promises.unlink(path.join('/dev/shm', file));
-                    } catch (err) {
-                        console.error(`Error processing file ${file} during cleanup:`, err);
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('Error cleaning up old snapshots in /dev/shm:', error);
-        }
-    }
-}
-async function snapshotCleanup() {
-    try {
-        const cleanupTime = new Date(new Date().getTime() - snapshotsTime * 1000);
-        const files = await fs.promises.readdir(snapshotsDir__);
-        for (const file of files) {
-            if (file.startsWith('snapshot_')) {
-                try {
-                    const fileTime = snapshotTimestampParser(file);
-                    if (fileTime && fileTime < cleanupTime) {
-                        const filePath = path.join(snapshotsDir__, file);
-                        await fs.promises.unlink(filePath);
-                        const index = snapshotsList__.indexOf(file);
-                        if (index !== -1) {
-                            console.log(`snapshot removed: ${file}`);
-                            snapshotsList__.splice(index, 1);
-                        }
-                    }
-                } catch (err) {
-                    console.error(`Error removing file ${file}:`, err);
-                }
-            }
-        }
-    } catch (error) {
-        console.error('Error updating snapshot:', error);
-    }
-}
-async function snapshotUpdate() {
-    snapshotRebuild();
-    snapshotCleanup();
-}
-async function snapshotInitialise() {
-    try {
-        await snapshotLoad();
-        snapshotUpdate();
-        setInterval(snapshotUpdate, 30000);
-        console.log('snapshot process started with frequency=30 seconds');
-    } catch (error) {
-        console.error('Failed to start snapshot process:', error);
-        throw error;
-    }
-}
-snapshotInitialise();
 
 //
 
@@ -345,6 +194,7 @@ function getSnapshotsImageFilename(file) {
     return undefined;
 }
 const sharp = require('sharp');
+const deasync = require('deasync');
 const crypto = require('crypto');
 const cacheEntries = {};
 const MAX_CACHE_ENTRIES = 32;
@@ -389,17 +239,170 @@ function cacheCleanup() {
     });
 }
 
-async function getSnapshotsImageThumbnail(file, width) {
+function getSnapshotsImageThumbnail(file, width) {
     const sourcePath = `/dev/shm/${file}`;
     if (!fs.existsSync(sourcePath)) return null;
     const mtime = fs.statSync(sourcePath).mtime.getTime();
     const cacheKey = crypto.createHash('md5').update(`${file}-${width}-${mtime}`).digest('hex');
     const cachedThumbnail = cacheRetrieve(cacheKey);
     if (cachedThumbnail) return cachedThumbnail;
-    const thumbnail = await sharp(sourcePath).resize(width).jpeg({ quality: 80 }).toBuffer();
+    //const thumbnail = await sharp(sourcePath).resize(width).jpeg({ quality: 80 }).toBuffer();
+    const pipeline = sharp(sourcePath)
+        .resize(width)
+        .jpeg({ quality: width > 200 ? 80 : 70 });
+    const thumbnail = deasync(pipeline.toBuffer.bind(pipeline))();
     cacheInsert(cacheKey, thumbnail);
     return thumbnail;
 }
+
+//
+
+function snapshotLoad() {
+    try {
+        fs.mkdirSync(snapshotsDir__, { recursive: true });
+        const files = fs.readdirSync(snapshotsDir__);
+        snapshotsList__ = files
+            .filter((file) => file.match(/snapshot_\d{14}\.jpg/))
+            .sort((a, b) => (snapshotTimestampParser(b) || 0) - (snapshotTimestampParser(a) || 0));
+        console.log(`snapshot list loaded with ${snapshotsList__.length} existing files (with expiration of ${snapshotsTime / 60 / 60} hours)`);
+    } catch (error) {
+        console.error('Error loading snapshot list:', error);
+        throw error;
+    }
+}
+let __snapshotReceiveImagedata = null;
+function snapshotReceiveImagedata(message) {
+    __snapshotReceiveImagedata = message;
+}
+function snapshotReceiveMetadata(message) {
+    try {
+        if (!__snapshotReceiveImagedata) {
+            console.error('Received snapshot metadata but no image data is available');
+            return;
+        }
+        const metadata = JSON.parse(message.toString());
+        const filename = metadata.filename;
+        const shmPath = path.join('/dev/shm', filename);
+        const snapshotPath = path.join(snapshotsDir__, filename);
+        fs.writeFileSync(shmPath, __snapshotReceiveImagedata);
+        fs.writeFileSync(snapshotPath, __snapshotReceiveImagedata);
+        snapshotsList__.unshift(filename);
+        __snapshotReceiveImagedata = null;
+        console.log(`snapshot received: ${filename} (--> /dev/shm, --> ${snapshotsDir__})`);
+    } catch (error) {
+        console.error('Error processing snapshot metadata:', error);
+    }
+}
+function __snapshotInstall(sourcePath, targetFilename, width) {
+    try {
+        getSnapshotsImageThumbnail(targetFilename, width);
+    } catch (error) {
+        console.error(`Error generating thumbnails for ${targetFilename}:`, error);
+    }
+    const symlinkPath = `/dev/shm/${targetFilename}`;
+    try {
+        fs.unlinkSync(symlinkPath);
+    } catch (err) {
+        if (err.code !== 'ENOENT') console.error(`Error removing symlink for ${symlinkPath}:`, err);
+    }
+    try {
+        fs.symlinkSync(sourcePath, symlinkPath);
+    } catch (err) {
+        console.error(`Error creating symlink for ${symlinkPath}:`, err);
+    }
+}
+function snapshotRebuild() {
+    if (snapshotsList__.length == 0) return;
+    const intervals = [15, 30, 45, 60];
+    const now = new Date();
+    let oldestNeededTimestamp = null;
+    const closestSnapshots = {};
+    for (const minutes of intervals) {
+        const targetTime = new Date(now.getTime() - minutes * 60 * 1000);
+        let closest = undefined;
+        let closestDiff = Infinity;
+        for (const file of snapshotsList__) {
+            try {
+                const fileTime = snapshotTimestampParser(file);
+                if (fileTime) {
+                    const diff = Math.abs(targetTime - fileTime);
+                    if (diff < closestDiff) {
+                        closestDiff = diff;
+                        closest = file;
+                    }
+                }
+            } catch (err) {
+                console.error(`Error comparing snapshot ${file}:`, err);
+            }
+        }
+        if (closest) {
+            closestSnapshots[minutes] = closest;
+            if (minutes === 60) oldestNeededTimestamp = snapshotTimestampParser(closest);
+        }
+    }
+    for (const minutes of intervals)
+        if (closestSnapshots[minutes]) __snapshotInstall(path.join('/dev/shm', closestSnapshots[minutes]), `snapshot_M${minutes}.jpg`, THUMBNAIL_WIDTH);
+    if (snapshotsList__.length > 0) __snapshotInstall(path.join('/dev/shm', snapshotsList__[0]), 'snapshot.jpg', MAIN_CAMERA_WIDTH);
+    if (oldestNeededTimestamp) {
+        try {
+            const files = fs.readdirSync('/dev/shm');
+            for (const file of files) {
+                if (file.match(/snapshot_\d{14}\.jpg/) && !file.startsWith('snapshot_M')) {
+                    try {
+                        const fileTime = snapshotTimestampParser(file);
+                        if (fileTime && fileTime.getTime() < oldestNeededTimestamp.getTime() - 5 * 60 * 1000) fs.unlinkSync(path.join('/dev/shm', file));
+                    } catch (err) {
+                        console.error(`Error processing file ${file} during cleanup:`, err);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error cleaning up old snapshots in /dev/shm:', error);
+        }
+    }
+}
+function snapshotCleanup() {
+    try {
+        const cleanupTime = new Date(new Date().getTime() - snapshotsTime * 1000);
+        const files = fs.readdirSync(snapshotsDir__);
+        for (const file of files) {
+            if (file.startsWith('snapshot_')) {
+                try {
+                    const fileTime = snapshotTimestampParser(file);
+                    if (fileTime && fileTime < cleanupTime) {
+                        const filePath = path.join(snapshotsDir__, file);
+                        fs.unlinkSync(filePath);
+                        const index = snapshotsList__.indexOf(file);
+                        if (index !== -1) {
+                            console.log(`snapshot removed: ${file}`);
+                            snapshotsList__.splice(index, 1);
+                        }
+                    }
+                } catch (err) {
+                    console.error(`Error removing file ${file}:`, err);
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error updating snapshot:', error);
+    }
+}
+function snapshotUpdate() {
+    snapshotRebuild();
+    snapshotCleanup();
+}
+function snapshotInitialise() {
+    try {
+        snapshotLoad();
+        snapshotUpdate();
+        setInterval(snapshotUpdate, 30000);
+        console.log('snapshot process started with frequency=30 seconds');
+    } catch (error) {
+        console.error('Failed to start snapshot process:', error);
+        throw error;
+    }
+}
+snapshotInitialise();
 
 //
 
@@ -421,11 +424,11 @@ xxx.get('/snapshot/file/:file', function (req, res) {
     if (!filename) return res.status(404).send('Snapshot not found');
     return res.sendFile(filename);
 });
-xxx.get('/snapshot/thumb/:file', async (req, res) => {
+xxx.get('/snapshot/thumb/:file', (req, res) => {
     const file = req.params.file;
     const width = parseInt(req.query.w) || THUMBNAIL_WIDTH;
     try {
-        const imagedata = await getSnapshotsImageThumbnail(file, width);
+        const imagedata = getSnapshotsImageThumbnail(file, width);
         if (imagedata == null) return res.status(404).send('Thumbnail not found');
         res.set('Content-Type', 'image/jpeg');
         res.set('Cache-Control', 'public, max-age=300');
@@ -436,6 +439,33 @@ xxx.get('/snapshot/thumb/:file', async (req, res) => {
     }
 });
 console.log(`Loaded 'snapshots' on '/snapshot', using 'thumbnail-cache-entries=${MAX_CACHE_ENTRIES}'`);
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+function __generateThumbnailsToRender() {
+    const thumbnails = {};
+    function makethumb(filename, width) {
+        try {
+            const imageBuffer = getSnapshotsImageThumbnail(filename, width);
+            if (imageBuffer) return `data:image/jpeg;base64,${imageBuffer.toString('base64')}`;
+        } catch (err) {
+            console.error(`Error getting thumbnail for ${filename}:`, err);
+            return null;
+        }
+    }
+    const intervals = [15, 30, 45, 60];
+    for (const minutes of intervals) thumbnails[`M${minutes}`] = makethumb(`snapshot_M${minutes}.jpg`, THUMBNAIL_WIDTH);
+    thumbnails['current'] = makethumb('snapshot.jpg', MAIN_CAMERA_WIDTH);
+    return thumbnails;
+}
+
+function dataRender() {
+    return {
+        thumbnails: __generateThumbnailsToRender(),
+    };
+}
+console.log(`Loaded 'data'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -459,7 +489,7 @@ const image_dataManifest = (directory) =>
 
 //
 
-xxx.get('/images/images.json', async (req, res) => {
+xxx.get('/images/images.json', (req, res) => {
     const url_base = `http://${conf.HOST}:${conf.PORT}/images/`;
     const manifest = image_dataManifest(data_images).map(({ filename, ...rest }) => ({ ...rest, url: url_base + filename }));
     console.log(
@@ -546,23 +576,10 @@ console.log(`Loaded 'vars' on '/vars'`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-xxx.get('/', async function (req, res) {
-    const thumbnails = {};
-    async function makethumb(filename, width) {
-        try {
-            const imageBuffer = await getSnapshotsImageThumbnail(filename, width);
-            if (imageBuffer) return `data:image/jpeg;base64,${imageBuffer.toString('base64')}`;
-        } catch (err) {
-            console.error(`Error getting thumbnail for ${filename}:`, err);
-            return null;
-        }
-    }
-    const intervals = [15, 30, 45, 60];
-    for (const minutes of intervals) thumbnails[`M${minutes}`] = await makethumb(`snapshot_M${minutes}.jpg`, THUMBNAIL_WIDTH);
-    thumbnails['current'] = await makethumb('snapshot.jpg', MAIN_CAMERA_WIDTH);
+xxx.get('/', function (req, res) {
     res.render('server-mainview', {
         vars: variablesRender(),
-        data: { thumbnails },
+        data: dataRender(),
     });
 });
 console.log(`Loaded '/' using 'server-mainview'`);
