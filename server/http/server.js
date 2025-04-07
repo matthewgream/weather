@@ -9,6 +9,9 @@ const path = require('path');
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+const MAIN_CAMERA_WIDTH = 600;
+const THUMBNAIL_WIDTH = 200;
+
 const configPath = process.argv[2] || 'secrets.txt';
 const { configLoad } = require('./server-functions.js');
 const conf = configLoad(configPath);
@@ -194,11 +197,20 @@ function snapshotReceiveMetadata(message) {
         console.error('Error processing snapshot metadata:', error);
     }
 }
+async function preGenerateThumbnails(sourcePath, targetFilename) {
+    try {
+        await getSnapshotsImageThumbnail(targetFilename, THUMBNAIL_WIDTH);
+        if (targetFilename === 'snapshot.jpg') await getSnapshotsImageThumbnail(targetFilename, MAIN_CAMERA_WIDTH);
+    } catch (error) {
+        console.error(`Error pre-generating thumbnails for ${targetFilename}:`, error);
+    }
+}
 async function snapshotRebuild() {
     if (snapshotsList__.length == 0) return;
     const intervals = [15, 30, 45, 60];
     const now = new Date();
     let oldestNeededTimestamp = null;
+    const closestSnapshots = {};
     for (const minutes of intervals) {
         const targetTime = new Date(now.getTime() - minutes * 60 * 1000);
         let closest = undefined;
@@ -218,37 +230,27 @@ async function snapshotRebuild() {
             }
         }
         if (closest) {
-            try {
-                const symlinkPath = `/dev/shm/snapshot_M${minutes}.jpg`;
-                const sourcePath = path.join('/dev/shm', closest);
-                if (minutes === 60) oldestNeededTimestamp = snapshotTimestampParser(closest);
-                try {
-                    fs.unlinkSync(symlinkPath);
-                } catch (err) {
-                    if (err.code !== 'ENOENT') console.error(`Error removing existing symlink for M${minutes}:`, err);
-                }
-                await fs.promises.symlink(sourcePath, symlinkPath);
-                //console.log(`snapshot (M${minutes}): ${symlinkPath} -> ${sourcePath}`);
-            } catch (err) {
-                console.error(`Error creating symlink for snapshot(M${minutes}):`, err);
-            }
+            closestSnapshots[minutes] = closest;
+            if (minutes === 60) oldestNeededTimestamp = snapshotTimestampParser(closest);
         }
     }
-    if (snapshotsList__.length > 0) {
-        const symlinkPath = `/dev/shm/snapshot.jpg`;
-        const sourcePath = path.join('/dev/shm', snapshotsList__[0]);
+    async function makelink(sourcePath, targetFilename) {
+        await preGenerateThumbnails(sourcePath, targetFilename);
         try {
+            const symlinkPath = `/dev/shm/${targetFilename}`;
             try {
                 fs.unlinkSync(symlinkPath);
             } catch (err) {
-                if (err.code !== 'ENOENT') console.error(`Error removing existing symlink for current snapshot:`, err);
+                if (err.code !== 'ENOENT') console.error(`Error removing symlink for ${symlinkPath}:`, err);
             }
             await fs.promises.symlink(sourcePath, symlinkPath);
-            //console.log(`snapshot (current): ${symlinkPath} -> ${sourcePath}`);
         } catch (err) {
-            console.error(`Error creating symlink for snapshot(current):`, err);
+            console.error(`Error creating symlink for ${symlinkPath}:`, err);
         }
     }
+    for (const minutes of intervals)
+        if (closestSnapshots[minutes]) await makelink(path.join('/dev/shm', closestSnapshots[minutes]), `snapshot_M${minutes}.jpg`);
+    if (snapshotsList__.length > 0) await makelink(path.join('/dev/shm', snapshotsList__[0]), 'snapshot.jpg');
     if (oldestNeededTimestamp) {
         try {
             const files = await fs.promises.readdir('/dev/shm');
@@ -257,7 +259,6 @@ async function snapshotRebuild() {
                     try {
                         const fileTime = snapshotTimestampParser(file);
                         if (fileTime && fileTime.getTime() < oldestNeededTimestamp.getTime() - 5 * 60 * 1000)
-                            // Add 5-minute buffer to avoid removing files we might need
                             await fs.promises.unlink(path.join('/dev/shm', file));
                     } catch (err) {
                         console.error(`Error processing file ${file} during cleanup:`, err);
@@ -422,7 +423,7 @@ xxx.get('/snapshot/file/:file', function (req, res) {
 });
 xxx.get('/snapshot/thumb/:file', async (req, res) => {
     const file = req.params.file;
-    const width = parseInt(req.query.w) || 200;
+    const width = parseInt(req.query.w) || THUMBNAIL_WIDTH;
     try {
         const imagedata = await getSnapshotsImageThumbnail(file, width);
         if (imagedata == null) return res.status(404).send('Thumbnail not found');
@@ -545,8 +546,6 @@ console.log(`Loaded 'vars' on '/vars'`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const MAIN_CAMERA_WIDTH = 600;
-
 xxx.get('/', async function (req, res) {
     const thumbnails = {};
     async function makethumb(filename, width) {
@@ -559,8 +558,8 @@ xxx.get('/', async function (req, res) {
         }
     }
     const intervals = [15, 30, 45, 60];
-    for (const minutes of intervals) thumbnails[`M${minutes}`] = await makethumb(`snapshot_M${minutes}.jpg`, 200);
-    thumbnails['current'] = await makethumb('snapshot.jpg', MAIN_CAMERA_WIDTH || 600);
+    for (const minutes of intervals) thumbnails[`M${minutes}`] = await makethumb(`snapshot_M${minutes}.jpg`, THUMBNAIL_WIDTH);
+    thumbnails['current'] = await makethumb('snapshot.jpg', MAIN_CAMERA_WIDTH);
     res.render('server-mainview', {
         vars: variablesRender(),
         data: { thumbnails },
