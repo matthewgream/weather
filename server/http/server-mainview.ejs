@@ -14,7 +14,7 @@
     <script src="/static/js/weather.js"></script>
     <script src="/static/js/mainview.js"></script>
     <script>
-        create(<%- JSON.stringify(vars) %>);
+        create(<%- JSON.stringify(vars) %>, <%- JSON.stringify(data) %>);
         io().on('update', update);
     </script>
 </body>

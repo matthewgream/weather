@@ -395,7 +395,7 @@ async function getSnapshotsImageThumbnail(file, width) {
     const cacheKey = crypto.createHash('md5').update(`${file}-${width}-${mtime}`).digest('hex');
     const cachedThumbnail = cacheRetrieve(cacheKey);
     if (cachedThumbnail) return cachedThumbnail;
-    const thumbnail = await sharp(sourcePath).resize(width).jpeg({ quality: 70 }).toBuffer();
+    const thumbnail = await sharp(sourcePath).resize(width).jpeg({ quality: 80 }).toBuffer();
     cacheInsert(cacheKey, thumbnail);
     return thumbnail;
 }
@@ -545,9 +545,25 @@ console.log(`Loaded 'vars' on '/vars'`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-xxx.get('/', function (req, res) {
+const MAIN_CAMERA_WIDTH = 600;
+
+xxx.get('/', async function (req, res) {
+    const thumbnails = {};
+    async function makethumb(filename, width) {
+        try {
+            const imageBuffer = await getSnapshotsImageThumbnail(filename, width);
+            if (imageBuffer) return `data:image/jpeg;base64,${imageBuffer.toString('base64')}`;
+        } catch (err) {
+            console.error(`Error getting thumbnail for ${filename}:`, err);
+            return null;
+        }
+    }
+    const intervals = [15, 30, 45, 60];
+    for (const minutes of intervals) thumbnails[`M${minutes}`] = await makethumb(`snapshot_M${minutes}.jpg`, 200);
+    thumbnails['current'] = await makethumb('snapshot.jpg', MAIN_CAMERA_WIDTH || 600);
     res.render('server-mainview', {
         vars: variablesRender(),
+        data: { thumbnails },
     });
 });
 console.log(`Loaded '/' using 'server-mainview'`);

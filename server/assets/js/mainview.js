@@ -309,7 +309,13 @@ const thumbnails = [
     { file: 'snapshot_M60.jpg', label: 'T-60mins' },
 ];
 
-const getThumbnailUrl = (file, now) => `/snapshot/thumb/${file}?w=200&t=${now}`;
+const getThumbnailUrl = (file, now, data) => {
+    if (data) {
+        const min = file.match(/snapshot_M(\d+)\.jpg/);
+        if (min && data[`M${min[1]}`]) return data[`M${min[1]}`];
+    }
+    return `/snapshot/thumb/${file}?w=200&t=${now}`;
+};
 const getThumbnailDay = (now) => `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
 
 function updateSectionThumbs() {
@@ -320,7 +326,7 @@ function updateSectionThumbs() {
         if (element) element.src = getThumbnailUrl(thumbnail.file, now);
     });
 }
-function createSectionThumbs() {
+function createSectionThumbs(data) {
     setTimeout(() => updateSectionThumbs(), UPDATE_THUMBS_PERIOD);
     const now = Date.now();
     const thumbnailsBoxes = thumbnails
@@ -328,7 +334,7 @@ function createSectionThumbs() {
             return `
             <div class="thumbnail-container">
                 <a href="/${thumbnail.file}" target="_blank">
-                    <img src="${getThumbnailUrl(thumbnail.file, now)}" alt="${thumbnail.label}" class="thumbnail-image" data-thumbnail="${thumbnail.file}">
+                    <img src="${getThumbnailUrl(thumbnail.file, now, data)}" alt="${thumbnail.label}" class="thumbnail-image" data-thumbnail="${thumbnail.file}">
                     <div class="thumbnail-label">${thumbnail.label}</div>
                 </a>
             </div>
@@ -354,24 +360,26 @@ function createSectionThumbs() {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const UPDATE_CAMERA_PERIOD = 30 * 1000;
+const MAIN_CAMERA_WIDTH = 600;
 
 function updateSectionCamera() {
     setTimeout(() => updateSectionCamera(), UPDATE_CAMERA_PERIOD);
     const element = document.getElementById('main-camera');
-    if (element) element.src = '/snapshot.jpg?t=' + Date.now();
+    if (element) element.src = `/snapshot.jpg?w=${MAIN_CAMERA_WIDTH}&t=${Date.now()}`;
 }
-function createSectionCamera(mode) {
+function createSectionCamera(mode, data) {
     setTimeout(() => updateSectionCamera(), UPDATE_CAMERA_PERIOD);
+    const img = data?.thumbnails?.['current'] ? data.thumbnails['current'] : `/snapshot/thumb/snapshot.jpg?w=${MAIN_CAMERA_WIDTH}&t=${Date.now()}`;
     return `
         <section class="section">
             ${mode === 'text' ? '' : '<h2>Camera</h2>'}
         	<div class="camera-container">
             	<a href="/snapshot.jpg" target="_blank" id="main-camera-link">
-                	<img src="/snapshot.jpg" alt="Camera View" id="main-camera" class="weather-camera">
+                	<img src="${img}" alt="Camera View" id="main-camera" class="weather-camera">
                 	<div class="camera-hint">Click to view full size</div>
             	</a>
             	<div class="thumbnails-row" id="thumbnails-row">
-                	${createSectionThumbs()}
+                	${createSectionThumbs(data?.thumbnails)}
             	</div>
         	</div>
         </section>
@@ -456,7 +464,7 @@ function update(vars) {
     updateSectionTime(mode, vars);
 }
 
-function create(vars) {
+function create(vars, data) {
     varsLast = vars;
     const mode = getMode();
 
@@ -464,7 +472,7 @@ function create(vars) {
         displayMode(mode),
         createBanner(mode, vars),
         createSectionData(mode, vars),
-        createSectionCamera(mode),
+        createSectionCamera(mode, data),
         createSectionTime(mode, vars),
         createSectionLinks(mode),
     ].join('');
