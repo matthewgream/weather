@@ -365,7 +365,7 @@ const MAIN_CAMERA_WIDTH = 600;
 function updateSectionCamera() {
     setTimeout(() => updateSectionCamera(), UPDATE_CAMERA_PERIOD);
     const element = document.getElementById('main-camera');
-    if (element) element.src = `/snapshot.jpg?w=${MAIN_CAMERA_WIDTH}&t=${Date.now()}`;
+    if (element) element.src = `/snapshot/thumb/snapshot.jpg?w=${MAIN_CAMERA_WIDTH}&t=${Date.now()}`;
 }
 function createSectionCamera(mode, data) {
     setTimeout(() => updateSectionCamera(), UPDATE_CAMERA_PERIOD);
@@ -453,7 +453,10 @@ const displayMode = (mode) => `
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+const varsInterval = 30 * 1000;
+let varsOffset = 1 * 1000;
 let varsLast;
+let varsTimer;
 
 function update(vars) {
     varsLast = vars;
@@ -462,6 +465,38 @@ function update(vars) {
     updateBanner(mode, vars);
     updateSectionData(mode, vars);
     updateSectionTime(mode, vars);
+}
+
+function request() {
+    fetch('/vars')
+        .then((response) => {
+            if (!response.ok) throw new Error('Error fetching vars: network failure');
+            return response.json();
+        })
+        .then((vars) => {
+            if (locate(vars, CONFIG.var_timestamp) == locate(varsLast, CONFIG.var_timestamp)) varsOffset += 1000;
+            else update(vars);
+            schedule(vars);
+        })
+        .catch((error) => {
+            console.error('Error fetching vars:', error);
+            if (varsTimer) clearTimeout(varsTimer);
+            varsTimer = setTimeout(request, varsInterval);
+        });
+}
+
+function schedule(vars) {
+    if (varsTimer) clearTimeout(varsTimer);
+    const time = locate(vars, CONFIG.var_timestamp);
+    if (time) {
+        const timeSinceUpdate = new Date() - new Date(time.replace(/([+-]\d{2})Z$/, '$1:00'));
+        const timeUntilUpdate = varsInterval - (timeSinceUpdate % varsInterval) + varsOffset;
+        varsTimer = setTimeout(request, timeUntilUpdate);
+        console.log(`vars next update in ${timeUntilUpdate / 1000}s (interval=${varsInterval / 1000}s, offset=${varsOffset / 1000}s)`);
+    } else {
+        varsOffset = 1 * 1000;
+        varsTimer = setTimeout(request, varsInterval);
+    }
 }
 
 function create(vars, data) {
@@ -476,6 +511,8 @@ function create(vars, data) {
         createSectionTime(mode, vars),
         createSectionLinks(mode),
     ].join('');
+
+    schedule(vars);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

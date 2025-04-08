@@ -25,7 +25,7 @@ const __generateDescription = (results) => {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function getWeatherInterpretation (location_data, data) {
+function getWeatherInterpretation(location_data, data) {
     const {
         temp,
         humidity,
@@ -38,7 +38,7 @@ function getWeatherInterpretation (location_data, data) {
         snowDepth,
         iceDepth,
         cloudCover = null,
-        season = getSeason (location_data.hemisphere),
+        season = getSeason(location_data.hemisphere),
     } = data;
 
     const dewPoint = calculateDewPoint(temp, humidity);
@@ -418,7 +418,7 @@ function getWeatherInterpretation (location_data, data) {
     results.description = __generateDescription(results);
 
     return results;
-};
+}
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------

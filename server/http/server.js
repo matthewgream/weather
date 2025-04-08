@@ -66,18 +66,16 @@ console.log(`Loaded 'static' using '/static -> ${data_assets}'`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const server_diagnostics = require('./server-functions-diagnostics')(xxx, '/diagnostics');
-console.log(`Loaded 'diagnostics' on '/diagnostics'`);
+const server_diagnostics = require('./server-functions-diagnostics')(xxx, '/status_requests');
+console.log(`Loaded 'diagnostics' on '/status_requests'`);
+xxx.use(require('express-status-monitor')({ port: 8080, path: '/status_system' }));
+console.log(`Loaded 'express-status-monitor' on '/status_system'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const http = require('http');
-const https = require('https');
-const httpsServer = https.createServer(credentials, xxx);
-const httpServer = http.createServer(xxx);
-const socket = require('socket.io')(httpsServer);
-console.log(`Loaded 'socket_io' using 'https'`);
+// const socket = require('socket.io')(httpsServer);
+// console.log(`Loaded 'socket_io' using 'https'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -95,7 +93,7 @@ function variablesUpdate(topic, message) {
     else return;
     if (vars.includes(topic)) {
         console.log(`variables: '${topic}' --> '${JSON.stringify(variablesSet[topic])}'`);
-        socket.emit('update', variablesRender());
+        // socket.emit('update', variablesRender());
     }
 }
 function variablesInitialise(xxx) {
@@ -508,6 +506,11 @@ xxx.use((req, res) => {
     console.error(`  Route path: ${req.path}`);
     res.status(404).send('not found');
 });
+
+const http = require('http');
+const https = require('https');
+const httpsServer = https.createServer(credentials, xxx);
+const httpServer = http.createServer(xxx);
 
 httpServer.listen(80, () => {
     console.log(`Loaded 'http' using 'port=${httpServer.address().port}'`);
