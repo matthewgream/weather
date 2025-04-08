@@ -192,7 +192,7 @@ class DiagnosticsManager {
         app.use(this.requestStats.createMiddleware());
         return this;
     }
-    setupStatsRoute(app, route = '/requests') {
+    setupStatsRoute(app, route) {
         const self = this;
         app.get(route, (req, res) => {
             const limit = req.query.limit ? parseInt(req.query.limit) : self.defaultLogLimit;
@@ -200,7 +200,7 @@ class DiagnosticsManager {
         });
         return this;
     }
-    setup(app, route = '/requests') {
+    setup(app, route) {
         return this.setupMorgan(app).setupRequestTracking(app).setupStatsRoute(app, route);
     }
     getStats() {
@@ -214,8 +214,10 @@ class DiagnosticsManager {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-module.exports = function (options) {
-    return new DiagnosticsManager(options);
+module.exports = function (xxx, route = '/diagnostics', options = {}) {
+    const diagnosticsManager = new DiagnosticsManager(options);
+    diagnosticsManager.setup(xxx, route);
+    return diagnosticsManager;
 };
 
 module.exports.MemoryLogsManager = MemoryLogsManager;

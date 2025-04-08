@@ -57,9 +57,8 @@ console.log(`Loaded 'static' using '/static -> ${data_assets}'`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const requestStatsManager = require('./server-functions-diagnostics');
-requestStatsManager().setup(xxx);
-console.log(`Loaded 'diagnostics' on '/requests'`);
+const server_diagnostics = require('./server-functions-diagnostics')(xxx, '/diagnostics');
+console.log(`Loaded 'diagnostics' on '/diagnostics'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -162,22 +161,22 @@ function getTimelpaseVideoFilename(file) {
 
 //
 
-xxx.get('/snapshot/list', function (req, res) {
+xxx.get('/snapshot/list', (req, res) => {
     return res.render('server-snapshot-list', {
         snapshotList: getSnapshotListOfDates(),
         timelapseList: getTimelapseListOfFiles(),
     });
 });
-xxx.get('/snapshot/list/:date', function (req, res) {
+xxx.get('/snapshot/list/:date', (req, res) => {
     return res.render('server-snapshot-date', getSnapshotListForDate(req.params.date));
 });
-xxx.get('/snapshot/file/:file', function (req, res) {
+xxx.get('/snapshot/file/:file', (req, res) => {
     const file = req.params.file;
     const filename = getSnapshotImageFilename(file);
     if (!filename) return res.status(404).send('Snapshot not found');
     return res.sendFile(filename);
 });
-xxx.get('/timelapse/file/:file', function (req, res) {
+xxx.get('/timelapse/file/:file', (req, res) => {
     const file = req.params.file;
     const filename = getTimelpaseVideoFilename(file);
     if (!filename) return res.status(404).send('Timelapse not found');
@@ -203,7 +202,7 @@ console.log(`Loaded 'snapshots' on '/snapshot', using 'thumbnail-cache-entries=$
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-xxx.get('/', function (req, res) {
+xxx.get('/', (req, res) => {
     return res.redirect('/snapshot/list');
 });
 console.log(`Loaded '/' using '/snapshot/list'`);
@@ -211,9 +210,10 @@ console.log(`Loaded '/' using '/snapshot/list'`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-xxx.use(function (req, res) {
-    const clientIP = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-    console.error(`[${new Date().toISOString()}] 404 Not Found: ${req.method} ${req.url} from ${clientIP}`);
+xxx.use((req, res) => {
+    console.error(
+        `[${new Date().toISOString()}] 404 Not Found: ${req.method} ${req.url} from ${req.headers['x-forwarded-for'] || req.connection.remoteAddress}`
+    );
     console.error(`  User-Agent: ${req.headers['user-agent']}`);
     console.error(`  Referrer: ${req.headers['referer'] || 'none'}`);
     console.error(`  Route path: ${req.path}`);
@@ -221,11 +221,11 @@ xxx.use(function (req, res) {
 });
 
 const httpServer = require('http').createServer(xxx);
-httpServer.listen(80, function () {
+httpServer.listen(80, () => {
     console.log(`Loaded 'http' using 'port=${httpServer.address().port}'`);
 });
 const httpsServer = require('https').createServer(credentials, xxx);
-httpsServer.listen(443, function () {
+httpsServer.listen(443, () => {
     console.log(`Loaded 'https' using 'port=${httpsServer.address().port}'`);
 });
 

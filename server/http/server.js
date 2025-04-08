@@ -66,9 +66,8 @@ console.log(`Loaded 'static' using '/static -> ${data_assets}'`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const requestStatsManager = require('./server-functions-diagnostics');
-requestStatsManager().setup(xxx);
-console.log(`Loaded 'diagnostics' on '/requests'`);
+const server_diagnostics = require('./server-functions-diagnostics')(xxx, '/diagnostics');
+console.log(`Loaded 'diagnostics' on '/diagnostics'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -87,9 +86,6 @@ const { formatInTimeZone } = require('date-fns-tz');
 const getTimestamp = (tz) => formatInTimeZone(new Date(), tz, "yyyy-MM-dd'T'HH:mm:ssXXX'Z'").replace(":00'Z", 'Z');
 
 const variablesSet = {};
-function variablesGet() {
-    return variablesSet;
-}
 function variablesRender() {
     return Object.fromEntries(vars.map((topic) => [topic, variablesSet[topic]]));
 }
@@ -101,6 +97,12 @@ function variablesUpdate(topic, message) {
         console.log(`variables: '${topic}' --> '${JSON.stringify(variablesSet[topic])}'`);
         socket.emit('update', variablesRender());
     }
+}
+function variablesInitialise(xxx) {
+    xxx.get('/vars', (req, res) => {
+        console.log(`/vars requested from '${req.headers['x-forwarded-for'] || req.connection.remoteAddress}'`);
+        res.json(variablesSet);
+    });
 }
 console.log(`Loaded 'variables' using '${vars.join(', ')}'`);
 
@@ -194,7 +196,6 @@ function getSnapshotsImageFilename(file) {
     return undefined;
 }
 const sharp = require('sharp');
-const deasync = require('deasync');
 const crypto = require('crypto');
 const cacheEntries = {};
 const MAX_CACHE_ENTRIES = 32;
@@ -239,18 +240,17 @@ function cacheCleanup() {
     });
 }
 
-function getSnapshotsImageThumbnail(file, width) {
+async function getSnapshotsImageThumbnail(file, width) {
     const sourcePath = `/dev/shm/${file}`;
     if (!fs.existsSync(sourcePath)) return null;
     const mtime = fs.statSync(sourcePath).mtime.getTime();
     const cacheKey = crypto.createHash('md5').update(`${file}-${width}-${mtime}`).digest('hex');
     const cachedThumbnail = cacheRetrieve(cacheKey);
     if (cachedThumbnail) return cachedThumbnail;
-    //const thumbnail = await sharp(sourcePath).resize(width).jpeg({ quality: 80 }).toBuffer();
-    const pipeline = sharp(sourcePath)
+    const thumbnail = await sharp(sourcePath)
         .resize(width)
-        .jpeg({ quality: width > 200 ? 80 : 70 });
-    const thumbnail = deasync(pipeline.toBuffer.bind(pipeline))();
+        .jpeg({ quality: width > 200 ? 80 : 70 })
+        .toBuffer();
     cacheInsert(cacheKey, thumbnail);
     return thumbnail;
 }
@@ -293,9 +293,9 @@ function snapshotReceiveMetadata(message) {
         console.error('Error processing snapshot metadata:', error);
     }
 }
-function __snapshotInstall(sourcePath, targetFilename, width) {
+async function __snapshotInstall(sourcePath, targetFilename, width) {
     try {
-        getSnapshotsImageThumbnail(targetFilename, width);
+        await getSnapshotsImageThumbnail(targetFilename, width);
     } catch (error) {
         console.error(`Error generating thumbnails for ${targetFilename}:`, error);
     }
@@ -311,7 +311,7 @@ function __snapshotInstall(sourcePath, targetFilename, width) {
         console.error(`Error creating symlink for ${symlinkPath}:`, err);
     }
 }
-function snapshotRebuild() {
+async function snapshotRebuild() {
     if (snapshotsList__.length == 0) return;
     const intervals = [15, 30, 45, 60];
     const now = new Date();
@@ -341,8 +341,8 @@ function snapshotRebuild() {
         }
     }
     for (const minutes of intervals)
-        if (closestSnapshots[minutes]) __snapshotInstall(path.join('/dev/shm', closestSnapshots[minutes]), `snapshot_M${minutes}.jpg`, THUMBNAIL_WIDTH);
-    if (snapshotsList__.length > 0) __snapshotInstall(path.join('/dev/shm', snapshotsList__[0]), 'snapshot.jpg', MAIN_CAMERA_WIDTH);
+        if (closestSnapshots[minutes]) await __snapshotInstall(path.join('/dev/shm', closestSnapshots[minutes]), `snapshot_M${minutes}.jpg`, THUMBNAIL_WIDTH);
+    if (snapshotsList__.length > 0) await __snapshotInstall(path.join('/dev/shm', snapshotsList__[0]), 'snapshot.jpg', MAIN_CAMERA_WIDTH);
     if (oldestNeededTimestamp) {
         try {
             const files = fs.readdirSync('/dev/shm');
@@ -406,29 +406,29 @@ snapshotInitialise();
 
 //
 
-xxx.get('/snapshot/list', function (req, res) {
+xxx.get('/snapshot/list', (req, res) => {
     return res.render('server-snapshot-list', {
         entries: getSnapshotsListOfDates(),
     });
 });
-xxx.get('/snapshot/list/:date', function (req, res) {
+xxx.get('/snapshot/list/:date', (req, res) => {
     const date = req.params.date;
     return res.render('server-snapshot-date', {
         dateFormatted: getFormattedDate(date),
         entries: getSnapshotsListForDate(date),
     });
 });
-xxx.get('/snapshot/file/:file', function (req, res) {
+xxx.get('/snapshot/file/:file', (req, res) => {
     const file = req.params.file;
     const filename = getSnapshotsImageFilename(file);
     if (!filename) return res.status(404).send('Snapshot not found');
     return res.sendFile(filename);
 });
-xxx.get('/snapshot/thumb/:file', (req, res) => {
+xxx.get('/snapshot/thumb/:file', async (req, res) => {
     const file = req.params.file;
     const width = parseInt(req.query.w) || THUMBNAIL_WIDTH;
     try {
-        const imagedata = getSnapshotsImageThumbnail(file, width);
+        const imagedata = await getSnapshotsImageThumbnail(file, width);
         if (imagedata == null) return res.status(404).send('Thumbnail not found');
         res.set('Content-Type', 'image/jpeg');
         res.set('Cache-Control', 'public, max-age=300');
@@ -443,11 +443,11 @@ console.log(`Loaded 'snapshots' on '/snapshot', using 'thumbnail-cache-entries=$
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function __generateThumbnailsToRender() {
+async function __generateThumbnailsToRender() {
     const thumbnails = {};
-    function makethumb(filename, width) {
+    async function makethumb(filename, width) {
         try {
-            const imageBuffer = getSnapshotsImageThumbnail(filename, width);
+            const imageBuffer = await getSnapshotsImageThumbnail(filename, width);
             if (imageBuffer) return `data:image/jpeg;base64,${imageBuffer.toString('base64')}`;
         } catch (err) {
             console.error(`Error getting thumbnail for ${filename}:`, err);
@@ -455,14 +455,14 @@ function __generateThumbnailsToRender() {
         }
     }
     const intervals = [15, 30, 45, 60];
-    for (const minutes of intervals) thumbnails[`M${minutes}`] = makethumb(`snapshot_M${minutes}.jpg`, THUMBNAIL_WIDTH);
-    thumbnails['current'] = makethumb('snapshot.jpg', MAIN_CAMERA_WIDTH);
+    for (const minutes of intervals) thumbnails[`M${minutes}`] = await makethumb(`snapshot_M${minutes}.jpg`, THUMBNAIL_WIDTH);
+    thumbnails['current'] = await makethumb('snapshot.jpg', MAIN_CAMERA_WIDTH);
     return thumbnails;
 }
 
-function dataRender() {
+async function dataRender() {
     return {
-        thumbnails: __generateThumbnailsToRender(),
+        thumbnails: await __generateThumbnailsToRender(),
     };
 }
 console.log(`Loaded 'data'`);
@@ -470,136 +470,49 @@ console.log(`Loaded 'data'`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const zlib = require('zlib');
-const multer = require('multer');
-
-const image_upload = multer({ dest: '/tmp' });
-const image_dataType = (filename) => filename.match(/^([^_]+)/)?.[1] || '';
-const image_dataVersion = (filename) => filename.match(/_v(\d+\.\d+\.\d+)/)?.[1] || '';
-const image_dataCompress = (data) => zlib.deflateSync(data);
-const image_dataManifest = (directory) =>
-    Object.values(
-        fs.readdirSync(directory).reduce((images, filename) => {
-            const type = image_dataType(filename),
-                version = image_dataVersion(filename);
-            if (!images[type] || images[type].version < version) images[type] = { type, version, filename };
-            return images;
-        }, {})
-    );
-
-//
-
-xxx.get('/images/images.json', (req, res) => {
-    const url_base = `http://${conf.HOST}:${conf.PORT}/images/`;
-    const manifest = image_dataManifest(data_images).map(({ filename, ...rest }) => ({ ...rest, url: url_base + filename }));
-    console.log(
-        `/images manifest request: ${manifest.length} items, ${JSON.stringify(manifest).length} bytes, types = ${manifest.map((item) => item.type).join(', ')}, version = ${req.query.version || 'unspecified'}`
-    );
-    res.json(manifest);
-});
-xxx.put('/images', image_upload.single('image'), (req, res) => {
-    if (!req.file) {
-        console.error(`/images upload failed: file not provided`);
-        return res.status(400).send('File not provided');
-    }
-    if (!req.file.originalname || !image_dataType(req.file.originalname) || !image_dataVersion(req.file.originalname)) {
-        console.error(`/images upload failed: file has no name or has bad type/version (received '${req.file.originalname}')`);
-        return res.status(400).send('File has no name or bad type/version');
-    }
-    if (fs.existsSync(path.join(data_images, req.file.originalname) + '.zz')) {
-        console.error(`/images upload failed: file already exists as '${path.join(data_images, req.file.originalname)}'`);
-        return res.status(409).send('File with this name already exists');
-    }
-    try {
-        const uploadedName = req.file.originalname,
-            uploadedData = fs.readFileSync(req.file.path);
-        fs.unlinkSync(req.file.path);
-        const compressedName = path.join(data_images, uploadedName) + '.zz',
-            compressedData = image_dataCompress(uploadedData);
-        fs.writeFileSync(compressedName, compressedData);
-        console.log(
-            `/images upload succeeded: '${uploadedName}' (${uploadedData.length} bytes) --> '${compressedName}' (${compressedData.length} bytes) [${req.headers['x-forwarded-for'] || req.connection.remoteAddress}]`
-        );
-        res.send('File uploaded, compressed, and saved successfully.');
-    } catch (error) {
-        console.error(`/images upload failed: error <<<${error}>>> [${req.headers['x-forwarded-for'] || req.connection.remoteAddress}]`);
-        res.status(500).send('File upload error');
-    }
-});
-xxx.get('/images/:filename', (req, res) => {
-    const downloadName = req.params.filename,
-        downloadPath = path.join(data_images, downloadName);
-    try {
-        res.set('Content-Type', 'application/octet-stream');
-        res.send(fs.readFileSync(downloadPath));
-        console.log(`/images download succeeded: ${downloadName} (${downloadPath})`);
-    } catch (error) {
-        console.error(`/images download failed: ${downloadName} (${downloadPath}), error <<<${error}>>>`);
-        res.status(404).send('File not found');
-    }
-});
-console.log(`Loaded 'images' on '/images'`);
+const server_images = require('./server-functions-images.js')(xxx, data_images, conf.HOST, conf.PORT);
+console.log(`Loaded 'images' on '/images' using 'images=${data_images}'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-xxx.get('/sets', (req, res) => {
-    const { mac } = req.query;
-    if (!mac) {
-        console.error(`/sets request failed: no mac address provided`);
-        return res.status(400).json({ error: 'MAC address required' });
-    }
-    try {
-        const sets = JSON.parse(fs.readFileSync(path.join(__dirname, 'client.json'), 'utf8'));
-        if (!sets[mac]) {
-            console.log(`/sets request failed: no client for ${mac}`);
-            return res.status(404).json({ error: 'MAC address unknown' });
-        }
-        res.json(sets[mac]);
-        console.log(`/sets request succeeded: ${mac}`);
-    } catch (error) {
-        console.error(`/sets request failed: error reading client file, error <<${error}>>`);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-console.log(`Loaded 'sets' on '/sets'`);
+const server_sets = require('./server-functions-sets.js')(xxx, 'client.json', __dirname);
+console.log(`Loaded 'sets' on '/sets' using 'source=${__dirname}/client.json'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-xxx.get('/vars', function (req, res) {
-    console.log(`/vars requested from '${req.headers['x-forwarded-for'] || req.connection.remoteAddress}'`);
-    res.json(variablesGet());
-});
+const server_vars = variablesInitialise(xxx);
 console.log(`Loaded 'vars' on '/vars'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-xxx.get('/', function (req, res) {
+xxx.get('/', async (req, res) => {
     res.render('server-mainview', {
         vars: variablesRender(),
-        data: dataRender(),
+        data: await dataRender(),
     });
 });
-console.log(`Loaded '/' using 'server-mainview'`);
+console.log(`Loaded '/' using 'server-mainview' && data/vars`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-xxx.use(function (req, res) {
-    const clientIP = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-    console.error(`[${new Date().toISOString()}] 404 Not Found: ${req.method} ${req.url} from ${clientIP}`);
+xxx.use((req, res) => {
+    console.error(
+        `[${new Date().toISOString()}] 404 Not Found: ${req.method} ${req.url} from ${req.headers['x-forwarded-for'] || req.connection.remoteAddress}`
+    );
     console.error(`  User-Agent: ${req.headers['user-agent']}`);
     console.error(`  Referrer: ${req.headers['referer'] || 'none'}`);
     console.error(`  Route path: ${req.path}`);
     res.status(404).send('not found');
 });
 
-httpServer.listen(80, function () {
+httpServer.listen(80, () => {
     console.log(`Loaded 'http' using 'port=${httpServer.address().port}'`);
 });
-httpsServer.listen(443, function () {
+httpsServer.listen(443, () => {
     console.log(`Loaded 'https' using 'port=${httpsServer.address().port}'`);
 });
 
