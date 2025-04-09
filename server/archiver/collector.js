@@ -233,7 +233,7 @@ function mqttEnd() {
 function collectorBegin() {
     archiverBegin();
     mqttBegin(archiverProcess);
-    console.log(`started (reporting-period=${REPORT_PERIOD_DEFAULT}m)`);
+    console.log(`started (reporting-period=${REPORT_PERIOD_DEFAULT} mins)`);
 }
 
 function collectorEnd() {
