@@ -88,32 +88,33 @@ function msUntilNextTimelapseCheck() {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function __snapshotToTimelapse(prefix) {
+function __snapshotToTimelapse(dateDir) {
+    const prefix = `snapshots: timelapse: ${dateDir}: encode `;
     return new Promise((resolve, reject) => {
-        console.log(`snapshots: timelapse: ${prefix}: encode begin ${new Date().toISOString()}`);
+        console.log(prefix + `begin ${new Date().toISOString()}`);
 
-        const snapshotsSrc = getSnapshotDirectory(prefix);
-        const timelapseFile = getTimelapseFilename(prefix);
-        const snapshotsFile = path.join('/tmp', `filelist_${prefix}.txt`);
+        const snapshotsSrc = getSnapshotDirectory(dateDir);
+        const timelapseFile = getTimelapseFilename(dateDir);
+        const snapshotsFile = path.join('/tmp', `filelist_${dateDir}.txt`);
         if (fs.existsSync(timelapseFile)) fs.unlinkSync(timelapseFile);
 
         let files;
         try {
             files = fs
                 .readdirSync(snapshotsSrc)
-                .filter((file) => file.startsWith(`snapshot_${prefix}`))
+                .filter((file) => file.startsWith(`snapshot_${dateDir}`))
                 .sort()
                 .map((file) => path.join(snapshotsSrc, file));
         } catch (error) {
-            console.error(`snapshots: timelapse: ${prefix}: encode error reading files: ${error.message}`);
+            console.error(prefix + `error reading files: ${error.message}`);
             return reject(error);
         }
 
         if (files.length === 0) {
-            console.warn(`snapshots: timelapse: ${prefix}: encode found no files`);
+            console.warn(prefix + `found no files`);
             return resolve({
                 status: 'warning',
-                message: `No snapshots found for prefix ${prefix}`,
+                message: `No snapshots found for directory ${dateDir}`,
             });
         }
 
@@ -123,7 +124,7 @@ function __snapshotToTimelapse(prefix) {
         files.forEach((file) => (snapshotsBytes += fs.statSync(file).size));
         const snapshotsSize = formatFileSize(snapshotsBytes);
 
-        console.log(`snapshots: timelapse: ${prefix}: encode using files='${snapshotsNumb}', size=${snapshotsSize}`);
+        console.log(prefix + `using files='${snapshotsNumb}', size=${snapshotsSize}`);
 
         const encodeTimeBegin = Math.floor(Date.now() / 1000);
 
@@ -135,17 +136,17 @@ function __snapshotToTimelapse(prefix) {
         const ffmpegCmd = `ffmpeg -hide_banner -loglevel warning -f concat -safe 0 -i ${snapshotsFile} ${ffmpegCodec} -preset ${ffmpegPreset} -r ${ffmpegFps} ${ffmpegOpt} ${timelapseFile}`;
 
         const { exec } = require('child_process');
-        console.log(`snapshots: timelapse: ${prefix}: encode ffmpeg: '${ffmpegCmd}'`);
+        console.log(prefix + `execute ffmpeg: '${ffmpegCmd}'`);
 
         const ffmpegProcess = exec(ffmpegCmd, (error) => {
             if (error) {
-                console.error(`snapshots: timelapse: ${prefix}: encode ffmpeg: error: ${error.message}`);
+                console.error(prefix + `error (ffmpeg execute): ${error.message}`);
                 if (fs.existsSync(snapshotsFile)) fs.unlinkSync(snapshotsFile);
                 return reject(error);
             }
 
             const encodingTime = Math.floor(Date.now() / 1000) - encodeTimeBegin;
-            console.log(`snapshots: timelapse: ${prefix}: encode finished (${encodingTime} seconds, ${(snapshotsNumb / encodingTime).toFixed(2)} FPS)`);
+            console.log(prefix + `finished (${encodingTime}s, ${(snapshotsNumb / encodingTime).toFixed(2)} FPS)`);
 
             const timelapseStats = fs.statSync(timelapseFile);
             if (fs.existsSync(snapshotsFile)) fs.unlinkSync(snapshotsFile);
@@ -154,12 +155,13 @@ function __snapshotToTimelapse(prefix) {
             const compressionRatio = (snapshotsBytes / timelapseBytes).toFixed(2);
 
             console.log(
-                `snapshots: timelapse: ${prefix}: encode complete: snapshots='${snapshotsNumb}', size=${snapshotsSize} --> timelapse='${timelapseFile}', size=${timelapseSize} (${compressionRatio}:1)`
+                prefix +
+                    `complete: snapshots='${snapshotsNumb}', size=${snapshotsSize} --> timelapse='${timelapseFile}', size=${timelapseSize} (${compressionRatio}:1)`
             );
 
             resolve({
                 status: 'success',
-                prefix,
+                dateDir,
                 snapshotsNumb,
                 snapshotsSize,
                 timelapseFile,
@@ -171,7 +173,7 @@ function __snapshotToTimelapse(prefix) {
 
         if (ffmpegProcess && ffmpegProcess.stderr)
             ffmpegProcess.stderr.on('data', (data) => {
-                console.log(`snapshots: timelapse: ${prefix}: encode ffmpeg: ${data.toString().trim()}`);
+                console.log(prefix + `execute ffmpeg: ${data.toString().trim()}`);
             });
     });
 }
@@ -180,6 +182,7 @@ function __snapshotToTimelapse(prefix) {
 
 async function snapshotCleanup(dateDir, snapshotDirPath) {
     if (!fs.existsSync(snapshotDirPath)) return { dateDir, deleted: false };
+    const prefix = `snapshots: cleanup: ${dateDir}: `;
     try {
         const getDirectorySize = (dirPath) => {
             let totalSize = 0;
@@ -198,10 +201,10 @@ async function snapshotCleanup(dateDir, snapshotDirPath) {
                 else resolve();
             });
         });
-        console.log(`snapshots: cleanup: ${dateDir}: removed ${formattedSize} snapshots`);
+        console.log(prefix + `removed ${formattedSize} snapshots`);
         return { dateDir, deleted: true, size: formattedSize };
     } catch (error) {
-        console.error(`snapshots: cleanup: ${dateDir}: error (exception): ${error.message}`);
+        console.error(prefix + `error (exception): ${error.message}`);
         throw error;
     }
 }
@@ -213,16 +216,19 @@ async function snapshotMaintain() {
     const cutoffDateStr = getCutoffDate(cutoffDays);
     const dateDirs = getCutoffDirectories(cutoffDateStr);
 
-    console.log(`snapshots: maintenance: ${dateDirs.length} directories older than ${cutoffDateStr} (${cutoffDays} days) to cleanup`);
+    const prefix = `snapshot: maintenance: `;
+    console.log(prefix + `${dateDirs.length} directories older than ${cutoffDateStr} (${cutoffDays} days) to cleanup`);
+    if (dateDirs.length == 0) return;
+    console.log(prefix + 'begin');
     for (const dateDir of dateDirs) {
         try {
             if (fs.existsSync(getTimelapseFilename(dateDir))) await snapshotCleanup(dateDir, getSnapshotDirectory(dateDir));
-            else console.warn(`snapshots: maintenance: ${dateDir}: cannot discard due to lack of timelapse`);
+            else console.warn(prefix + `${dateDir}: cannot discard due to lack of timelapse`);
         } catch (dirError) {
-            console.error(`snapshots: maintenance: ${dateDir}: error (exception): ${dirError.message}`);
+            console.error(prefix + `${dateDir}: error (exception): ${dirError.message}`);
         }
     }
-    if (dateDirs.length > 0) console.log('snapshots: maintenance: complete');
+    console.log(prefix + 'complete');
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -232,19 +238,21 @@ async function snapshotToTimelapse() {
     const cutoffDateStr = getCutoffDate(cutoffDays);
     const dateDirs = getCutoffDirectories(cutoffDateStr).filter((dir) => !fs.existsSync(getTimelapseFilename(dir)));
 
-    console.log(`snapshots: timelapse: ${dateDirs.length} directories older than ${cutoffDateStr} (${cutoffDays} days) to process`);
+    const prefix = `snapshot: timelapse: `;
+    console.log(prefix + `${dateDirs.length} directories older than ${cutoffDateStr} (${cutoffDays} days) to process`);
+    if (dateDirs.length == 0) return;
+    console.log(prefix + 'begin');
     for (const dateDir of dateDirs) {
         try {
-            console.log(`snapshots: timelapse: ${dateDir}: generating`);
+            console.log(prefix + `${dateDir}: generating`);
             const result = await __snapshotToTimelapse(dateDir);
-            console.log(`snapshots: timelapse: ${dateDir}: generated (${JSON.stringify(result)})`);
+            //console.log(`snapshots: timelapse: ${dateDir}: generated (${JSON.stringify(result)})`);
+            console.log(prefix + `${dateDir}: generated`);
         } catch (error) {
-            console.error(`snapshots: timelapse: ${dateDir}: error (exception): ${error.message}`);
+            console.error(prefix + `${dateDir}: error (exception): ${error.message}`);
         }
     }
-    if (dateDirs.length > 0) console.log('snapshots: timelapse: complete');
-
-    snapshotMaintain();
+    console.log(prefix + 'complete');
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -264,10 +272,12 @@ function snapshotBegin(config) {
     const timeToNextCheck = msUntilNextTimelapseCheck();
     __timelapseTimer = setTimeout(() => {
         snapshotToTimelapse();
+        snapshotMaintain();
         __timelapseTimer = setInterval(snapshotToTimelapse, 24 * 60 * 60 * 1000);
     }, timeToNextCheck);
     console.log(`snapshots: timelapse: startup check, then next check in ${Math.floor(timeToNextCheck / 1000 / 60)} minutes`);
     snapshotToTimelapse();
+    snapshotMaintain();
     console.log(`snapshots: loaded using 'snapshots-path=${__snapshotsDirectory}, timelapse-path=${__timelapseDirectory}'`);
 }
 

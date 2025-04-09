@@ -3,7 +3,10 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const REPORT_PERIOD_DEFAULT = 15; // report output every this many minutes
+const REPORT_PERIOD_DEFAULT = 30; // report output every this many minutes
+const MONTHLY_CHECK_HOUR = 4; // Run monthly tasks after 4:00 AM on the first day of each month
+const DAILY_CHECK_HOUR = 2; // Run monthly tasks after 2:00 AM on the first day of each month
+const SCHEDULER_CHECK_INTERVAL = 60 * 60 * 1000; // Check every 60 minutes if tasks should run
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -57,53 +60,108 @@ let archiverLoaded = false;
 
 const { ReportCounter } = require('./collector-functions.js');
 
-const archiverSpec = {
-    messages: require('./collector-messages.js'),
-    snapshots: require('./collector-snapshots.js'),
-};
-
 const archiverConf = {
     messages: {
         enabled: true,
+        functions: require('./collector-messages.js'),
         topicPattern: (topic) => topic.startsWith('weather/') || topic.startsWith('sensors/'),
     },
     snapshots: {
         enabled: true,
+        functions: require('./collector-snapshots.js'),
         topicPattern: (topic) => topic.startsWith('snapshots/'),
     },
 };
 
 const archiverExec = {};
 
-function archiverBegin() {
+function __archiverExecute(name, func) {
     Object.entries(archiverConf)
-        .filter(([type, conf]) => conf.enabled && archiverSpec[type]?.begin)
-        .forEach(([type]) => {
-            archiverSpec[type].begin(config);
-            archiverExec[type] = { report: new ReportCounter({ label: type, period: REPORT_PERIOD_DEFAULT }) };
+        .filter(([type, conf]) => conf.enabled && conf.functions?.[name])
+        .forEach(([type, conf]) => {
+            try {
+                if (!func || func(type, conf)) conf.functions[name]();
+            } catch (error) {
+                console.error(`archiver: ${name}: error executing for ${type}:`, error);
+            }
         });
-    archiverLoaded = true;
+}
+
+const archiverTasks = {
+    daily: {
+        lastRun: '',
+        getTimestamp: (now) => now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0'),
+        shouldRun: (now, timestamp, lastRun) => timestamp !== lastRun && now.getHours() >= DAILY_CHECK_HOUR,
+    },
+    monthly: {
+        lastRun: '',
+        getTimestamp: (now) => now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0'),
+        shouldRun: (now, timestamp, lastRun) => timestamp !== lastRun && now.getDate() === 1 && now.getHours() >= MONTHLY_CHECK_HOUR,
+    },
+};
+
+function __archiverPeriodic() {
+    const now = new Date();
+    Object.entries(archiverTasks).forEach(([name, task]) => {
+        const timestamp = task.getTimestamp(now);
+        const prefix = `archiver: ${name}: ${timestamp} `;
+        if (task.shouldRun(now, timestamp, task.lastRun)) {
+            console.log(prefix + `running`);
+            __archiverExecute(name, (type, conf) => {
+                console.log(prefix + `running for ${type}`);
+                return true;
+            });
+            task.lastRun = timestamp;
+        }
+    });
+}
+
+let __archiverPeriodicInterval = null;
+function __archiverPeriodicBegin() {
+    __archiverPeriodic();
+    __archiverPeriodicInterval = setInterval(__archiverPeriodic, SCHEDULER_CHECK_INTERVAL);
+}
+function __archiverPeriodicEnd() {
+    if (__archiverPeriodicInterval) {
+        clearInterval(__archiverPeriodicInterval);
+        __archiverPeriodicInterval = null;
+    }
+}
+
+function archiverBegin() {
+    if (!archiverLoaded) {
+        __archiverExecute('begin', (type, conf) => {
+            conf.functions.begin(config);
+            archiverExec[type] = { report: new ReportCounter({ label: type, period: REPORT_PERIOD_DEFAULT }) };
+            return false; // skip inbuilt call
+        });
+        __archiverPeriodicBegin();
+        archiverLoaded = true;
+    }
 }
 
 function archiverEnd() {
-    if (!archiverLoaded) return;
-    Object.entries(archiverConf)
-        .reverse()
-        .filter(([type, conf]) => conf.enabled && archiverSpec[type]?.end)
-        .forEach(([type]) => {
-            archiverSpec[type].end();
+    if (archiverLoaded) {
+        __archiverPeriodicEnd();
+        __archiverExecute('end', (type, conf) => {
             archiverExec[type].report.end();
+            delete archiverExec[type].report;
+            return true;
         });
+        archiverLoaded = false;
+    }
 }
 
 function archiverProcess(topic, message) {
-    if (!archiverLoaded) return;
-    Object.entries(archiverConf)
-        .filter(([type, conf]) => conf.enabled && archiverSpec[type]?.process && conf.topicPattern(topic))
-        .forEach(([type]) => {
-            archiverSpec[type].process(topic, message);
-            archiverExec[type].report.update(topic);
+    if (archiverLoaded) {
+        __archiverExecute('process', (type, conf) => {
+            if (conf.topicPattern(topic)) {
+                conf.functions.process(topic, message);
+                archiverExec[type].report.update(topic);
+            }
+            return false; // skip inbuilt call
         });
+    }
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -127,7 +185,7 @@ function mqttSubscribe() {
         config.mqtt.topics.forEach((topic) =>
             __client.subscribe(topic, (err) => {
                 if (err) console.error(`mqtt: subscribe to '${topic}', error:`, err);
-                else console.log(`mqtt: subscribed to '${topic}'`);
+                else console.log(`mqtt: subscribe to '${topic}', succeeded`);
             })
         );
     }
@@ -175,7 +233,7 @@ function mqttEnd() {
 function collectorBegin() {
     archiverBegin();
     mqttBegin(archiverProcess);
-    console.log(`started`);
+    console.log(`started (reporting-period=${REPORT_PERIOD_DEFAULT}m)`);
 }
 
 function collectorEnd() {
