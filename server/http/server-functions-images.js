@@ -1,7 +1,7 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function initialiseImages(xxx, data_images, host, port) {
+function initialiseImages(xxx, path_images, host, port) {
     const fs = require('fs');
     const path = require('path');
     const zlib = require('zlib');
@@ -25,7 +25,7 @@ function initialiseImages(xxx, data_images, host, port) {
 
     xxx.get('/images/images.json', (req, res) => {
         const url_base = `http://${host}:${port}/images/`;
-        const manifest = image_dataManifest(data_images).map(({ filename, ...rest }) => ({ ...rest, url: url_base + filename }));
+        const manifest = image_dataManifest(path_images).map(({ filename, ...rest }) => ({ ...rest, url: url_base + filename }));
         console.log(
             `/images manifest request: ${manifest.length} items, ${JSON.stringify(manifest).length} bytes, types = ${manifest.map((item) => item.type).join(', ')}, version = ${req.query.version || 'unspecified'}`
         );
@@ -41,15 +41,15 @@ function initialiseImages(xxx, data_images, host, port) {
             console.error(`/images upload failed: file has no name or has bad type/version (received '${req.file.originalname}')`);
             return res.status(400).send('File has no name or bad type/version');
         }
-        if (fs.existsSync(path.join(data_images, req.file.originalname) + '.zz')) {
-            console.error(`/images upload failed: file already exists as '${path.join(data_images, req.file.originalname)}'`);
+        if (fs.existsSync(path.join(path_images, req.file.originalname) + '.zz')) {
+            console.error(`/images upload failed: file already exists as '${path.join(path_images, req.file.originalname)}'`);
             return res.status(409).send('File with this name already exists');
         }
         try {
             const uploadedName = req.file.originalname,
                 uploadedData = fs.readFileSync(req.file.path);
             fs.unlinkSync(req.file.path);
-            const compressedName = path.join(data_images, uploadedName) + '.zz',
+            const compressedName = path.join(path_images, uploadedName) + '.zz',
                 compressedData = image_dataCompress(uploadedData);
             fs.writeFileSync(compressedName, compressedData);
             console.log(
@@ -64,7 +64,7 @@ function initialiseImages(xxx, data_images, host, port) {
 
     xxx.get('/images/:filename', (req, res) => {
         const downloadName = req.params.filename,
-            downloadPath = path.join(data_images, downloadName);
+            downloadPath = path.join(path_images, downloadName);
         try {
             res.set('Content-Type', 'application/octet-stream');
             res.send(fs.readFileSync(downloadPath));
@@ -79,8 +79,8 @@ function initialiseImages(xxx, data_images, host, port) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-module.exports = function (xxx, data_images, host, port) {
-    return initialiseImages(xxx, data_images, host, port);
+module.exports = function (xxx, path_images, host, port) {
+    return initialiseImages(xxx, path_images, host, port);
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

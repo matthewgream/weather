@@ -1,11 +1,11 @@
 [Unit]
-Description=Weather Server HTTP
+Description=Weather Mainview Server HTTP
 Wants=network-online.target
 After=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/opt/weather/server/http/server.js /opt/weather/server/secrets.txt
+ExecStart=/opt/weather/server/http/server-mainview.js /opt/weather/server/secrets.txt
 ExecReload=kill -HUP $MAINPID
 KillMode=process
 Restart=on-failure

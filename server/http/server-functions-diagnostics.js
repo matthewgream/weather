@@ -175,38 +175,21 @@ class RequestStatsManager {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 class DiagnosticsManager {
-    constructor(options = {}) {
-        this.memoryLogs = new MemoryLogsManager({
-            maxSize: options.maxLogSize || LOGS_INMEMORY_MAXSIZE,
-        });
+    constructor(app, options = {}) {
+        this.logLimitDisplay = options.logLimitDisplay || LOGS_DISPLAY_DEFAULT;
+        this.memoryLogs = new MemoryLogsManager({ maxSize: options.logLimitStorage || LOGS_INMEMORY_MAXSIZE });
         this.requestStats = new RequestStatsManager();
-        this.defaultLogLimit = options.defaultLogLimit || LOGS_DISPLAY_DEFAULT;
-        this.morganFormat = options.morganFormat || 'combined';
-    }
-    setupMorgan(app) {
-        const logStream = this.memoryLogs.createLogStream();
-        app.use(morgan(this.morganFormat, { stream: logStream }));
-        return this;
-    }
-    setupRequestTracking(app) {
-        app.use(this.requestStats.createMiddleware());
-        return this;
-    }
-    setupStatsRoute(app, route) {
         const self = this;
-        app.get(route, (req, res) => {
-            const limit = req.query.limit ? parseInt(req.query.limit) : self.defaultLogLimit;
-            return res.send(self.requestStats.generateStatsPage(limit, self.memoryLogs));
-        });
-        return this;
-    }
-    setup(app, route) {
-        return this.setupMorgan(app).setupRequestTracking(app).setupStatsRoute(app, route);
+        app.use(morgan(options.morganFormat || 'combined', { stream: self.memoryLogs.createLogStream() }));
+        app.use(this.requestStats.createMiddleware());
+        app.get(options.path || '/requests', (req, res) =>
+            res.send(self.requestStats.generateStatsPage(req.query.limit ? parseInt(req.query.limit) : self.logLimitDisplay, self.memoryLogs))
+        );
     }
     getStats() {
         return this.requestStats.getStats();
     }
-    getLogs(limit = this.defaultLogLimit) {
+    getLogs(limit = this.logLimitDisplay) {
         return this.memoryLogs.getLogs().slice(-limit);
     }
 }
@@ -214,17 +197,10 @@ class DiagnosticsManager {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-module.exports = function (xxx, route = '/diagnostics', options = {}) {
-    const diagnosticsManager = new DiagnosticsManager(options);
-    diagnosticsManager.setup(xxx, route);
-    return diagnosticsManager;
+module.exports = function (xxx, options) {
+    xxx.use(require('express-status-monitor')({ port: options.port, path: options.path + '/internal' }));
+    return new DiagnosticsManager(xxx, { path: options.path + '/requests' });
 };
-
-module.exports.MemoryLogsManager = MemoryLogsManager;
-module.exports.RequestStatsManager = RequestStatsManager;
-module.exports.DiagnosticsManager = DiagnosticsManager;
-module.exports.DEFAULT_LOGS_MAXSIZE = LOGS_INMEMORY_MAXSIZE;
-module.exports.DEFAULT_LOGS_DISPLAY = LOGS_DISPLAY_DEFAULT;
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------

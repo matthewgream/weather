@@ -1,6 +1,6 @@
 
 SYSTEM=http
-TARGET=server.js
+TARGET=server-mainview.js
 
 ##
 
