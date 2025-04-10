@@ -167,78 +167,20 @@ function archiverProcess(topic, message) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const mqtt = require('mqtt');
-
-let __client = null;
-let __receiver = null;
-
-function mqttReceive(topic, message) {
-    try {
-        if (__receiver) __receiver(topic, message);
-    } catch (error) {
-        console.error(`mqtt: receiver on '${topic}', error (exception):`, error);
-    }
-}
-
-function mqttSubscribe() {
-    if (__client) {
-        config.mqtt.topics.forEach((topic) =>
-            __client.subscribe(topic, (err) => {
-                if (err) console.error(`mqtt: subscribe to '${topic}', error:`, err);
-                else console.log(`mqtt: subscribe to '${topic}', succeeded`);
-            })
-        );
-    }
-}
-
-function mqttBegin(receiver) {
-    const options = {
-        clientId: config.mqtt.clientId,
-    };
-    if (config.mqtt.username && config.mqtt.password) {
-        options.username = config.mqtt.username;
-        options.password = config.mqtt.password;
-    }
-
-    __receiver = receiver;
-    console.log(`mqtt: connecting to '${config.mqtt.broker}'`);
-    __client = mqtt.connect(config.mqtt.broker, options);
-
-    if (__client) {
-        __client.on('connect', () => {
-            console.log('mqtt: connected');
-            mqttSubscribe();
-        });
-        __client.on('message', (topic, message) => {
-            mqttReceive(topic, message);
-        });
-        __client.on('error', (err) => console.error('mqtt: error:', err));
-        __client.on('offline', () => console.warn('mqtt: offline'));
-        __client.on('reconnect', () => console.log('mqtt: reconnect'));
-    }
-
-    console.log(`mqtt: loaded using 'broker=${config.mqtt.broker}'`);
-}
-
-function mqttEnd() {
-    if (__client) {
-        __client.end();
-        __client = null;
-    }
-}
+const mqtt = require('./collector-mqtt.js')(config.mqtt);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function collectorBegin() {
     archiverBegin();
-    mqttBegin(archiverProcess);
+    mqtt.begin(archiverProcess);
     console.log(`started (reporting-period=${REPORT_PERIOD_DEFAULT} mins)`);
 }
 
 function collectorEnd() {
     console.log(`stopping`);
-    mqttEnd();
+    mqtt.end();
     archiverEnd();
     process.exit(0);
 }

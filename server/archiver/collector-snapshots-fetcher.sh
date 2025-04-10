@@ -13,12 +13,12 @@ CFG="/opt/weather/server/archiver/collector-snapshots-fetcher.secrets"
 if [ -f "$CFG" ]; then
     source "$CFG"
 else
-    echo "Error: Configuration file not found at $CFG"
+    echo "archiver: collector: snapshot-fetcher: config: file not found at $CFG"
     exit 1
 fi
 for VAR in SSH_KEY SSH_PORT SSH_USER SSH_HOST; do
     if [ -z "${!VAR}" ]; then
-        echo "Error: $VAR is not set in configuration file"
+        echo "archiver: collector: snapshot-fetcher: config: error, $VAR not found in config"
         exit 1
     fi
 done
@@ -26,7 +26,7 @@ REMOTE_DIR="/opt/storage/snapshots"
 LOCAL_DIR="/opt/storage/snapshots"
 
 
-echo "Starting snapshot sync for files with prefix: $PREFIX"
+echo "archiver: collector: snapshot-fetcher: sync starting for $PREFIX"
 
 
 mkdir -p "$LOCAL_DIR/$PREFIX"
@@ -53,9 +53,9 @@ done <<< "$file_info"
 rm "$temp_file"
 
 
-echo "Found $total_count files to download with total size of $(numfmt --to=iec-i --suffix=B --format="%.2f" $total_size)"
+echo "archiver: collector: snapshot-fetcher: sync found $total_count files with total size $(numfmt --to=iec-i --suffix=B --format="%.2f" $total_size)"
 if [ "$total_count" -eq 0 ]; then
-    echo "No new files to download."
+    echo "archiver: collector: snapshot-fetcher: sync found no new files"
     exit 0
 fi
 
@@ -65,7 +65,7 @@ for i in "${!files_to_download[@]}"; do
     filename="${files_to_download[$i]}"
     filesize="${sizes_to_download[$i]}"
     current_count=$((current_count + 1))
-    echo -n "Downloading file $current_count/$total_count ($(numfmt --to=iec-i --suffix=B --format="%.2f" $current_size)/$(numfmt --to=iec-i --suffix=B --format="%.2f" $total_size)): $filename ... "
+    echo -n "archiver: collector: snapshot-fetcher: sync get $current_count/$total_count ($(numfmt --to=iec-i --suffix=B --format="%.2f" $current_size)/$(numfmt --to=iec-i --suffix=B --format="%.2f" $total_size)): $filename ... "
     ssh -i "$SSH_KEY" -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "cat $REMOTE_DIR/$filename" > "$LOCAL_DIR/$PREFIX/$filename"
     code=$?
     progress_percent=$(( (current_size * 100) / total_size ))
@@ -78,4 +78,5 @@ for i in "${!files_to_download[@]}"; do
 done
 
 
-echo "Sync completed. Downloaded $current_count files with total size of $(numfmt --to=iec-i --suffix=B --format="%.2f" $current_size)"
+echo "archiver: collector: snapshot-fetcher: sync complete, got $current_count files with total size $(numfmt --to=iec-i --suffix=B --format="%.2f" $current_size)"
+
