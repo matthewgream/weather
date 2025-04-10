@@ -315,7 +315,10 @@ function initialiseSnapshot(xxx, prefix, directory) {
 
     xxx.get(prefix + '/list', (req, res) => {
         return res.render('server-snapshot-list', {
-            entries: getSnapshotsListOfDates(),
+            snapshotList: {
+                entries: getSnapshotsListOfDates(),
+            },
+            timelapseList: {},
         });
     });
     xxx.get(prefix + '/list/:date', (req, res) => {

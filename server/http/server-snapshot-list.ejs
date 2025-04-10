@@ -7,9 +7,10 @@
     <link href="/static/css/snapshot.css" rel="stylesheet">
 </head>
 <body>
+    <% if (snapshotList?.entries?.length > 0) { %>
     <h1>Snapshots</h1>
     <div class="item-list">
-        <% snapshotList.entries.forEach(entry => {%>
+        <% snapshotList?.entries?.forEach(entry => {%>
             <div class="item-entry">
                 <a href="/snapshot/list/<%= entry.dateCode %>">
                     <%= entry.dateFormatted %>
@@ -17,9 +18,11 @@
             </div>
          <% }); %>
     </div>
+    <% } %>
+    <% if (timelapseList?.entries?.length > 0) { %>
     <h1>Timelapse</h1>
     <div class="item-list">
-        <% timelapseList.entries.forEach(entry => {%>
+        <% timelapseList?.entries?.forEach(entry => {%>
             <div class="item-entry">
                 <a href="/timelapse/file/<%= entry.file %>">
                     <%= entry.dateFormatted %>
@@ -27,5 +30,6 @@
             </div>
          <% }); %>
     </div>
+    <% } %>
 </body>
 </html>

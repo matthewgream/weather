@@ -24,7 +24,7 @@ endef
 install_daily: daily.service daily.timer
 	$(call install_systemd_timer,$(SYSTEM)-daily,daily)
 install_server: server-http.service
-	$(call install_systemd_service,mainview-server-http,server-http)
+	$(call install_systemd_service,$(SERVER)-server-http,server-http)
 install_ecowitt2mqtt_service: ecowitt2mqtt.service
 	$(call install_systemd_service,ecowitt2mqtt,ecowitt2mqtt)
 install_ecowitt2mqtt_config: ecowitt2mqtt.default
