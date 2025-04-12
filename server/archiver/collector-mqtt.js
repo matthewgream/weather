@@ -26,7 +26,7 @@ function mqttSubscribe() {
     }
 }
 
-function mqttBegin(receiver) {
+function mqttBegin(r) {
     const options = {
         clientId: config.clientId,
     };
@@ -35,7 +35,7 @@ function mqttBegin(receiver) {
         options.password = config.password;
     }
 
-    receiver = receiver;
+    receiver = r;
     console.log(`mqtt: connecting to '${config.broker}'`);
     client = mqtt.connect(config.broker, options);
 
