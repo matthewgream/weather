@@ -28,11 +28,8 @@ const THUMBNAIL_WIDTH = 200;
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function initialiseSnapshot(xxx, prefix, directory) {
-    //
+function initialiseSnapshot(xxx, prefix) {
 
-    const snapshotsTime = (24 * 2 + 2) * 60 * 60; // 2 days + 2 hours, in seconds
-    const snapshotsDir__ = directory + '/snapshots';
     let snapshotsList__ = [];
     function snapshotTimestampParser(filename) {
         const match = filename.match(/snapshot_(\d{14})\.jpg/);
@@ -52,35 +49,6 @@ function initialiseSnapshot(xxx, prefix, directory) {
 
     //
 
-    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    function getFormattedDate(date) {
-        return `${date.substring(0, 4)} ${months[parseInt(date.substring(4, 6)) - 1]} ${parseInt(date.substring(6, 8))}`;
-    }
-    function getFormattedTime(time) {
-        return `${parseInt(time.substring(0, 2)).toString().padStart(2, '0')}:${parseInt(time.substring(2, 4)).toString().padStart(2, '0')}:${parseInt(time.substring(4, 6)).toString().padStart(2, '0')}`;
-    }
-    function getSnapshotsListForDate(date) {
-        return snapshotsList__
-            .filter((file) => file.slice(9, 17) === date)
-            .sort((a, b) => b.localeCompare(a))
-            .map((file) => ({ file, timeCode: file.slice(17, 23) }))
-            .map(({ file, timeCode }) => ({
-                file,
-                timeFormatted: getFormattedTime(timeCode),
-            }));
-    }
-    function getSnapshotsListOfDates() {
-        return [...new Set(snapshotsList__.map((file) => file.slice(9, 17)))]
-            .sort((a, b) => b.localeCompare(a))
-            .map((dateCode) => ({
-                dateCode,
-                dateFormatted: getFormattedDate(dateCode),
-            }));
-    }
-    function getSnapshotsImageFilename(file) {
-        if (snapshotsList__.includes(file)) return `${snapshotsDir__}/${file}`;
-        return undefined;
-    }
     const fs = require('fs');
     const path = require('path');
     const sharp = require('sharp');
@@ -146,19 +114,6 @@ function initialiseSnapshot(xxx, prefix, directory) {
 
     //
 
-    function snapshotLoad() {
-        try {
-            fs.mkdirSync(snapshotsDir__, { recursive: true });
-            const files = fs.readdirSync(snapshotsDir__);
-            snapshotsList__ = files
-                .filter((file) => file.match(/snapshot_\d{14}\.jpg/))
-                .sort((a, b) => (snapshotTimestampParser(b) || 0) - (snapshotTimestampParser(a) || 0));
-            console.log(`snapshot list loaded with ${snapshotsList__.length} existing files (with expiration of ${snapshotsTime / 60 / 60} hours)`);
-        } catch (error) {
-            console.error('Error loading snapshot list:', error);
-            throw error;
-        }
-    }
     let __snapshotReceiveImagedata = null;
     function snapshotReceiveImagedata(message) {
         __snapshotReceiveImagedata = message;
@@ -172,12 +127,10 @@ function initialiseSnapshot(xxx, prefix, directory) {
             const metadata = JSON.parse(message.toString());
             const filename = metadata.filename;
             const shmPath = path.join('/dev/shm', filename);
-            const snapshotPath = path.join(snapshotsDir__, filename);
             fs.writeFileSync(shmPath, __snapshotReceiveImagedata);
-            fs.writeFileSync(snapshotPath, __snapshotReceiveImagedata);
             snapshotsList__.unshift(filename);
             __snapshotReceiveImagedata = null;
-            console.log(`snapshot received: ${filename} (--> /dev/shm, --> ${snapshotsDir__})`);
+            console.log(`snapshot received: ${filename} (--> /dev/shm)`);
         } catch (error) {
             console.error('Error processing snapshot metadata:', error);
         }
@@ -251,41 +204,10 @@ function initialiseSnapshot(xxx, prefix, directory) {
             }
         }
     }
-    function snapshotCleanup() {
-        try {
-            const cleanupTime = new Date(new Date().getTime() - snapshotsTime * 1000);
-            const files = fs.readdirSync(snapshotsDir__);
-            for (const file of files) {
-                if (file.startsWith('snapshot_')) {
-                    try {
-                        const fileTime = snapshotTimestampParser(file);
-                        if (fileTime && fileTime < cleanupTime) {
-                            const filePath = path.join(snapshotsDir__, file);
-                            fs.unlinkSync(filePath);
-                            const index = snapshotsList__.indexOf(file);
-                            if (index !== -1) {
-                                console.log(`snapshot removed: ${file}`);
-                                snapshotsList__.splice(index, 1);
-                            }
-                        }
-                    } catch (err) {
-                        console.error(`Error removing file ${file}:`, err);
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('Error updating snapshot:', error);
-        }
-    }
-    function snapshotUpdate() {
-        snapshotRebuild();
-        snapshotCleanup();
-    }
     function snapshotInitialise() {
         try {
-            snapshotLoad();
-            snapshotUpdate();
-            setInterval(snapshotUpdate, 30000);
+            snapshotRebuild();
+            setInterval(snapshotRebuild, 30000);
             console.log('snapshot process started with frequency=30 seconds');
         } catch (error) {
             console.error('Failed to start snapshot process:', error);
@@ -314,25 +236,13 @@ function initialiseSnapshot(xxx, prefix, directory) {
     //
 
     xxx.get(prefix + '/list', (req, res) => {
-        return res.render('server-snapshot-list', {
-            snapshotList: {
-                entries: getSnapshotsListOfDates(),
-            },
-            timelapseList: {},
-        });
+		return res.status (404);
     });
     xxx.get(prefix + '/list/:date', (req, res) => {
-        const date = req.params.date;
-        return res.render('server-snapshot-date', {
-            dateFormatted: getFormattedDate(date),
-            entries: getSnapshotsListForDate(date),
-        });
+		return res.status (404);
     });
     xxx.get(prefix + '/file/:file', (req, res) => {
-        const file = req.params.file;
-        const filename = getSnapshotsImageFilename(file);
-        if (!filename) return res.status(404).send('Snapshot not found');
-        return res.sendFile(filename);
+		return res.status (404);
     });
     xxx.get(prefix + '/thumb/:file', async (req, res) => {
         const file = req.params.file;
@@ -361,8 +271,8 @@ function initialiseSnapshot(xxx, prefix, directory) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-module.exports = function (xxx, prefix, directory) {
-    return initialiseSnapshot(xxx, prefix, directory);
+module.exports = function (xxx, prefix) {
+    return initialiseSnapshot(xxx, prefix);
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
