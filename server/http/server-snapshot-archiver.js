@@ -118,15 +118,9 @@ function initialiseSnapshot(xxx, prefix, directory) {
     });
     xxx.get(prefix + '/file/:file', (req, res) => {
         const file = req.params.file;
-        const filename = getSnapshotImageFilename(file);
-        if (!filename) return res.status(404).send('Snapshot not found');
-        return res.sendFile(filename);
-    });
-    xxx.get('/timelapse/file/:file', (req, res) => {
-        // XXX
-        const file = req.params.file;
-        const filename = getTimelpaseVideoFilename(file);
-        if (!filename) return res.status(404).send('Timelapse not found');
+        filename = getSnapshotImageFilename(file);
+        if (!filename) filename = getTimelpaseVideoFilename(file);
+        if (!filename) return res.status(404).send('File not found');
         return res.sendFile(filename);
     });
     xxx.get(prefix + '/thumb/:file', async (req, res) => {
