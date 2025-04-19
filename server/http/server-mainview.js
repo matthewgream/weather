@@ -82,8 +82,8 @@ console.log(`Loaded 'variables' using '${vars.join(', ')}'`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const server_snapshots = require('./server-snapshot-mainview.js')(xxx, '/snapshot');
-console.log(`Loaded 'snapshots' on '/snapshot'`);
+const server_snapshots = require('./server-snapshot-mainview.js')(xxx, '/snapshot', conf.SERVER_ARCHIVER);
+console.log(`Loaded 'snapshots' on '/snapshot' using 'server-archiver=${conf.SERVER_ARCHIVER}'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
