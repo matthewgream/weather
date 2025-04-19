@@ -9,7 +9,7 @@ if [ -z "$PREFIX" ]; then
     exit 1
 fi
 
-CFG="/opt/weather/server/archiver/collector-snapshots-fetcher.secrets"
+CFG="/opt/weather/server/archiver/tools/collector-snapshots-fetcher.secrets"
 if [ -f "$CFG" ]; then
     source "$CFG"
 else
@@ -55,7 +55,6 @@ rm "$temp_file"
 
 echo "archiver: collector: snapshot-fetcher: sync found $total_count files with total size $(numfmt --to=iec-i --suffix=B --format="%.2f" $total_size)"
 if [ "$total_count" -eq 0 ]; then
-    echo "archiver: collector: snapshot-fetcher: sync found no new files"
     exit 0
 fi
 

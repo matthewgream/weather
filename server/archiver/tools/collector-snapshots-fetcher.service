@@ -6,7 +6,7 @@ After=archiver-storage.service
 
 [Service]
 Type=oneshot
-ExecStart=/opt/weather/server/archiver/collector-snapshots-fetcher.yesterday 
+ExecStart=/opt/weather/server/archiver/tools/collector-snapshots-fetcher.yesterday 
 SuccessExitStatus=0
 
 [Install]
