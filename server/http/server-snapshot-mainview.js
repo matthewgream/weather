@@ -194,7 +194,7 @@ function initialiseSnapshot(app, prefix, server) {
     }
     snapshotInitialise();
 
-	//
+    //
 
     async function __generateThumbnailsToRender() {
         const thumbnails = {};
@@ -213,7 +213,7 @@ function initialiseSnapshot(app, prefix, server) {
         return thumbnails;
     }
 
-	//
+    //
 
     app.get(prefix + '/thumb/:file', async (req, res) => {
         const file = req.params.file;
@@ -229,17 +229,20 @@ function initialiseSnapshot(app, prefix, server) {
             return res.status(500).send('Error generating thumbnail');
         }
     });
-    app.use (prefix, require ('http-proxy-middleware').createProxyMiddleware({
-        target: server,
-        changeOrigin: true,
-        secure: false,
-        logLevel: 'debug',
-        selfHandleResponse: false,
-        followRedirects: false,
-        pathRewrite: { '^/': '/snapshot/' },
-    }));
+    app.use(
+        prefix,
+        require('http-proxy-middleware').createProxyMiddleware({
+            target: server,
+            changeOrigin: true,
+            secure: false,
+            logLevel: 'debug',
+            selfHandleResponse: false,
+            followRedirects: false,
+            pathRewrite: { '^/': '/snapshot/' },
+        })
+    );
 
-	//
+    //
 
     return {
         getThumbnails: __generateThumbnailsToRender,

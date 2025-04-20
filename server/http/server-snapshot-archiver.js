@@ -1,7 +1,7 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function initialiseSnapshot(xxx, prefix, directory) {
+function initialiseSnapshot(app, prefix, directory) {
     const {
         SnapshotThumbnailsManager,
         SnapshotDirectoryManager,
@@ -70,7 +70,9 @@ function initialiseSnapshot(xxx, prefix, directory) {
     }
     function getTimelapseListOfFiles() {
         return {
-            entries: snapshotTimelapseManager.getListOfFiles().map(({ file }) => ({ dateCode: file.slice (10, 18), file, dateFormatted: getFormattedDate(file.slice(10, 18)) })),
+            entries: snapshotTimelapseManager
+                .getListOfFiles()
+                .map(({ file }) => ({ dateCode: file.slice(10, 18), file, dateFormatted: getFormattedDate(file.slice(10, 18)) })),
         };
     }
     function getSnapshotImageFilename(file) {
@@ -107,23 +109,23 @@ function initialiseSnapshot(xxx, prefix, directory) {
 
     //
 
-    xxx.get(prefix + '/list', (req, res) => {
+    app.get(prefix + '/list', (req, res) => {
         return res.render('server-snapshot-list', {
             snapshotList: getSnapshotListOfDates(),
             timelapseList: getTimelapseListOfFiles(),
         });
     });
-    xxx.get(prefix + '/list/:date', (req, res) => {
+    app.get(prefix + '/list/:date', (req, res) => {
         return res.render('server-snapshot-date', getSnapshotListForDate(req.params.date));
     });
-    xxx.get(prefix + '/file/:file', (req, res) => {
+    app.get(prefix + '/file/:file', (req, res) => {
         const file = req.params.file;
         filename = getSnapshotImageFilename(file);
         if (!filename) filename = getTimelpaseVideoFilename(file);
         if (!filename) return res.status(404).send('File not found');
         return res.sendFile(filename);
     });
-    xxx.get(prefix + '/thumb/:file', async (req, res) => {
+    app.get(prefix + '/thumb/:file', async (req, res) => {
         const file = req.params.file;
         const width = parseInt(req.query.w) || snapshotThumbnailsWidthDefault;
         try {
@@ -148,8 +150,8 @@ function initialiseSnapshot(xxx, prefix, directory) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-module.exports = function (xxx, prefix, directory) {
-    return initialiseSnapshot(xxx, prefix, directory);
+module.exports = function (app, prefix, directory) {
+    return initialiseSnapshot(app, prefix, directory);
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
