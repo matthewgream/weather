@@ -1,35 +1,13 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-/*
-const { createProxyMiddleware } = require('http-proxy-middleware');
-const TARGET_SERVER = 'http://workshop.local:80';
-const snapshotProxy = createProxyMiddleware({
-    target: TARGET_SERVER,
-    changeOrigin: true,
-    onProxyRes: (proxyRes, req, res) => {
-        console.log(`Proxied ${req.method} ${req.path} -> ${TARGET_SERVER} [${proxyRes.statusCode}]`);
-    },
-    onError: (err, req, res) => {
-        console.error('Proxy error:', err);
-        res.status(500).send('Proxy error occurred');
-    }
-});
-app.use('/snapshot/list', snapshotProxy);
-app.use('/snapshot/file', snapshotProxy);
-*/
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
 const MAIN_CAMERA_WIDTH = 600;
 const THUMBNAIL_WIDTH = 200;
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function initialiseSnapshot(xxx, prefix) {
-
+function initialiseSnapshot(app, prefix, server) {
     let snapshotsList__ = [];
     function snapshotTimestampParser(filename) {
         const match = filename.match(/snapshot_(\d{14})\.jpg/);
@@ -216,6 +194,8 @@ function initialiseSnapshot(xxx, prefix) {
     }
     snapshotInitialise();
 
+	//
+
     async function __generateThumbnailsToRender() {
         const thumbnails = {};
         async function makethumb(filename, width) {
@@ -233,18 +213,9 @@ function initialiseSnapshot(xxx, prefix) {
         return thumbnails;
     }
 
-    //
+	//
 
-    xxx.get(prefix + '/list', (req, res) => {
-		return res.status (404);
-    });
-    xxx.get(prefix + '/list/:date', (req, res) => {
-		return res.status (404);
-    });
-    xxx.get(prefix + '/file/:file', (req, res) => {
-		return res.status (404);
-    });
-    xxx.get(prefix + '/thumb/:file', async (req, res) => {
+    app.get(prefix + '/thumb/:file', async (req, res) => {
         const file = req.params.file;
         const width = parseInt(req.query.w) || THUMBNAIL_WIDTH;
         try {
@@ -258,8 +229,17 @@ function initialiseSnapshot(xxx, prefix) {
             return res.status(500).send('Error generating thumbnail');
         }
     });
+    app.use (prefix, require ('http-proxy-middleware').createProxyMiddleware({
+        target: server,
+        changeOrigin: true,
+        secure: false,
+        logLevel: 'debug',
+        selfHandleResponse: false,
+        followRedirects: false,
+        pathRewrite: { '^/': '/snapshot/' },
+    }));
 
-    //
+	//
 
     return {
         getThumbnails: __generateThumbnailsToRender,
@@ -271,8 +251,8 @@ function initialiseSnapshot(xxx, prefix) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-module.exports = function (xxx, prefix) {
-    return initialiseSnapshot(xxx, prefix);
+module.exports = function (app, prefix, server) {
+    return initialiseSnapshot(app, prefix, server);
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
