@@ -70,7 +70,7 @@ function initialiseSnapshot(xxx, prefix, directory) {
     }
     function getTimelapseListOfFiles() {
         return {
-            entries: snapshotTimelapseManager.getListOfFiles().map(({ file }) => ({ file, dateFormatted: getFormattedDate(file.slice(10, 18)) })),
+            entries: snapshotTimelapseManager.getListOfFiles().map(({ file }) => ({ dateCode: file.slice (10, 18), file, dateFormatted: getFormattedDate(file.slice(10, 18)) })),
         };
     }
     function getSnapshotImageFilename(file) {
