@@ -5,30 +5,125 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Snapshots</title>
     <link href="/static/css/snapshot.css" rel="stylesheet">
+    <style>
+        .item-list {
+            margin-bottom: 20px;
+        }
+        .week-row {
+            font-family: monospace;
+            white-space: nowrap;
+            line-height: 1.5;
+            margin-bottom: 4px;
+            display: flex;
+            font-size: 16px;
+        }
+        .month-label {
+            font-weight: bold;
+            margin-right: 8px;
+            min-width: 120px;
+        }
+        .date-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 28px);
+        }
+        .date-link {
+            text-decoration: none;
+            color: #4299e1;
+            text-align: center;
+        }
+        .date-link:hover {
+            text-decoration: underline;
+        }
+        .date-placeholder {
+            text-align: center;
+        }
+    </style>
 </head>
 <body>
-    <% if (snapshotList?.entries?.length > 0) { %>
-    <h1>Snapshots</h1>
+    <%
+    function getMonthName(monthNum) {
+        return ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'] [parseInt (monthNum) - 1];
+    }
+    function getDaysInMonth(year, month) {
+        return new Date(year, month, 0).getDate();
+    }
+    function formatDatesByWeek(entries, yearMonth, urlPrefix) {
+        const dateMap = {};
+        entries.forEach(entry => {
+            dateMap[entry.dateCode] = entry;
+        });
+        const year = yearMonth.substring(0, 4), month = yearMonth.substring(4, 6), monthInt = parseInt(month), lastDay = getDaysInMonth(year, monthInt);
+        const calendar = [];
+        let currentWeek = Array(7).fill(null);
+        for (let day = lastDay; day >= 1; day--) {
+            const dayOfWeek = (new Date(parseInt(year), monthInt - 1, day)).getDay ();
+            const dateStr = `${year}${month}${day.toString().padStart(2, '0')}`;
+            const hasData = dateMap[dateStr] ? true : false;
+            currentWeek[ [0, 6, 5, 4, 3, 2, 1] .indexOf(dayOfWeek)] = { day, dateStr, hasData };
+            if (dayOfWeek === 1 || day === 1) {
+                calendar.push([...currentWeek]);
+                currentWeek = Array(7).fill(null);
+            }
+        }
+        calendar.forEach(week => {
+            week.hasData = week.some(day => day && day.hasData);
+        });
+        let startIndex = 0; while (startIndex < calendar.length && !calendar[startIndex].hasData)
+            startIndex++;
+        let endIndex = calendar.length - 1; while (endIndex >= 0 && !calendar[endIndex].hasData)
+            endIndex--;
+        const result = [];
+        calendar.slice(startIndex, endIndex + 1).forEach(week => {
+            const weekElements = [];
+            week.forEach(dayInfo => {
+                if (!dayInfo)
+                    weekElements.push(`<span class="date-placeholder"></span>`);
+                 else {
+                    const dayText = dayInfo.day.toString().padStart(2, ' ');
+                    if (dayInfo.hasData)
+                        weekElements.push(`<a href="${(urlPrefix === 'file')  ? `/snapshot/file/${dateMap[dayInfo.dateStr].file}` :  `/snapshot/list/${dateMap[dayInfo.dateStr].dateCode}`}" class="date-link">${dayText}</a>`);
+                    else
+                        weekElements.push(`<span class="date-placeholder">${dayText}</span>`);
+                }
+            });
+            result.push(`
+                <div class="week-row">
+                    <div class="month-label">${year} ${getMonthName(monthInt)}:</div>
+                    <div class="date-grid">${weekElements.join('')}</div>
+                </div>
+            `);
+        });
+        return result.join('');
+    }
+    function groupByYearMonth(entries) {
+        const groups = {};
+        entries?.forEach(entry => {
+            const yearMonth = entry.dateCode.substring(0, 6);
+            if (!groups[yearMonth])
+                groups[yearMonth] = [];
+            groups[yearMonth].push(entry);
+        });
+        return groups;
+    }
+    function getSortedYearMonths(groups) {
+        return Object.keys(groups).sort((a, b) => b.localeCompare(a));
+    }
+    %>
+
+    <% if (snapshotList?.entries?.length > 0) { const snapshotGroups = groupByYearMonth(snapshotList?.entries); %>
+    <h1>Snapshots (28 days)</h1>
     <div class="item-list">
-        <% snapshotList?.entries?.forEach(entry => {%>
-            <div class="item-entry">
-                <a href="/snapshot/list/<%= entry.dateCode %>">
-                    <%= entry.dateFormatted %>
-                </a>
-            </div>
-         <% }); %>
+        <% getSortedYearMonths(snapshotGroups).forEach(yearMonth => { %>
+            <%- formatDatesByWeek(snapshotGroups[yearMonth], yearMonth, 'list') %>
+        <% }); %>
     </div>
     <% } %>
-    <% if (timelapseList?.entries?.length > 0) { %>
+    <% if (timelapseList?.entries?.length > 0) { const timelapseGroups = groupByYearMonth(timelapseList?.entries); %>
     <h1>Timelapse</h1>
     <div class="item-list">
-        <% timelapseList?.entries?.forEach(entry => {%>
-            <div class="item-entry">
-                <a href="/snapshot/file/<%= entry.file %>">
-                    <%= entry.dateFormatted %>
-                </a>
-            </div>
-         <% }); %>
+        <% getSortedYearMonths(timelapseGroups).forEach(yearMonth => { %>
+            <%- formatDatesByWeek(timelapseGroups[yearMonth], yearMonth, 'file') %>
+        <% }); %>
     </div>
     <% } %>
 </body>
