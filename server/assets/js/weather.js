@@ -34,7 +34,9 @@ function getWeatherInterpretation(location_data, data) {
         solarRad,
         solarUvi,
         rainRate,
-        radiation,
+        radiationCpm,
+        radiationAcpm,
+        radationUsvh,
         snowDepth,
         iceDepth,
         cloudCover = null,
@@ -258,35 +260,50 @@ function getWeatherInterpretation(location_data, data) {
             results.phenomena.push('typical Nordic winter conditions');
     }
 
-    // Radiation Interpretation
-    if (radiation !== null) {
-        if (radiation <= 30) {
+    // Radiation Interpretation: prefer ACPM (rolling average) but fall back to CPM if needed
+    const radiationValue = radiationAcpm !== null ? radiationAcpm : radiationCpm;
+    const radiationSource = radiationAcpm !== null ? 'average' : 'instant';
+    if (radiationValue !== null) {
+        // Interpret radiation levels based on available readings
+        if (radiationValue <= 30) {
             // Background radiation in Sweden normally ranges from 5-30 CPM
             // Normal background radiation - no specific condition
-        } else if (radiation > 30 && radiation <= 50) {
+        } else if (radiationValue > 30 && radiationValue <= 50) {
             results.conditions.push('slightly elevated radiation');
             results.phenomena.push('above normal background radiation');
-        } else if (radiation > 50 && radiation <= 100) {
+        } else if (radiationValue > 50 && radiationValue <= 100) {
             results.conditions.push('moderately elevated radiation');
-            results.alerts.push('elevated radiation levels');
+            results.alerts.push(`elevated radiation levels (${radiationSource})`);
             results.phenomena.push('investigate radiation source');
-        } else if (radiation > 100 && radiation <= 300) {
+        } else if (radiationValue > 100 && radiationValue <= 300) {
             results.conditions.push('high radiation');
-            results.alerts.push('high radiation levels');
+            results.alerts.push(`high radiation levels (${radiationSource})`);
             results.phenomena.push('minimize prolonged exposure');
-        } else if (radiation > 300) {
+        } else if (radiationValue > 300) {
             results.conditions.push('extremely high radiation');
-            results.alerts.push('dangerous radiation levels');
+            results.alerts.push(`dangerous radiation levels (${radiationSource})`);
             results.phenomena.push('seek immediate shelter');
         }
-        if (radiation > 30) {
+        if (radiationValue > 30) {
             // Context-specific radiation interpretations
             if (rainRate > 0) results.phenomena.push('possible radon washout in precipitation');
             if (month >= 9 || month <= 3) results.phenomena.push('seasonal radon fluctuation possible');
         }
-        if (radiation > 50 && solarUvi > 5)
+        if (radiationValue > 50 && solarUvi > 5)
             // Radiation health context
             results.phenomena.push('combined radiation and UV exposure');
+        // Add µSv/h context if available
+        if (radationUsvh !== null) {
+            if (radationUsvh > 0.5) results.alerts.push(`radiation dose rate: ${radationUsvh.toFixed(2)} µSv/h`);
+            // Additional health context based on dose rate
+            if (radationUsvh > 0.3 && radationUsvh <= 1) {
+                results.phenomena.push('above typical background dose rate');
+            } else if (radationUsvh > 1 && radationUsvh <= 5) {
+                results.phenomena.push('elevated dose rate - limit prolonged exposure');
+            } else if (radationUsvh > 5) {
+                results.phenomena.push('significant dose rate - health concern');
+            }
+        }
     }
 
     // Weather phenomena interpretations - Nordic forest context

@@ -1,0 +1,6 @@
+#!/bin/bash
+. /opt/weather/server/scripts/secrets.txt
+/opt/weather/server/scripts/upnp_sshd_forwarding
+/opt/weather/server/scripts/cloudflare_dns_update
+. /opt/weather/server/scripts/secrets2.txt
+/opt/weather/server/scripts/upnp_sshd_forwarding

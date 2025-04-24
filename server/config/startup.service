@@ -1,0 +1,12 @@
+[Unit]
+Description=Weather Startup Script
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash /opt/weather/server/scripts/startup
+SuccessExitStatus=0
+
+[Install]
+WantedBy=multi-user.target

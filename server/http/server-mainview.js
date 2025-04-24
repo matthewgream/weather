@@ -10,7 +10,7 @@ const configList = Object.entries(conf)
     .map(([k, v]) => k.toLowerCase() + '=' + v)
     .join(', ');
 const subs = ['weather/#', 'sensors/#', 'snapshots/#'];
-const vars = ['weather/branna', 'sensors/radiation/cpm'];
+const vars = ['weather/branna', 'sensors/radiation'];
 const data_views = conf.DATA + '/http';
 const data_images = conf.DATA + '/images';
 const data_assets = conf.DATA + '/assets';
@@ -66,8 +66,8 @@ function variablesRender() {
     return Object.fromEntries(vars.map((topic) => [topic, variablesSet[topic]]));
 }
 function variablesUpdate(topic, message) {
-    if (topic.startsWith('sensors')) variablesSet[topic] = { value: message.toString(), timestamp: getTimestamp(conf.TZ) };
-    else if (topic.startsWith('weather')) variablesSet[topic] = { ...JSON.parse(message.toString()), timestamp: getTimestamp(conf.TZ) };
+    if (topic.startsWith('sensors') || topic.startsWith('weather'))
+        variablesSet[topic] = { ...JSON.parse(message.toString()), timestamp: getTimestamp(conf.TZ) };
     else return;
     if (vars.includes(topic)) console.log(`variables: '${topic}' --> '${JSON.stringify(variablesSet[topic])}'`);
 }

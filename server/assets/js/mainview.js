@@ -25,7 +25,9 @@ const model = [
             { label: 'Solar Radiation', id: 'solarrad', unit: 'W/m²', path: 'weather/branna.solarradiation', decimals: 1, format },
             { label: 'Solar UVI', id: 'solaruv', unit: '', path: 'weather/branna.uv', decimals: 1, format },
             { label: 'Snow Depth', id: 'snowdepth', unit: 'cm', path: 'weather/branna.depth_ch1', decimals: 0, format: formatDepthFromMMtoCM },
-            { label: 'Radiation', id: 'radiation', unit: 'cpm', path: 'sensors/radiation/cpm.value', decimals: 1, format },
+            { label: 'Radiation', id: 'radiationcpm', unit: 'cpm', path: 'sensors/radiation.cpm', decimals: 1, format },
+            { label: 'Radiation (1 hour avg)', id: 'radiationacpm', unit: 'cpm', path: 'sensors/radiation.acpm', decimals: 1, format },
+            { label: 'Radiation (dosing)', id: 'radiationusvh', unit: 'uSv/h', path: 'sensors/radiation.usvh', decimals: 2, format },
         ],
     },
     {
@@ -91,7 +93,9 @@ function createViewTextSummary(vars) {
     const solarRad = locate(vars, outside[8].path);
     const solarUvi = locate(vars, outside[9].path);
     const snowDepth = locate(vars, outside[10].path) || null;
-    const radiation = locate(vars, outside[11].path) || null;
+    const radiationCpm = locate(vars, outside[11].path) || null;
+    const radiationAcpm = locate(vars, outside[12].path) || null;
+    const radiationUsvh = locate(vars, outside[13].path) || null;
     const lakeSurface = locate(vars, lake[0].path);
     const lakeSubmerged = locate(vars, lake[1].path);
     const lakeIceDepth = null;
@@ -158,11 +162,19 @@ function createViewTextSummary(vars) {
         }
 
         //
-        if (!radiation);
+        if (!radiationCpm);
         else {
-            const fRadiation = outside[11].format(outside[11], radiation);
-            let details_rads = `Radiation <span class="value">${fRadiation}</span> cpm.`;
-            details_list.push(details_rads);
+            const fRadiationCpm = outside[11].format(outside[11], radiationCpm);
+            let details_rads = `Radiation <span class="value">${fRadiationCpm}</span> cpm`;
+            if (radiationAcpm) {
+                const fRadiationAcpm = outside[12].format(outside[12], radiationAcpm);
+                details_rads += ` (<span class="value">${fRadiationAcpm}</span> avg)`;
+            }
+            if (radiationUsvh) {
+                const fRadiationUsvh = outside[13].format(outside[13], radiationUsvh);
+                details_rads += `, <span class="value">${fRadiationUsvh}</span> uSv/h`;
+            }
+            details_list.push(details_rads + '.');
         }
 
         //
@@ -207,7 +219,9 @@ function createViewTextSummary(vars) {
             solarRad,
             solarUvi,
             rainRate,
-            radiation,
+            radiationCpm,
+            radiationAcpm,
+            radiationUsvh,
             snowDepth,
             iceDepth: lakeIceDepth,
         }); // XXX
