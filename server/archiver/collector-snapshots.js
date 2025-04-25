@@ -3,7 +3,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const rimraf = require('rimraf');
+const { rimraf } = require('rimraf');
 
 const NUMBER_OF_DAYS_BACKWARDS_TIMELAPSE = 0; // make timelapse after this many days
 const NUMBER_OF_DAYS_BACKWARDS_SNAPSHOTS = 28; // delete after this many days
@@ -195,12 +195,7 @@ async function snapshotCleanup(dateDir, snapshotDirPath) {
         };
         const sizeBefore = getDirectorySize(snapshotDirPath);
         const formattedSize = formatFileSize(sizeBefore);
-        await new Promise((resolve, reject) => {
-            rimraf(snapshotDirPath, (err) => {
-                if (err) reject(err);
-                else resolve();
-            });
-        });
+	await rimraf (snapshotDirPath);
         console.log(prefix + `removed ${formattedSize} snapshots`);
         return { dateDir, deleted: true, size: formattedSize };
     } catch (error) {

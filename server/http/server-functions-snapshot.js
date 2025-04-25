@@ -54,19 +54,28 @@ class SnapshotDirectoryManager {
         });
         watcher.on('addDir', (dirPath) => {
             const dirName = path.basename(dirPath);
-            if (/^\d{8}$/.test(dirName)) this.updateCacheWithNewDirectory(dirName);
+            if (/^\d{8}$/.test(dirName)) this.cacheInsertDirectory(dirName);
+        });
+        watcher.on('unlinkDir', (dirPath) => {
+            const dirName = path.basename(dirPath);
+            if (/^\d{8}$/.test(dirName)) this.cacheRemoveDirectory(dirName);
         });
         watcher.on('error', (error) => {
             console.error(`SnapshotDirectoryManager(${this.snapshotsDir}): watcher error: ${error}`);
         });
         this.watchers.push(watcher);
     }
-    updateCacheWithNewDirectory(dirName) {
+    cacheInsertDirectory(dirName) {
         if (!this.snapshotsCache.some((item) => item.dateCode === dirName)) {
             this.snapshotsCache.push({ dateCode: dirName });
             this.snapshotsCache.sort((a, b) => b.dateCode.localeCompare(a.dateCode));
-            console.log(`SnapshotDirectoryManager(${this.snapshotsDir}): adding new directory: ${dirName}`);
+            console.log(`SnapshotDirectoryManager(${this.snapshotsDir}): insert directory: ${dirName}`);
         }
+    }
+    cacheRemoveDirectory(dirName) {
+        const initialLength = this.snapshotsCache.length;
+        this.snapshotsCache = this.snapshotsCache.filter((item) => item.dateCode !== dirName);
+        if (initialLength !== this.snapshotsCache.length) console.log(`SnapshotDirectoryManager(${this.snapshotsDir}): remove directory: ${dirName}`);
     }
     getListOfDates() {
         if (!this.isInitialized) this.initializeCache();
