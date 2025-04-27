@@ -13,14 +13,14 @@ const joinand = (items) => {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const __generateDescription = (results) => {
-    let description = '';
-    if (results.conditions.length > 0) description = joinand([...new Set(results.conditions)]);
-    if (results.phenomena.length > 0) description += (description ? ': ' : '') + joinand([...new Set(results.phenomena)]);
-    if (description) {
-        description = description.charAt(0).toUpperCase() + description.slice(1);
-        if (!description.endsWith('.')) description += '.';
+    let details = '';
+    if (results.conditions.length > 0) details = joinand([...new Set(results.conditions)]);
+    if (results.phenomena.length > 0) details += (details ? ': ' : '') + joinand([...new Set(results.phenomena)]);
+    if (details) {
+        details = details.charAt(0).toUpperCase() + details.slice(1);
+        if (!details.endsWith('.')) details += '.';
     }
-    return description || null;
+    return details || null;
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -57,7 +57,7 @@ function getWeatherInterpretation(location_data, data) {
         phenomena: [],
         comfort: null,
         alerts: [],
-        description: null,
+        details: null,
         feelsLike,
         daylight,
     };
@@ -432,7 +432,7 @@ function getWeatherInterpretation(location_data, data) {
     }
 
     results.comfort = calculateComfortLevel(temp, humidity, windSpeed, solarRad);
-    results.description = __generateDescription(results);
+    results.details = __generateDescription(results);
 
     return results;
 }

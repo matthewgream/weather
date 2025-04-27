@@ -225,13 +225,13 @@ function createViewTextSummary(vars) {
             snowDepth,
             iceDepth: lakeIceDepth,
         }); // XXX
-    if (weather) analysis += `${weather.description}`;
+    if (weather?.details) analysis += `${weather.details}`;
     if (analysis) summary.push(analysis);
 
     ////
     let warnings_list = [];
     if (weather?.alerts?.length > 0) warnings_list.push(...weather.alerts);
-    if (internalBatteryWH65 !== 'OFF') warnings_list.push('battery for WH66 is faulty');
+    if (internalBatteryWH65 !== 'OFF') warnings_list.push('faulty battery for WH66');
     let warnings = '';
     if (warnings_list.length > 0) warnings = `WARNING: ${joinand(warnings_list)}.`;
     if (warnings) summary.push(warnings);
