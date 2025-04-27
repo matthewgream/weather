@@ -72,7 +72,7 @@ const server_data = {
 };
 console.log(`Loaded 'data' using 'data=thumbnails'`);
 const server_vars = require('./server-functions-vars.js')(app, '/vars', { vars: configData.CONTENT_VIEW_VARS, tz: configData.TZ });
-console.log(`Loaded 'vars' on '/vars' using 'vars=${configData.CONTENT_VIEW_VARS.join(', ')}'`);
+console.log(`Loaded 'vars' on '/vars' using 'vars=[${configData.CONTENT_VIEW_VARS.join(', ')}]'`);
 
 app.get('/', async (req, res) =>
     res.render('server-mainview', {
@@ -111,7 +111,7 @@ mqtt_client.on('message', (topic, message) => {
     else if (topic === 'snapshots/metadata') receive_snapshotMetadata(message);
     else server_vars.update(topic, message);
 });
-console.log(`Loaded 'mqtt:subscriber' using 'server=${configData.MQTT}, topics=${configData.CONTENT_DATA_SUBS.join(', ')}'`);
+console.log(`Loaded 'mqtt:subscriber' using 'server=${configData.MQTT}, topics=[${configData.CONTENT_DATA_SUBS.join(', ')}]'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------

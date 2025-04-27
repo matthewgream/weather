@@ -3,7 +3,7 @@
 
 const { formatInTimeZone } = require('date-fns-tz');
 
-function initialise(app, prefix, vars, tz) {
+function initialise(app, prefix, vars, tz, debug = null) {
     const getTimestamp = (tz) => formatInTimeZone(new Date(), tz, "yyyy-MM-dd'T'HH:mm:ssXXX'Z'").replace(":00'Z", 'Z');
     const variablesSet = {};
     function render() {
@@ -16,7 +16,7 @@ function initialise(app, prefix, vars, tz) {
         if (vars.includes(topic)) console.log(`variables: '${topic}' --> '${JSON.stringify(variablesSet[topic])}'`);
     }
     app.get(prefix + '', (req, res) => {
-        console.log(`vars requested from '${req.headers['x-forwarded-for'] || req.connection.remoteAddress}'`);
+        debug && console.log(`vars requested from '${req.headers['x-forwarded-for'] || req.connection.remoteAddress}'`);
         res.json(variablesSet);
     });
 

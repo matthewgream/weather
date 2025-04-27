@@ -4,6 +4,8 @@
 const fs = require('fs');
 const path = require('path');
 const chokidar = require('chokidar');
+const crypto = require('crypto');
+const sharp = require('sharp');
 
 let debugSnapshotFunctions = false;
 
@@ -441,6 +443,21 @@ class SnapshotTimelapseManager {
     }
 }
 
+function getThumbnailKey(file, width) {
+    const mtime = fs.statSync(file).mtime.getTime();
+    return crypto.createHash('md5').update(`${file}-${width}-${mtime}`).digest('hex');
+}
+async function getThumbnailData(manager, filePath, width, quality) {
+    if (!fs.existsSync(filePath)) return null;
+    const key = getThumbnailKey(filePath, width);
+    let thumbnail = manager.retrieve(key);
+    if (!thumbnail) {
+        thumbnail = await sharp(filePath).resize(width).jpeg({ quality }).toBuffer();
+        manager.insert(key, thumbnail);
+    }
+    return thumbnail;
+}
+
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -450,6 +467,7 @@ module.exports = {
     SnapshotContentsManager,
     SnapshotThumbnailsManager,
     SnapshotTimelapseManager,
+    getThumbnailData,
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

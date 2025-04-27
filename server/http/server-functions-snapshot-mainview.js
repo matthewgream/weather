@@ -3,8 +3,6 @@
 
 const fs = require('fs');
 const path = require('path');
-const sharp = require('sharp');
-const crypto = require('crypto');
 
 const THUMBNAIL_CACHE_SIZE = 128;
 const THUMBNAIL_CACHE_TIME = 65 * 60 * 1000;
@@ -19,7 +17,7 @@ const SNAPSHOT_REBUILD_TIME = 30 * 1000;
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function initialise(app, prefix, directory, server) {
-    const { SnapshotThumbnailsManager } = require('./server-functions-snapshot.js');
+    const { SnapshotThumbnailsManager, getThumbnailData } = require('./server-functions-snapshot.js');
     const snapshotThumbnailsManager = new SnapshotThumbnailsManager({ maxEntries: THUMBNAIL_CACHE_SIZE, ttl: THUMBNAIL_CACHE_TIME });
     process.on('SIGTERM', () => {
         snapshotThumbnailsManager.dispose();
@@ -27,30 +25,16 @@ function initialise(app, prefix, directory, server) {
 
     //
 
-    function getThumbnailKey(file, width) {
-        const mtime = fs.statSync(file).mtime.getTime();
-        return crypto.createHash('md5').update(`${file}-${width}-${mtime}`).digest('hex');
-    }
-    async function getThumbnailData(file, width) {
-        if (!file.match(/snapshot_(\d{8})\d{6}\.jpg/)?.[1]) return null;
-        const filePath = path.join(directory, file);
-        if (!fs.existsSync(filePath)) return null;
-        const key = getThumbnailKey(filePath, width);
-        let thumbnail = snapshotThumbnailsManager.retrieve(key);
-        if (!thumbnail) {
-            thumbnail = await sharp(filePath)
-                .resize(width)
-                .jpeg({ quality: width > THUMBNAIL_WIDTH_SNAPSHOT ? 80 : 70 })
-                .toBuffer();
-            snapshotThumbnailsManager.insert(key, thumbnail);
-        }
-        return thumbnail;
+    async function getThumbnailImage(file, width) {
+        if (!file.startsWith('snapshot') || !file.endsWith('.jpg')) return null;
+        return getThumbnailData(snapshotThumbnailsManager, path.join(directory, file), width, width > THUMBNAIL_WIDTH_SNAPSHOT ? 80 : 70);
     }
 
     //
 
     // XXX should use SnapshotContentsManager
-
+    // this is also not the correct way to do it. should not create symlink, but just return the specific timestamped
+    // snapshot. otherwise, we can be out of sync between clients and thumbnails / snapshots.
     let snapshotList__ = [];
     function getSnapshotTimestamp(filename) {
         const match = filename.match(/snapshot_(\d{14})\.jpg/);
@@ -65,23 +49,13 @@ function initialise(app, prefix, directory, server) {
               )
             : undefined;
     }
-    function readSnapshotsFromDirectory(dirPath) {
+    function snapshotsLoad(directory) {
         return fs
-            .readdirSync(dirPath)
+            .readdirSync(directory)
             .filter((file) => !file.startsWith('snapshot_M') && file.startsWith('snapshot_') && file.endsWith('.jpg'))
-            .sort((a, b) => b.localeCompare(a))
-            .map((file) => ({ file }));
+            .sort((a, b) => b.localeCompare(a));
     }
-    function addSnapshot(filename, data) {
-        try {
-            fs.writeFileSync(path.join(directory, filename), data);
-            snapshotList__.unshift(filename);
-            console.log(`snapshot received: ${filename} (--> ${directory}`);
-        } catch (error) {
-            console.error('Error storing snapshot:', error);
-        }
-    }
-    function expireSnapshot() {
+    function snapshotsExpire() {
         const expiryTime = new Date(new Date().getTime() - SNAPSHOT_CACHE_TIME);
         try {
             snapshotList__ = snapshotList__.filter((file) => {
@@ -99,9 +73,21 @@ function initialise(app, prefix, directory, server) {
             console.error(`Error cleaning up old snapshots in ${directory}:`, error);
         }
     }
-    async function setIntervalSnapshot(sourcePath, targetName, width) {
+    function snapshotsInsert(filename, data) {
         try {
-            await getThumbnailData(targetName, width);
+            fs.writeFileSync(path.join(directory, filename), data);
+            snapshotList__.unshift(filename);
+            console.log(`snapshot received: ${filename} (--> ${directory})`);
+        } catch (error) {
+            console.error('Error storing snapshot:', error);
+        }
+    }
+
+    //
+
+    async function intervalsSnapshotsSet(sourcePath, targetName, width) {
+        try {
+            await getThumbnailImage(targetName, width);
         } catch (error) {
             console.error(`Error generating thumbnails for ${targetName}:`, error);
         }
@@ -117,8 +103,8 @@ function initialise(app, prefix, directory, server) {
             console.error(`Error creating symlink for ${targetPath}:`, err);
         }
     }
-    async function rebuildIntervals() {
-        expireSnapshot();
+    async function intervalsSnapshotsRebuild() {
+        snapshotsExpire();
         if (snapshotList__.length == 0) return;
         const closestSnapshots = {};
         const earliest = snapshotList__[0];
@@ -144,13 +130,13 @@ function initialise(app, prefix, directory, server) {
             if (closest.file) closestSnapshots[interval] = closest.file;
         }
         for (const interval in closestSnapshots)
-            await setIntervalSnapshot(path.join(directory, closestSnapshots[interval]), `snapshot_M${interval}.jpg`, THUMBNAIL_WIDTH_SNAPSHOT);
-        await setIntervalSnapshot(path.join(directory, earliest), 'snapshot.jpg', THUMBNAIL_WIDTH_CAMERA);
+            await intervalsSnapshotsSet(path.join(directory, closestSnapshots[interval]), `snapshot_M${interval}.jpg`, THUMBNAIL_WIDTH_SNAPSHOT);
+        await intervalsSnapshotsSet(path.join(directory, earliest), 'snapshot.jpg', THUMBNAIL_WIDTH_CAMERA);
     }
-    async function getIntervalThumbnails() {
+    async function intervalsThumbnailsGet() {
         async function makethumb(filename, width) {
             try {
-                const imageBuffer = await getThumbnailData(filename, width);
+                const imageBuffer = await getThumbnailImage(filename, width);
                 if (imageBuffer) return `data:image/jpeg;base64,${imageBuffer.toString('base64')}`;
             } catch (err) {
                 console.error(`Error getting thumbnail for ${filename}:`, err);
@@ -163,10 +149,9 @@ function initialise(app, prefix, directory, server) {
         return thumbnails;
     }
 
-    snapshotList__ = readSnapshotsFromDirectory(directory);
-    rebuildIntervals();
-    setInterval(rebuildIntervals, SNAPSHOT_REBUILD_TIME);
-    console.log(`snapshot intervals started using frequency=${SNAPSHOT_REBUILD_TIME}s`);
+    snapshotList__ = snapshotsLoad(directory);
+    intervalsSnapshotsRebuild();
+    setInterval(intervalsSnapshotsRebuild, SNAPSHOT_REBUILD_TIME);
 
     //
 
@@ -174,7 +159,7 @@ function initialise(app, prefix, directory, server) {
         const file = req.params.file;
         const width = parseInt(req.query.w) || THUMBNAIL_WIDTH_SNAPSHOT;
         try {
-            const imagedata = await getThumbnailData(file, width);
+            const imagedata = await getThumbnailImage(file, width);
             if (imagedata == null) return res.status(404).send('Thumbnail not found');
             res.set('Content-Type', 'image/jpeg');
             res.set('Cache-Control', 'public, max-age=300');
@@ -200,8 +185,8 @@ function initialise(app, prefix, directory, server) {
     //
 
     return {
-        getThumbnails: getIntervalThumbnails,
-        insert: addSnapshot,
+        getThumbnails: intervalsThumbnailsGet,
+        insert: snapshotsInsert,
     };
 }
 

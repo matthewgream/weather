@@ -3,8 +3,6 @@
 
 const fs = require('fs');
 const path = require('path');
-const sharp = require('sharp');
-const crypto = require('crypto');
 
 const THUMBNAIL_CACHE_SIZE = 128;
 const THUMBNAIL_CACHE_TIME = 60 * 60 * 1000;
@@ -19,6 +17,7 @@ function initialise(app, prefix, directory) {
         SnapshotDirectoryManager,
         SnapshotContentsManager,
         SnapshotTimelapseManager,
+        getThumbnailData,
     } = require('./server-functions-snapshot.js');
     const snapshotThumbnailsManager = new SnapshotThumbnailsManager({ size: THUMBNAIL_CACHE_SIZE, time: THUMBNAIL_CACHE_TIME });
     const snapshotDirectoryManager = new SnapshotDirectoryManager({ directory: directorySnapshot });
@@ -73,25 +72,10 @@ function initialise(app, prefix, directory) {
         if (!fs.existsSync(filePath)) return null;
         return filePath;
     }
-    function getThumbnailKey(file, width) {
-        const mtime = fs.statSync(file).mtime.getTime();
-        return crypto.createHash('md5').update(`${file}-${width}-${mtime}`).digest('hex');
-    }
-    async function getThumbnailData(file, width) {
+    async function getThumbnailImage(file, width) {
         const date = file.match(/snapshot_(\d{8})\d{6}\.jpg$/)?.[1];
         if (!date) return null;
-        const filePath = path.join(directorySnapshot, date, file); // subdirectory
-        if (!fs.existsSync(filePath)) return null;
-        const key = getThumbnailKey(filePath, width);
-        let thumbnail = snapshotThumbnailsManager.retrieve(key);
-        if (!thumbnail) {
-            thumbnail = await sharp(filePath)
-                .resize(width)
-                .jpeg({ quality: width > THUMBNAIL_WIDTH_SNAPSHOT ? 80 : 70 })
-                .toBuffer();
-            snapshotThumbnailsManager.insert(key, thumbnail);
-        }
-        return thumbnail;
+        return getThumbnailData(snapshotThumbnailsManager, path.join(directorySnapshot, date, file), width, width > THUMBNAIL_WIDTH_SNAPSHOT ? 80 : 70); // subdirectory
     }
 
     //
@@ -113,7 +97,7 @@ function initialise(app, prefix, directory) {
         const file = req.params.file;
         const width = parseInt(req.query.w) || THUMBNAIL_WIDTH_SNAPSHOT;
         try {
-            const imagedata = await getThumbnailData(file, width);
+            const imagedata = await getThumbnailImage(file, width);
             if (!imagedata) return res.status(404).send('Thumbnail not found');
             res.set('Content-Type', 'image/jpeg');
             res.set('Cache-Control', 'public, max-age=300');
