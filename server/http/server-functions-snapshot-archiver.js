@@ -1,25 +1,37 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function initialiseSnapshot(app, prefix, directory) {
+const fs = require('fs');
+const path = require('path');
+const sharp = require('sharp');
+const crypto = require('crypto');
+
+const THUMBNAIL_CACHE_SIZE = 128;
+const THUMBNAIL_CACHE_TIME = 60 * 60 * 1000;
+const THUMBNAIL_WIDTH_SNAPSHOT = 200;
+
+function initialise(app, prefix, directory) {
+    const directorySnapshot = directory + '/snapshots';
+    const directoryTimelapse = directory + '/timelapse';
+
     const {
         SnapshotThumbnailsManager,
         SnapshotDirectoryManager,
         SnapshotContentsManager,
         SnapshotTimelapseManager,
     } = require('./server-functions-snapshot.js');
-    const snapshotThumbnailsCacheSize = 2048;
-    const snapshotThumbnailsCacheTtl = 60 * 60 * 1000;
-    const snapshotThumbnailsWidthDefault = 200;
-    const snapshotDirectory = directory + '/snapshots';
-    const timelapseDirectory = directory + '/timelapse';
+    const snapshotThumbnailsManager = new SnapshotThumbnailsManager({ size: THUMBNAIL_CACHE_SIZE, time: THUMBNAIL_CACHE_TIME });
+    const snapshotDirectoryManager = new SnapshotDirectoryManager({ directory: directorySnapshot });
+    const snapshotContentsManager = new SnapshotContentsManager({ directory: directorySnapshot });
+    const snapshotTimelapseManager = new SnapshotTimelapseManager({ directory: directoryTimelapse });
+    process.on('SIGTERM', () => {
+        snapshotDirectoryManager.dispose();
+        snapshotContentsManager.dispose();
+        snapshotThumbnailsManager.dispose();
+        snapshotTimelapseManager.dispose();
+    });
 
     //
-
-    const fs = require('fs');
-    const path = require('path');
-    const sharp = require('sharp');
-    const crypto = require('crypto');
 
     function getFormattedDate(date) {
         const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -30,33 +42,6 @@ function initialiseSnapshot(app, prefix, directory) {
         if (!time || time.length < 6) return 'Invalid time';
         return `${parseInt(time.substring(0, 2)).toString().padStart(2, '0')}:${parseInt(time.substring(2, 4)).toString().padStart(2, '0')}:${parseInt(time.substring(4, 6)).toString().padStart(2, '0')}`;
     }
-    function getThumbnailKey(file, width) {
-        const mtime = fs.statSync(file).mtime.getTime();
-        return crypto.createHash('md5').update(`${file}-${width}-${mtime}`).digest('hex');
-    }
-
-    const snapshotThumbnailsManager = new SnapshotThumbnailsManager({
-        maxEntries: snapshotThumbnailsCacheSize,
-        ttl: snapshotThumbnailsCacheTtl,
-    });
-    const snapshotDirectoryManager = new SnapshotDirectoryManager({
-        directory: snapshotDirectory,
-    });
-    const snapshotContentsManager = new SnapshotContentsManager({
-        directory: snapshotDirectory,
-    });
-    const snapshotTimelapseManager = new SnapshotTimelapseManager({
-        directory: timelapseDirectory,
-    });
-    process.on('SIGTERM', () => {
-        snapshotDirectoryManager.dispose();
-        snapshotContentsManager.dispose();
-        snapshotThumbnailsManager.dispose();
-        snapshotTimelapseManager.dispose();
-    });
-
-    //
-
     function getSnapshotListOfDates() {
         return {
             entries: snapshotDirectoryManager.getListOfDates().map(({ dateCode }) => ({ dateCode, dateFormatted: getFormattedDate(dateCode) })),
@@ -75,61 +60,60 @@ function initialiseSnapshot(app, prefix, directory) {
                 .map(({ file }) => ({ dateCode: file.slice(10, 18), file, dateFormatted: getFormattedDate(file.slice(10, 18)) })),
         };
     }
-    function getSnapshotImageFilename(file) {
-        const match = file.match(/snapshot_(\d{8})\d{6}\.jpg$/);
-        if (!match?.[1]) return undefined;
-        const date = match[1];
-        const filePath = path.join(snapshotDirectory, date, file);
+    function getSnapshotFilename(file) {
+        const date = file.match(/snapshot_(\d{8})\d{6}\.jpg$/)?.[1];
+        if (!date) return null;
+        const filePath = path.join(directorySnapshot, date, file); // subdirectory
         if (!fs.existsSync(filePath)) return null;
         return filePath;
     }
-
-    async function getSnapshotImageThumbnail(file, width) {
-        const match = file.match(/snapshot_(\d{8})\d{6}\.jpg/);
-        if (!match?.[1]) return null;
-        const dateDir = match[1];
-        const filePath = path.join(snapshotDirectory, dateDir, file);
+    function getTimelapseFilename(file) {
+        if (!file.match(/timelapse_(\d{8})\.mp4$/)?.[1]) return null;
+        const filePath = path.join(directoryTimelapse, file);
+        if (!fs.existsSync(filePath)) return null;
+        return filePath;
+    }
+    function getThumbnailKey(file, width) {
+        const mtime = fs.statSync(file).mtime.getTime();
+        return crypto.createHash('md5').update(`${file}-${width}-${mtime}`).digest('hex');
+    }
+    async function getThumbnailData(file, width) {
+        const date = file.match(/snapshot_(\d{8})\d{6}\.jpg$/)?.[1];
+        if (!date) return null;
+        const filePath = path.join(directorySnapshot, date, file); // subdirectory
         if (!fs.existsSync(filePath)) return null;
         const key = getThumbnailKey(filePath, width);
         let thumbnail = snapshotThumbnailsManager.retrieve(key);
         if (!thumbnail) {
-            thumbnail = await sharp(filePath).resize(width).jpeg({ quality: 70 }).toBuffer();
+            thumbnail = await sharp(filePath)
+                .resize(width)
+                .jpeg({ quality: width > THUMBNAIL_WIDTH_SNAPSHOT ? 80 : 70 })
+                .toBuffer();
             snapshotThumbnailsManager.insert(key, thumbnail);
         }
         return thumbnail;
     }
 
-    function getTimelpaseVideoFilename(file) {
-        const match = file.match(/timelapse_(\d{8})\.mp4$/);
-        if (!match?.[1]) return undefined;
-        const filePath = path.join(timelapseDirectory, file);
-        if (!fs.existsSync(filePath)) return null;
-        return filePath;
-    }
-
     //
 
     app.get(prefix + '/list', (req, res) => {
-        return res.render('server-snapshot-list', {
-            snapshotList: getSnapshotListOfDates(),
-            timelapseList: getTimelapseListOfFiles(),
-        });
+        return res.render('server-snapshot-list', { snapshotList: getSnapshotListOfDates(), timelapseList: getTimelapseListOfFiles() });
     });
     app.get(prefix + '/list/:date', (req, res) => {
         return res.render('server-snapshot-date', getSnapshotListForDate(req.params.date));
     });
     app.get(prefix + '/file/:file', (req, res) => {
         const file = req.params.file;
-        filename = getSnapshotImageFilename(file);
-        if (!filename) filename = getTimelpaseVideoFilename(file);
+        let filename = getSnapshotFilename(file);
+        if (!filename) filename = getTimelapseFilename(file);
         if (!filename) return res.status(404).send('File not found');
         return res.sendFile(filename);
     });
     app.get(prefix + '/thumb/:file', async (req, res) => {
         const file = req.params.file;
-        const width = parseInt(req.query.w) || snapshotThumbnailsWidthDefault;
+        const width = parseInt(req.query.w) || THUMBNAIL_WIDTH_SNAPSHOT;
         try {
-            const imagedata = await getSnapshotImageThumbnail(file, width);
+            const imagedata = await getThumbnailData(file, width);
             if (!imagedata) return res.status(404).send('Thumbnail not found');
             res.set('Content-Type', 'image/jpeg');
             res.set('Cache-Control', 'public, max-age=300');
@@ -150,8 +134,8 @@ function initialiseSnapshot(app, prefix, directory) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-module.exports = function (app, prefix, directory) {
-    return initialiseSnapshot(app, prefix, directory);
+module.exports = function (app, prefix, options) {
+    return initialise(app, prefix, options.directory || __dirname);
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

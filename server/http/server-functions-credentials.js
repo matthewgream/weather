@@ -3,30 +3,20 @@
 
 const fs = require('fs');
 
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-function configLoad(configPath) {
-    try {
-        const items = {};
-        fs.readFileSync(configPath, 'utf8')
-            .split('\n')
-            .forEach((line) => {
-                const [key, value] = line.split('=').map((s) => s.trim());
-                if (key && value) items[key] = value;
-            });
-        return items;
-    } catch (err) {
-        console.warn(`config: cannot load '${configPath}' (using defaults, which may not work correctly), error:`, err);
-        return {};
-    }
+function initialise(fqdn) {
+    const letsencrypt = `/etc/letsencrypt/live/${fqdn}`;
+    return {
+        key: fs.readFileSync(`${letsencrypt}/privkey.pem`, 'utf8'),
+        cert: fs.readFileSync(`${letsencrypt}/cert.pem`, 'utf8'),
+        ca: fs.readFileSync(`${letsencrypt}/chain.pem`, 'utf8'),
+    };
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-module.exports = {
-    configLoad,
+module.exports = function (fqdn) {
+    return initialise(fqdn);
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

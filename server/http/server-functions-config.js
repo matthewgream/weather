@@ -1,23 +1,28 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function initialiseCredentials(fqdn) {
-    const fs = require('fs');
+const fs = require('fs');
 
-    const letsencrypt = `/etc/letsencrypt/live/${fqdn}`;
-
-    return {
-        key: fs.readFileSync(`${letsencrypt}/privkey.pem`, 'utf8'),
-        cert: fs.readFileSync(`${letsencrypt}/cert.pem`, 'utf8'),
-        ca: fs.readFileSync(`${letsencrypt}/chain.pem`, 'utf8'),
-    };
+function initialise(filename) {
+    const items = {};
+    try {
+        fs.readFileSync(filename, 'utf8')
+            .split('\n')
+            .forEach((line) => {
+                const [key, value] = line.split('=').map((s) => s.trim());
+                if (key && value) items[key] = value;
+            });
+    } catch (err) {
+        console.warn(`config: cannot load '${filename}' (using defaults, which may not work correctly), error:`, err);
+    }
+    return items;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-module.exports = function (fqdn) {
-    return initialiseCredentials(fqdn);
+module.exports = function (filename) {
+    return initialise(filename);
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

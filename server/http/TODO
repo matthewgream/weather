@@ -1,6 +1,4 @@
 
 - allow return list of images from /dev/shm in server-mainview
 - update archiver collector messages so on startup it will probe and pull (e.g. to overcome reboot loss)
-- remove existing ssh based tools entirely
-- update server-snapshots-mainview for proxy pass through to archiver
 

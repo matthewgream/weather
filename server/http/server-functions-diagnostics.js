@@ -2,6 +2,7 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const morgan = require('morgan');
+const expressStatus = require('express-status-monitor');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -180,9 +181,10 @@ class DiagnosticsManager {
         this.memoryLogs = new MemoryLogsManager({ maxSize: options.logLimitStorage || LOGS_INMEMORY_MAXSIZE });
         this.requestStats = new RequestStatsManager();
         const self = this;
+        app.use(expressStatus({ port: options.port || 80, path: (options.path || '') + '/internal' }));
         app.use(morgan(options.morganFormat || 'combined', { stream: self.memoryLogs.createLogStream() }));
         app.use(this.requestStats.createMiddleware());
-        app.get(options.path || '/requests', (req, res) =>
+        app.get((options.path || '') + '/requests', (req, res) =>
             res.send(self.requestStats.generateStatsPage(req.query.limit ? parseInt(req.query.limit) : self.logLimitDisplay, self.memoryLogs))
         );
     }
@@ -197,9 +199,8 @@ class DiagnosticsManager {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-module.exports = function (xxx, options) {
-    xxx.use(require('express-status-monitor')({ port: options.port, path: options.path + '/internal' }));
-    return new DiagnosticsManager(xxx, { path: options.path + '/requests' });
+module.exports = function (app, options) {
+    return new DiagnosticsManager(app, options);
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

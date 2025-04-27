@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const chokidar = require('chokidar');
 
-let debugSnapshotFunctions = true;
+let debugSnapshotFunctions = false;
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -26,7 +26,7 @@ class SnapshotDirectoryManager {
             this.snapshotsCache = this.readSnapshotDirectories();
             this.isInitialized = true;
             this.setupWatcher();
-            console.log(`SnapshotDirectoryManager(${this.snapshotsDir}): initialized with ${this.snapshotsCache.length} entries`);
+            debugSnapshotFunctions && console.log(`SnapshotDirectoryManager(${this.snapshotsDir}): initialized with ${this.snapshotsCache.length} entries`);
         } catch (error) {
             console.error(`SnapshotDirectoryManager(${this.snapshotsDir}): failed to initialize:`, error);
         }
@@ -50,7 +50,7 @@ class SnapshotDirectoryManager {
             ignoreInitial: true,
             depth: 0,
             awaitWriteFinish: true,
-            ignored: /(^|[\/\\])\../, // Ignore dotfiles
+            ignored: /(^|[\/\\])\../, // eslint-disable-line no-useless-escape
         });
         watcher.on('addDir', (dirPath) => {
             const dirName = path.basename(dirPath);
@@ -69,13 +69,14 @@ class SnapshotDirectoryManager {
         if (!this.snapshotsCache.some((item) => item.dateCode === dirName)) {
             this.snapshotsCache.push({ dateCode: dirName });
             this.snapshotsCache.sort((a, b) => b.dateCode.localeCompare(a.dateCode));
-            console.log(`SnapshotDirectoryManager(${this.snapshotsDir}): insert directory: ${dirName}`);
+            debugSnapshotFunctions && console.log(`SnapshotDirectoryManager(${this.snapshotsDir}): insert directory: ${dirName}`);
         }
     }
     cacheRemoveDirectory(dirName) {
         const initialLength = this.snapshotsCache.length;
         this.snapshotsCache = this.snapshotsCache.filter((item) => item.dateCode !== dirName);
-        if (initialLength !== this.snapshotsCache.length) console.log(`SnapshotDirectoryManager(${this.snapshotsDir}): remove directory: ${dirName}`);
+        if (initialLength !== this.snapshotsCache.length)
+            debugSnapshotFunctions && console.log(`SnapshotDirectoryManager(${this.snapshotsDir}): remove directory: ${dirName}`);
     }
     getListOfDates() {
         if (!this.isInitialized) this.initializeCache();
@@ -85,7 +86,7 @@ class SnapshotDirectoryManager {
     checkCacheExpiry() {
         const now = Date.now();
         if (now - this.lastAccessed > this.expiryTime && this.isInitialized) {
-            console.log(`SnapshotDirectoryManager(${this.snapshotsDir}): flushing (inactivity timeout)`);
+            debugSnapshotFunctions && console.log(`SnapshotDirectoryManager(${this.snapshotsDir}): flushing (inactivity timeout)`);
             this.closeWatchers();
             this.snapshotsCache = [];
             this.isInitialized = false;
@@ -157,7 +158,8 @@ class SnapshotContentsManager {
                 this.watchers.get(date).close();
                 this.watchers.delete(date);
                 this.watcherTimestamps.delete(date);
-                console.log(`SnapshotContentsManager(${this.snapshotsDir}): (date=${date}) watcher closed (watchers=${this.watchers.size})`);
+                debugSnapshotFunctions &&
+                    console.log(`SnapshotContentsManager(${this.snapshotsDir}): (date=${date}) watcher closed (watchers=${this.watchers.size})`);
             } catch (error) {
                 console.error(`SnapshotContentsManager(${this.snapshotsDir}): (date=${date}) watcher error:`, error);
             }
@@ -171,12 +173,12 @@ class SnapshotContentsManager {
             ignoreInitial: true,
             depth: 0,
             awaitWriteFinish: true,
-            ignored: /(^|[\/\\])\../, // Ignore hidden files
+            ignored: /(^|[\/\\])\../, // eslint-disable-line no-useless-escape
         });
         watcher.on('all', (event, filePath) => {
             const fileName = path.basename(filePath);
             if (fileName.startsWith('snapshot_') && fileName.endsWith('.jpg')) {
-                console.log(`SnapshotContentsManager(${this.snapshotsDir}): (date=${date}) watcher event (${event}: ${fileName})`);
+                debugSnapshotFunctions && console.log(`SnapshotContentsManager(${this.snapshotsDir}): (date=${date}) watcher event (${event}: ${fileName})`);
                 this.closeWatcher(date);
                 this.cache.delete(date);
                 this.cacheTimestamps.delete(date);
@@ -187,7 +189,7 @@ class SnapshotContentsManager {
         });
         this.watchers.set(date, watcher);
         this.watcherTimestamps.set(date, Date.now());
-        console.log(`SnapshotContentsManager(${this.snapshotsDir}): (date=${date}) watcher started (watchers=${this.watchers.size})`);
+        debugSnapshotFunctions && console.log(`SnapshotContentsManager(${this.snapshotsDir}): (date=${date}) watcher started (watchers=${this.watchers.size})`);
     }
     enforceWatcherLimit() {
         if (this.watchers.size < this.maxWatchers) return;
@@ -196,7 +198,7 @@ class SnapshotContentsManager {
         for (let i = 0; i < numToClose; i++) {
             if (i < entries.length) {
                 const [date] = entries[i];
-                console.log(`SnapshotContentsManager(${this.snapshotsDir}): (date=${date}) watcher closed (limit reached)`);
+                debugSnapshotFunctions && console.log(`SnapshotContentsManager(${this.snapshotsDir}): (date=${date}) watcher closed (limit reached)`);
                 this.closeWatcher(date);
             }
         }
@@ -205,13 +207,13 @@ class SnapshotContentsManager {
         const now = Date.now();
         this.watcherTimestamps.forEach((timestamp, date) => {
             if (now - timestamp > this.expiryTime) {
-                console.log(`SnapshotContentsManager(${this.snapshotsDir}): (date=${date}) watcher closed (inactivity timeout)`);
+                debugSnapshotFunctions && console.log(`SnapshotContentsManager(${this.snapshotsDir}): (date=${date}) watcher closed (inactivity timeout)`);
                 this.closeWatcher(date);
             }
         });
         this.cacheTimestamps.forEach((timestamp, date) => {
             if (now - timestamp > this.expiryTime) {
-                console.log(`SnapshotContentsManager(${this.snapshotsDir}): (date=${date}) flushing (inactivity timeout)`);
+                debugSnapshotFunctions && console.log(`SnapshotContentsManager(${this.snapshotsDir}): (date=${date}) flushing (inactivity timeout)`);
                 this.cache.delete(date);
                 this.cacheTimestamps.delete(date);
             }
@@ -225,7 +227,7 @@ class SnapshotContentsManager {
         this.watchers.forEach((watcher, date) => {
             try {
                 watcher.close();
-                console.log(`SnapshotContentsManager(${this.snapshotsDir}): (date=${date}) watcher closed`);
+                debugSnapshotFunctions && console.log(`SnapshotContentsManager(${this.snapshotsDir}): (date=${date}) watcher closed`);
             } catch (error) {
                 console.error(`SnapshotContentsManager(${this.snapshotsDir}): watcher error (on close):`, error);
             }
@@ -244,10 +246,10 @@ class SnapshotThumbnailsManager {
     constructor(options = {}) {
         this.cacheEntries = {};
         this.cacheDetails = {};
-        this.cacheLimit = options.maxEntries || 2048;
-        this.cacheTimeout = options.ttl || 24 * 60 * 60 * 1000;
+        this.cacheSize = options.size || 2048;
+        this.cacheTime = options.time || 24 * 60 * 60 * 1000;
         if (options.autoCleanup !== false) {
-            const cleanupInterval = options.cleanupInterval || this.cacheTimeout / 4;
+            const cleanupInterval = options.cleanupInterval || this.cacheTime / 4;
             this.cleanupTimer = setInterval(() => this.cleanup(), cleanupInterval);
         }
     }
@@ -283,9 +285,9 @@ class SnapshotThumbnailsManager {
     cleanup() {
         const now = Date.now();
         const cacheKeys = Object.keys(this.cacheEntries);
-        if (cacheKeys.length <= this.cacheLimit) {
+        if (cacheKeys.length <= this.cacheSize) {
             cacheKeys.forEach((key) => {
-                if (now - this.cacheDetails[key].added > this.cacheTimeout) {
+                if (now - this.cacheDetails[key].added > this.cacheTime) {
                     delete this.cacheEntries[key];
                     delete this.cacheDetails[key];
                 }
@@ -293,9 +295,9 @@ class SnapshotThumbnailsManager {
             return;
         }
         const sortedKeys = cacheKeys.sort((a, b) => this.cacheDetails[a].lastAccessed - this.cacheDetails[b].lastAccessed);
-        let keysToRemove = sortedKeys.filter((key) => now - this.cacheDetails[key].added > this.cacheTimeout);
-        if (cacheKeys.length - keysToRemove.length > this.cacheLimit) {
-            const additionalToRemove = cacheKeys.length - keysToRemove.length - Math.floor(this.cacheLimit * 0.9);
+        let keysToRemove = sortedKeys.filter((key) => now - this.cacheDetails[key].added > this.cacheTime);
+        if (cacheKeys.length - keysToRemove.length > this.cacheSize) {
+            const additionalToRemove = cacheKeys.length - keysToRemove.length - Math.floor(this.cacheSize * 0.9);
             if (additionalToRemove > 0)
                 keysToRemove = keysToRemove.concat(sortedKeys.filter((key) => !keysToRemove.includes(key)).slice(0, additionalToRemove));
         }
@@ -332,7 +334,7 @@ class SnapshotTimelapseManager {
             this.timelapseCache = this.readTimelapseFiles();
             this.isInitialized = true;
             this.setupWatcher();
-            console.log(`SnapshotTimelapseManager(${this.timelapseDir}): initialized with ${this.timelapseCache.length} entries`);
+            debugSnapshotFunctions && console.log(`SnapshotTimelapseManager(${this.timelapseDir}): initialized with ${this.timelapseCache.length} entries`);
         } catch (error) {
             console.error(`SnapshotTimelapseManager(${this.timelapseDir}): failed to initialize:`, error);
         }
@@ -359,7 +361,7 @@ class SnapshotTimelapseManager {
                 stabilityThreshold: 2000,
                 pollInterval: 100,
             },
-            ignored: /(^|[\/\\])\../, // Ignore dotfiles
+            ignored: /(^|[\/\\])\../, // eslint-disable-line no-useless-escape
         });
         watcher.on('add', (filePath) => {
             const fileName = path.basename(filePath);
@@ -384,7 +386,7 @@ class SnapshotTimelapseManager {
                 filePath,
                 fileSizeBytes: fs.statSync(filePath).size,
             };
-            console.log(`SnapshotTimelapseManager(${this.timelapseDir}): updated file: ${fileName}`);
+            debugSnapshotFunctions && console.log(`SnapshotTimelapseManager(${this.timelapseDir}): updated file: ${fileName}`);
         } else {
             this.timelapseCache.push({
                 file: fileName,
@@ -393,13 +395,14 @@ class SnapshotTimelapseManager {
                 fileSizeBytes: fs.statSync(filePath).size,
             });
             this.timelapseCache.sort((a, b) => b.file.localeCompare(a.file));
-            console.log(`SnapshotTimelapseManager(${this.timelapseDir}): adding new file: ${fileName}`);
+            debugSnapshotFunctions && console.log(`SnapshotTimelapseManager(${this.timelapseDir}): adding new file: ${fileName}`);
         }
     }
     removeFileFromCache(fileName) {
         const initialLength = this.timelapseCache.length;
         this.timelapseCache = this.timelapseCache.filter((item) => item.file !== fileName);
-        if (initialLength !== this.timelapseCache.length) console.log(`SnapshotTimelapseManager(${this.timelapseDir}): removed file: ${fileName}`);
+        if (initialLength !== this.timelapseCache.length)
+            debugSnapshotFunctions && console.log(`SnapshotTimelapseManager(${this.timelapseDir}): removed file: ${fileName}`);
     }
     getListOfFiles() {
         if (!this.isInitialized) this.initializeCache();
@@ -409,7 +412,7 @@ class SnapshotTimelapseManager {
     checkCacheExpiry() {
         const now = Date.now();
         if (now - this.lastAccessed > this.expiryTime && this.isInitialized) {
-            console.log(`SnapshotTimelapseManager(${this.timelapseDir}): flushing (inactivity timeout)`);
+            debugSnapshotFunctions && console.log(`SnapshotTimelapseManager(${this.timelapseDir}): flushing (inactivity timeout)`);
             this.closeWatcher();
             this.timelapseCache = [];
             this.isInitialized = false;
@@ -419,7 +422,7 @@ class SnapshotTimelapseManager {
         if (this.watcher) {
             try {
                 this.watcher.close();
-                console.log(`SnapshotTimelapseManager(${this.timelapseDir}): watcher closed`);
+                debugSnapshotFunctions && console.log(`SnapshotTimelapseManager(${this.timelapseDir}): watcher closed`);
             } catch (error) {
                 console.error(`SnapshotTimelapseManager(${this.timelapseDir}): watcher error (on close):`, error);
             }
@@ -434,7 +437,7 @@ class SnapshotTimelapseManager {
         this.closeWatcher();
         this.timelapseCache = [];
         this.isInitialized = false;
-        console.log(`SnapshotTimelapseManager(${this.timelapseDir}): disposed`);
+        debugSnapshotFunctions && console.log(`SnapshotTimelapseManager(${this.timelapseDir}): disposed`);
     }
 }
 

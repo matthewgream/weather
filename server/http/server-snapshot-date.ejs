@@ -4,17 +4,50 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Snapshots: <%= dateFormatted %></title>
-    <link href="/static/css/snapshot.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f4f8;
+            color: #2d3748;
+        }
+        h1 {
+            color: #4299e1;
+            margin-bottom: 20px;
+        }
+        .item-list {
+            background-color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .item-entry {
+            padding: 3px 0;
+            display: flex;
+            align-items: center;
+        }
+        .item-entry a {
+            color: #4299e1;
+            text-decoration: none;
+        }
+        .item-entry a:hover {
+            text-decoration: underline;
+        }
+        .item-detail {
+            font-weight: 500;
+            min-width: 80px;
+            margin-right: 16px;
+        }
+    </style>
 </head>
 <body>
     <h1>Snapshots: <%= dateFormatted %></h1>
     <div class="item-list">
         <% entries.forEach(entry => {%>
             <div class="item-entry">
-                <span class="item-detail">
-                    <%= entry.timeFormatted %>
-                </span>
-                <a href="/snapshot/file/<%= entry.file %>" target="_blank">View Image</a>
+                <span class="item-detail"><%= entry.timeFormatted %></span><a href="/snapshot/file/<%= entry.file %>" target="_blank">View Image</a>
             </div>
         <% }); %>
     </div>

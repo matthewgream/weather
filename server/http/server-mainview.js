@@ -4,136 +4,80 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const configPath = process.argv[2] || 'secrets.txt';
-const { configLoad } = require('./server-functions.js');
-const conf = configLoad(configPath);
-const configList = Object.entries(conf)
+const configData = require('./server-functions-config.js')(configPath);
+const configList = Object.entries(configData)
     .map(([k, v]) => k.toLowerCase() + '=' + v)
     .join(', ');
-const subs = ['weather/#', 'sensors/#', 'snapshots/#'];
-const vars = ['weather/branna', 'sensors/radiation'];
-const data_views = conf.DATA + '/http';
-const data_images = conf.DATA + '/images';
-const data_assets = conf.DATA + '/assets';
+configData.CONTENT_DATA_SUBS = ['weather/#', 'sensors/#', 'snapshots/#'];
+configData.CONTENT_VIEW_VARS = ['weather/branna', 'sensors/radiation'];
+configData.DATA_VIEWS = configData.DATA + '/http';
+configData.DATA_ASSETS = configData.DATA + '/assets';
+configData.DATA_IMAGES = configData.DATA + '/images';
+configData.DATA_CACHE = '/dev/shm';
+configData.FILE_SETS = require('path').join(__dirname, 'client.json');
 console.log(`Loaded 'config' using '${configPath}': ${configList}`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const credentials = require('./server-credentials.js')(conf.FQDN);
-console.log(`Loaded 'certificates' using '${conf.FQDN}'`);
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
 const exp = require('express');
-const xxx = exp();
-xxx.set('view engine', 'ejs');
-xxx.set('views', data_views);
-console.log(`Loaded 'express' using 'ejs=${data_views}'`);
+const app = exp();
+app.set('view engine', 'ejs');
+app.set('views', configData.DATA_VIEWS);
+console.log(`Loaded 'express' using 'ejs=${configData.DATA_VIEWS}'`);
 
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-const server_diagnostics = require('./server-functions-diagnostics')(xxx, { port: 8080, path: '/status' }); // XXX PORT_EXTERNAL
-console.log(`Loaded 'diagnostics' on '/status'`);
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-xxx.use((req, res, next) => {
+app.use((req, res, next) => {
     if (req.path === '/' && !req.secure) return res.redirect(`https://${req.headers.host.split(':')[0]}${req.url}`);
     next();
 });
 console.log(`Loaded 'redirect' using 'http -> https'`);
 
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
+const credentials = require('./server-functions-credentials.js')(configData.FQDN);
+console.log(`Loaded 'credentials' using '${configData.FQDN}'`);
 
-xxx.use(exp.static('/dev/shm'));
-console.log(`Loaded 'static' using '/dev/shm'`);
-
-xxx.use('/static', exp.static(data_assets));
-console.log(`Loaded 'static' using '/static -> ${data_assets}'`);
+require('./server-functions-diagnostics')(app, { port: 8080, path: '/status' }); // XXX PORT_EXTERNAL
+console.log(`Loaded 'diagnostics' on '/status'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const { formatInTimeZone } = require('date-fns-tz');
-const getTimestamp = (tz) => formatInTimeZone(new Date(), tz, "yyyy-MM-dd'T'HH:mm:ssXXX'Z'").replace(":00'Z", 'Z');
-
-const variablesSet = {};
-function variablesRender() {
-    return Object.fromEntries(vars.map((topic) => [topic, variablesSet[topic]]));
-}
-function variablesUpdate(topic, message) {
-    if (topic.startsWith('sensors') || topic.startsWith('weather'))
-        variablesSet[topic] = { ...JSON.parse(message.toString()), timestamp: getTimestamp(conf.TZ) };
-    else return;
-    if (vars.includes(topic)) console.log(`variables: '${topic}' --> '${JSON.stringify(variablesSet[topic])}'`);
-}
-function variablesInitialise(xxx) {
-    xxx.get('/vars', (req, res) => {
-        console.log(`/vars requested from '${req.headers['x-forwarded-for'] || req.connection.remoteAddress}'`);
-        res.json(variablesSet);
-    });
-}
-console.log(`Loaded 'variables' using '${vars.join(', ')}'`);
+app.use(exp.static(configData.DATA_CACHE));
+console.log(`Loaded 'static' using '${configData.DATA_CACHE}'`);
+app.use('/static', exp.static(configData.DATA_ASSETS));
+console.log(`Loaded 'static' using '/static -> ${configData.DATA_ASSETS}'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const server_snapshots = require('./server-snapshot-mainview.js')(xxx, '/snapshot', conf.SERVER_ARCHIVER);
-console.log(`Loaded 'snapshots' on '/snapshot' using 'server-archiver=${conf.SERVER_ARCHIVER}'`);
+require('./server-functions-images.js')(app, '/images', { directory: configData.DATA_IMAGES, location: `http://${configData.HOST}:${configData.PORT}` });
+console.log(`Loaded 'images' on '/images' using 'directory=${configData.DATA_IMAGES}'`);
+require('./server-functions-sets.js')(app, '/sets', { filename: configData.FILE_SETS });
+console.log(`Loaded 'sets' on '/sets' using 'filename=${configData.FILE_SETS}`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const mqtt_client = require('mqtt').connect(conf.MQTT, {
-    clientId: 'server-http-' + Math.random().toString(16).substring(2, 8),
+const server_snapshots = require('./server-functions-snapshot-mainview.js')(app, '/snapshot', {
+    directory: configData.DATA_CACHE,
+    server: configData.SERVER_ARCHIVER,
 });
-mqtt_client.on('connect', () => mqtt_client.subscribe(subs, () => console.log(`mqtt connected & subscribed for '${subs}'`)));
-mqtt_client.on('message', (topic, message) => {
-    if (topic === 'snapshots/imagedata') server_snapshots.receiveImagedata(message);
-    else if (topic === 'snapshots/metadata') server_snapshots.receiveMetadata(message);
-    else variablesUpdate(topic, message);
-});
-console.log(`Loaded 'mqtt:subscriber' using '${conf.MQTT}'`);
+console.log(`Loaded 'snapshots' on '/snapshot' using 'directory=${configData.DATA_CACHE}, server=${configData.SERVER_ARCHIVER}'`);
 
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
+const server_data = {
+    render: async function () {
+        return {
+            thumbnails: await server_snapshots.getThumbnails(),
+        };
+    },
+};
+console.log(`Loaded 'data' using 'data=thumbnails'`);
+const server_vars = require('./server-functions-vars.js')(app, '/vars', { vars: configData.CONTENT_VIEW_VARS, tz: configData.TZ });
+console.log(`Loaded 'vars' on '/vars' using 'vars=${configData.CONTENT_VIEW_VARS.join(', ')}'`);
 
-async function dataRender() {
-    return {
-        thumbnails: await server_snapshots.getThumbnails(),
-    };
-}
-console.log(`Loaded 'data'`);
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-const server_images = require('./server-functions-images.js')(xxx, data_images, conf.HOST, conf.PORT);
-console.log(`Loaded 'images' on '/images' using 'images=${data_images}'`);
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-const server_sets = require('./server-functions-sets.js')(xxx, 'client.json', __dirname);
-console.log(`Loaded 'sets' on '/sets' using 'source=${__dirname}/client.json'`);
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-const server_vars = variablesInitialise(xxx);
-console.log(`Loaded 'vars' on '/vars'`);
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-xxx.get('/', async (req, res) =>
+app.get('/', async (req, res) =>
     res.render('server-mainview', {
-        vars: variablesRender(),
-        data: await dataRender(),
+        vars: server_vars.render(),
+        data: await server_data.render(),
     })
 );
 console.log(`Loaded '/' using 'server-mainview' && data/vars`);
@@ -141,7 +85,38 @@ console.log(`Loaded '/' using 'server-mainview' && data/vars`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-xxx.use((req, res) => {
+let __snapshotImagedata = null;
+function receive_snapshotImagedata(message) {
+    __snapshotImagedata = message;
+}
+function receive_snapshotMetadata(message) {
+    if (!__snapshotImagedata) console.error('Received snapshot metadata but no image data is available');
+    else {
+        try {
+            server_snapshots.insert(JSON.parse(message.toString()).filename, __snapshotImagedata);
+        } catch (error) {
+            console.error('Error processing snapshot metadata:', error);
+        }
+        __snapshotImagedata = null;
+    }
+}
+const mqtt_client = require('mqtt').connect(configData.MQTT, {
+    clientId: 'server-http-' + Math.random().toString(16).substring(2, 8),
+});
+mqtt_client.on('connect', () =>
+    mqtt_client.subscribe(configData.CONTENT_DATA_SUBS, () => console.log(`mqtt connected & subscribed for '${configData.CONTENT_DATA_SUBS}'`))
+);
+mqtt_client.on('message', (topic, message) => {
+    if (topic === 'snapshots/imagedata') receive_snapshotImagedata(message);
+    else if (topic === 'snapshots/metadata') receive_snapshotMetadata(message);
+    else server_vars.update(topic, message);
+});
+console.log(`Loaded 'mqtt:subscriber' using 'server=${configData.MQTT}, topics=${configData.CONTENT_DATA_SUBS.join(', ')}'`);
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+app.use((req, res) => {
     const req_ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
     console.error(`[${new Date().toISOString()}] 404 Not Found: ${req.method} ${req.url} from ${req_ip}`);
     console.error(`  User-Agent: ${req.headers['user-agent']}`);
@@ -150,11 +125,8 @@ xxx.use((req, res) => {
     res.status(404).send('not found');
 });
 
-const http = require('http');
-const https = require('https');
-const httpsServer = https.createServer(credentials, xxx);
-const httpServer = http.createServer(xxx);
-
+const httpServer = require('http').createServer(app);
+const httpsServer = require('https').createServer(credentials, app);
 httpServer.listen(80, () => {
     console.log(`Loaded 'http' using 'port=${httpServer.address().port}'`);
 });

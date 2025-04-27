@@ -4,10 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Snapshots</title>
-    <link href="/static/css/snapshot.css" rel="stylesheet">
     <style>
-        .item-list {
+        body {
+            font-family: 'Inter', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f4f8;
+            color: #2d3748;
+        }
+        h1 {
+            color: #4299e1;
             margin-bottom: 20px;
+        }
+        .week-group {
+            background-color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         .week-row {
             font-family: monospace;
@@ -49,9 +63,7 @@
     }
     function formatDatesByWeek(entries, yearMonth, urlPrefix) {
         const dateMap = {};
-        entries.forEach(entry => {
-            dateMap[entry.dateCode] = entry;
-        });
+        entries.forEach(entry => (dateMap[entry.dateCode] = entry));
         const year = yearMonth.substring(0, 4), month = yearMonth.substring(4, 6), monthInt = parseInt(month), lastDay = getDaysInMonth(year, monthInt);
         const calendar = [];
         let currentWeek = Array(7).fill(null);
@@ -65,9 +77,7 @@
                 currentWeek = Array(7).fill(null);
             }
         }
-        calendar.forEach(week => {
-            week.hasData = week.some(day => day && day.hasData);
-        });
+        calendar.forEach(week => (week.hasData = week.some(day => day && day.hasData)));
         let startIndex = 0; while (startIndex < calendar.length && !calendar[startIndex].hasData)
             startIndex++;
         let endIndex = calendar.length - 1; while (endIndex >= 0 && !calendar[endIndex].hasData)
@@ -112,7 +122,7 @@
 
     <% if (snapshotList?.entries?.length > 0) { const snapshotGroups = groupByYearMonth(snapshotList?.entries); %>
     <h1>Snapshots (28 days)</h1>
-    <div class="item-list">
+    <div class="week-group">
         <% getSortedYearMonths(snapshotGroups).forEach(yearMonth => { %>
             <%- formatDatesByWeek(snapshotGroups[yearMonth], yearMonth, 'list') %>
         <% }); %>
@@ -120,7 +130,7 @@
     <% } %>
     <% if (timelapseList?.entries?.length > 0) { const timelapseGroups = groupByYearMonth(timelapseList?.entries); %>
     <h1>Timelapse</h1>
-    <div class="item-list">
+    <div class="week-group">
         <% getSortedYearMonths(timelapseGroups).forEach(yearMonth => { %>
             <%- formatDatesByWeek(timelapseGroups[yearMonth], yearMonth, 'file') %>
         <% }); %>
