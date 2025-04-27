@@ -547,12 +547,15 @@ const getDST = (date) => {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const getDaylightHours = (latitude, longitude) => {
+    const getLocalUtcOffset = (date) => -date.getTimezoneOffset() / 60;
     const normalizeTime = (time) => (time < 0 ? time + 24 : time >= 24 ? time - 24 : time);
-    const formatTime = (timeInHours) =>
-        `${Math.floor(timeInHours).toString().padStart(2, '0')}:${Math.floor((timeInHours - Math.floor(timeInHours)) * 60)
-            .toString()
-            .padStart(2, '0')}`;
-    //
+    const formatTime = (timeInHours) => {
+        const hours = Math.floor(timeInHours).toString().padStart(2, '0'),
+            minutes = Math.round((timeInHours - Math.floor(timeInHours)) * 60)
+                .toString()
+                .padStart(2, '0');
+        return minutes === '60' ? `${(Math.floor(timeInHours) + 1).toString().padStart(2, '0')}:00` : `${hours}:${minutes}`;
+    };
     const date = new Date();
     const isLeapYear = (date.getFullYear() % 4 === 0 && date.getFullYear() % 100 !== 0) || date.getFullYear() % 400 === 0;
     const daysInMonth = [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
@@ -578,7 +581,7 @@ const getDaylightHours = (latitude, longitude) => {
     const isPolarNight = cosHourAngle > 1;
     const hourAngle = !isPolarDay && !isPolarNight ? (Math.acos(cosHourAngle) * 180) / Math.PI / 15 : 0;
     const isDST = getDST(date);
-    const utcOffset = isDST ? 2 : 1;
+    const utcOffset = getLocalUtcOffset(date);
     //
     const cosCivilHourAngle = (Math.cos((96 * Math.PI) / 180) - Math.sin(latRad) * Math.sin(declination)) / (Math.cos(latRad) * Math.cos(declination)); // 90 + 6 degrees
     const civilHourAngle =
