@@ -33,6 +33,23 @@ console.log(`Loaded 'credentials' using '${configData.FQDN}'`);
 require('./server-functions-diagnostics')(app, { port: 80, path: '/status' }); // XXX PORT_EXTERNAL
 console.log(`Loaded 'diagnostics' on '/status'`);
 
+app.use((req, res, next) => {
+    if (!req.headers.authorization) {
+        res.setHeader('WWW-Authenticate', 'Basic');
+        return res.status(401).send('Authentication required');
+    }
+    try {
+        const pass = Buffer.from(req.headers.authorization.split(' ')[1], 'base64').toString().split(':')?.[1];
+        if (pass == configData.PASS) return next();
+    } catch {
+        res.setHeader('WWW-Authenticate', 'Basic');
+        return res.status(400).send('Authentication malformedc');
+    }
+    res.setHeader('WWW-Authenticate', 'Basic');
+    return res.status(401).send('Authentication failed');
+});
+console.log(`Loaded 'authentication' using 'pass=${configData.PASS}'`);
+
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
