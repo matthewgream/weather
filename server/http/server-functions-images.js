@@ -31,7 +31,6 @@ function initialise(app, prefix, directory, location) {
         );
         res.json(manifest);
     });
-
     app.put(prefix + '', image_upload.single('image'), (req, res) => {
         if (!req.file) {
             console.error(`images upload failed: file not provided`);
@@ -62,7 +61,6 @@ function initialise(app, prefix, directory, location) {
             res.status(500).send('File upload error');
         }
     });
-
     app.get(prefix + '/:filename', (req, res) => {
         const downloadName = req.params.filename,
             downloadPath = path.join(directory, downloadName);
@@ -75,6 +73,10 @@ function initialise(app, prefix, directory, location) {
             res.status(404).send('File not found');
         }
     });
+
+    //
+
+    return {};
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

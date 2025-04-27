@@ -15,10 +15,15 @@ function initialise(app, prefix, vars, tz, debug = null) {
         else return;
         if (vars.includes(topic)) console.log(`variables: '${topic}' --> '${JSON.stringify(variablesSet[topic])}'`);
     }
+
+    //
+
     app.get(prefix + '', (req, res) => {
         debug && console.log(`vars requested from '${req.headers['x-forwarded-for'] || req.connection.remoteAddress}'`);
         res.json(variablesSet);
     });
+
+    //
 
     return { update, render };
 }
