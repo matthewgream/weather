@@ -101,7 +101,7 @@ function receive_snapshotMetadata(message) {
     }
 }
 const mqtt_client = require('mqtt').connect(configData.MQTT, {
-    clientId: 'server-http-' + Math.random().toString(16).substring(2, 8),
+    clientId: 'server-mainview-http-' + Math.random().toString(16).substring(2, 8),
 });
 mqtt_client.on('connect', () =>
     mqtt_client.subscribe(configData.CONTENT_DATA_SUBS, () => console.log(`mqtt connected & subscribed for '${configData.CONTENT_DATA_SUBS}'`))

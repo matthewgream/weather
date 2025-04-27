@@ -195,7 +195,7 @@ async function snapshotCleanup(dateDir, snapshotDirPath) {
         };
         const sizeBefore = getDirectorySize(snapshotDirPath);
         const formattedSize = formatFileSize(sizeBefore);
-	await rimraf (snapshotDirPath);
+        await rimraf(snapshotDirPath);
         console.log(prefix + `removed ${formattedSize} snapshots`);
         return { dateDir, deleted: true, size: formattedSize };
     } catch (error) {
