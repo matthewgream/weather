@@ -605,6 +605,8 @@ const getDaylightHours = (latitude, longitude) => {
         sunsetDecimal,
         sunrise: formatTime(sunriseDecimal),
         sunset: formatTime(sunsetDecimal),
+        civilDawnDecimal,
+        civilDuskDecimal,
         civilDawn: formatTime(civilDawnDecimal),
         civilDusk: formatTime(civilDuskDecimal),
         daylightHours,

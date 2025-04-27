@@ -198,12 +198,11 @@ function createViewTextSummary(vars) {
     const daylight = getDaylightHours(CONFIG.location_data.latitude, CONFIG.location_data.longitude);
     const date = new Date();
     const formattedTime = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Stockholm' });
-    timeinfo += `Time <span class="value">${formattedTime}</span>`;
-    if (daylight.isDST) timeinfo += ` (dst)`;
-    if (daylight.isDaytime && daylight.sunset)
-        timeinfo += `, sunset <span class="value">${daylight.sunset}</span>, dusk <span class="value">${daylight.civilDusk}</span>`;
-    else if (!daylight.isDaytime && daylight.sunrise)
-        timeinfo += `, dawn <span class="value">${daylight.civilDawn}</span>, sunrise <span class="value">${daylight.sunrise}</span>`;
+    const civilDawnToSunrise = Math.round((daylight.sunriseDecimal - daylight.civilDawnDecimal) * 60);
+    const sunsetToCivilDusk = Math.round((daylight.civilDuskDecimal - daylight.sunsetDecimal) * 60);
+    timeinfo += `Time <span class="value">${formattedTime}</span><sup>+${daylight.isDST ? '2' : '1'}</sup>`;
+    if (daylight.sunrise && daylight.sunset)
+        timeinfo += `, daylight <span class="value">${daylight.sunrise}</span><sup>-${civilDawnToSunrise}</sup> to <span class="value">${daylight.sunset}</span><sup>+${sunsetToCivilDusk}</sup>`;
     timeinfo += `.<br>`;
     summary.push(timeinfo);
 
