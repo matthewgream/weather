@@ -358,10 +358,10 @@ function createSectionThumbs(data) {
         <div class="thumbnails-placeholder">
             <div class="snaps-nav-box">
                 <div class="snaps-nav-item">
-                    <a href="/snapshot/list/${getThumbnailDay(new Date())}" class="snaps-nav-link">day</a>
+                    <a href="/snapshot/list/${getThumbnailDay(new Date())}" class="snaps-nav-link" title="Password is required for access">day</a>
                 </div>
                 <div class="snaps-nav-item">
-                    <a href="/snapshot/list" class="snaps-nav-link">all</a>
+                    <a href="/snapshot/list" class="snaps-nav-link" title="Password is required for access">all</a>
                 </div>
             </div>
         </div>
