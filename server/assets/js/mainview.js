@@ -194,16 +194,14 @@ function createViewTextSummary(vars) {
     summary.push(details);
 
     ////
+    const formatTime = (date) => date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', timeZone: CONFIG.timezone });
     let timeinfo = '';
-    const daylight = getDaylightHours(CONFIG.location_data.latitude, CONFIG.location_data.longitude);
     const date = new Date();
-    const formattedTime = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Stockholm' });
-    const civilDawnToSunrise = Math.round((daylight.sunriseDecimal - daylight.civilDawnDecimal) * 60);
-    const sunsetToCivilDusk = Math.round((daylight.civilDuskDecimal - daylight.sunsetDecimal) * 60);
-    timeinfo += `Time <span class="value">${formattedTime}</span><sup>+${daylight.isDST ? '2' : '1'}</sup>`;
-    if (daylight.sunrise && daylight.sunset)
-        timeinfo += `, daylight <span class="value">${daylight.sunrise}</span><sup>-${civilDawnToSunrise}</sup> to <span class="value">${daylight.sunset}</span><sup>+${sunsetToCivilDusk}</sup>`;
+    timeinfo += `Time <span class="value">${formatTime(date)}</span><sup>+${getDST(date) ? '2' : '1'}</sup>`;
+    const solar = new SolarCalc(new Date(), CONFIG.location_data.latitude, CONFIG.location_data.longitude);
+    timeinfo += `, daylight <span class="value">${formatTime(solar.sunrise)}</span><sup>-${Math.round((solar.sunrise - solar.civilDawn) / 60 / 1000)}</sup> to <span class="value">${formatTime(solar.sunset)}</span><sup>+${Math.round((solar.civilDusk - solar.sunset) / 60 / 1000)}</sup>`;
     timeinfo += `.<br>`;
+
     summary.push(timeinfo);
 
     ////
