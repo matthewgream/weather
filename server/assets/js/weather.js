@@ -59,7 +59,6 @@ function getWeatherInterpretation(location_data, data) {
         alerts: [],
         details: null,
         feelsLike,
-        daylight,
     };
 
     // Atmospheric pressure conditions - Nordic context
@@ -392,7 +391,7 @@ function getWeatherInterpretation(location_data, data) {
                 results.phenomena.push('approaching winter solstice');
         }
         const currentHourDecimal = hour + new Date().getMinutes() / 60; // Civil twilight phenomena
-        if (!daylight.isDaytime && currentHourDecimal >= daylight.sunsetDecimal && currentHourDecimal <= daylight.civilDuskLocal)
+        if (!daylight.isDaytime && currentHourDecimal >= daylight.sunsetDecimal && currentHourDecimal <= daylight.civilDuskDecimal)
             results.phenomena.push('civil twilight');
         if (temp < 3 && hour > Math.floor(daylight.sunriseDecimal) && hour < Math.floor(daylight.sunriseDecimal) + 3)
             // Standard time patterns adjusted for Nordic climate
@@ -546,21 +545,11 @@ const getDST = (date) => {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const getDaylightHours = (latitude, longitude) => {
-    const getLocalUtcOffset = (date) => -date.getTimezoneOffset() / 60;
+const getDaylightHours = (latitude, longitude, date = new Date()) => {
     const normalizeTime = (time) => (time < 0 ? time + 24 : time >= 24 ? time - 24 : time);
-    const formatTime = (timeInHours) => {
-        const hours = Math.floor(timeInHours).toString().padStart(2, '0'),
-            minutes = Math.round((timeInHours - Math.floor(timeInHours)) * 60)
-                .toString()
-                .padStart(2, '0');
-        return minutes === '60' ? `${(Math.floor(timeInHours) + 1).toString().padStart(2, '0')}:00` : `${hours}:${minutes}`;
-    };
-    const date = new Date();
     const isLeapYear = (date.getFullYear() % 4 === 0 && date.getFullYear() % 100 !== 0) || date.getFullYear() % 400 === 0;
-    const daysInMonth = [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     let dayOfYear = date.getDate();
-    for (let i = 0; i < date.getMonth(); i++) dayOfYear += daysInMonth[i];
+    for (let i = 0; i < date.getMonth(); i++) dayOfYear += [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][i];
     const latRad = (latitude * Math.PI) / 180;
     const fracYear = ((2 * Math.PI) / (isLeapYear ? 366 : 365)) * (dayOfYear - 1 + (date.getHours() - 12) / 24);
     const declination =
@@ -575,46 +564,22 @@ const getDaylightHours = (latitude, longitude) => {
         229.18 *
         (0.000075 + 0.001868 * Math.cos(fracYear) - 0.032077 * Math.sin(fracYear) - 0.014615 * Math.cos(2 * fracYear) - 0.040849 * Math.sin(2 * fracYear));
     const solarNoon = 12 - eqTime / 60 - longitude / 15;
-    const zenith = (90.8333 * Math.PI) / 180; // Calculate sunrise/sunset hour angle, standard zenith: 90.8333 degrees (sun diameter + atmospheric refraction)
-    const cosHourAngle = (Math.cos(zenith) - Math.sin(latRad) * Math.sin(declination)) / (Math.cos(latRad) * Math.cos(declination));
-    const isPolarDay = cosHourAngle < -1;
-    const isPolarNight = cosHourAngle > 1;
-    const hourAngle = !isPolarDay && !isPolarNight ? (Math.acos(cosHourAngle) * 180) / Math.PI / 15 : 0;
-    const isDST = getDST(date);
-    const utcOffset = getLocalUtcOffset(date);
-    //
+    const cosHourAngle = (Math.cos((90.8333 * Math.PI) / 180) - Math.sin(latRad) * Math.sin(declination)) / (Math.cos(latRad) * Math.cos(declination));
+    const hourAngle = cosHourAngle >= -1 && cosHourAngle <= 1 ? (Math.acos(cosHourAngle) * 180) / Math.PI / 15 : 0;
     const cosCivilHourAngle = (Math.cos((96 * Math.PI) / 180) - Math.sin(latRad) * Math.sin(declination)) / (Math.cos(latRad) * Math.cos(declination)); // 90 + 6 degrees
     const civilHourAngle =
         cosCivilHourAngle >= -1 && cosCivilHourAngle <= 1 ? (Math.acos(cosCivilHourAngle) * 180) / Math.PI / 15 : cosCivilHourAngle < -1 ? 12 : 0;
-    const civilDawnUTC = solarNoon - civilHourAngle;
-    const civilDuskUTC = solarNoon + civilHourAngle;
-    const civilDawnLocal = civilDawnUTC + utcOffset;
-    const civilDuskLocal = civilDuskUTC + utcOffset;
-    const civilDawnDecimal = normalizeTime(civilDawnLocal);
-    const civilDuskDecimal = normalizeTime(civilDuskLocal);
-    //
-    const sunriseUTC = solarNoon - hourAngle;
-    const sunsetUTC = solarNoon + hourAngle;
-    const sunriseLocal = sunriseUTC + utcOffset;
-    const sunsetLocal = sunsetUTC + utcOffset;
-    const sunriseDecimal = normalizeTime(sunriseLocal);
-    const sunsetDecimal = normalizeTime(sunsetLocal);
-    //
-    const daylightHours = isPolarDay ? 24 : isPolarNight ? 0 : 2 * hourAngle;
-    const isDaytime = date.getHours() + date.getMinutes() / 60 > sunriseDecimal && date.getHours() + date.getMinutes() / 60 < sunsetDecimal;
-    //
+    const utcOffset = -date.getTimezoneOffset() / 60;
     return {
-        sunriseDecimal,
-        sunsetDecimal,
-        sunrise: formatTime(sunriseDecimal),
-        sunset: formatTime(sunsetDecimal),
-        civilDawnDecimal,
-        civilDuskDecimal,
-        civilDawn: formatTime(civilDawnDecimal),
-        civilDusk: formatTime(civilDuskDecimal),
-        daylightHours,
-        isDaytime,
-        isDST,
+        sunriseDecimal: normalizeTime(solarNoon - hourAngle + utcOffset),
+        sunsetDecimal: normalizeTime(solarNoon + hourAngle + utcOffset),
+        civilDawnDecimal: normalizeTime(solarNoon - civilHourAngle + utcOffset),
+        civilDuskDecimal: normalizeTime(solarNoon + civilHourAngle + utcOffset),
+        daylightHours: cosHourAngle < -1 ? 24 : cosHourAngle > 1 ? 0 : 2 * hourAngle,
+        isDaytime:
+            (date.getHours() + date.getMinutes() / 60) > normalizeTime(solarNoon - hourAngle + utcOffset) &&
+            (date.getHours() + date.getMinutes() / 60) < normalizeTime(solarNoon + hourAngle + utcOffset),
+        isDST: getDST(date),
     };
 };
 
@@ -743,7 +708,8 @@ function calcJDofNextPrevRiseSet(next, rise, type, JD, latitude, longitude) {
     }
     return jday;
 }
-function calcSunriseSet(rise, angle, JD, date, latitude, longitude) { // rise = 1 for sunrise, 0 for sunset
+function calcSunriseSet(rise, angle, JD, date, latitude, longitude) {
+    // rise = 1 for sunrise, 0 for sunset
     const newTimeUTC = calcSunriseSetUTC(rise, angle, JD + calcSunriseSetUTC(rise, angle, JD, latitude, longitude) / 1440, latitude, longitude);
     if (isNumber(newTimeUTC)) return formatDate(date, newTimeUTC);
     const doy = __jdToDoy(JD),
