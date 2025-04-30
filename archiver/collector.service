@@ -7,7 +7,7 @@ After=weather-archiver-storage.service
 
 [Service]
 Type=simple
-ExecStart=/opt/weather/archiver/collector.js /opt/weather/server/secrets.txt
+ExecStart=/opt/bin/weather/weather-archiver-collector.js /opt/weather/server/secrets.txt
 ExecReload=kill -HUP $MAINPID
 KillMode=process
 Restart=on-failure
