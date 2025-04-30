@@ -1,5 +1,5 @@
 
-SYSTEM=archiver
+SYSTEM=weather-archiver
 TARGET=collector.js
 
 ##
@@ -42,10 +42,8 @@ install_storage: storage.service
 	$(call install_systemd_depend,$(SYSTEM)-storage,storage)
 install_collector: collector.service
 	$(call install_systemd_service,$(SYSTEM)-collector,collector)
-install_collector_snapshots: collector-snapshots-fetcher.service  collector-snapshots-fetcher.timer
-	$(call install_systemd_timer,$(SYSTEM)-collector-snapshots-fetcher,collector-snapshots-fetcher)
 install_server: server-http.service
 	$(call install_systemd_service,$(SYSTEM)-server-http,server-http)
-install: install_storage install_server install_collector install_collector_snapshots
-.PHONY: install install_storage install_server install_collector install_collector_snapshots
+install: install_storage install_collector install_server
+.PHONY: install install_storage install_collector install_server
 

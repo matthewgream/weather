@@ -2,12 +2,12 @@
 Description=Weather Archiver Collector
 Wants=network-online.target
 After=network-online.target
-Requires=archiver-storage.service
-After=archiver-storage.service
+Requires=weather-archiver-storage.service
+After=weather-archiver-storage.service
 
 [Service]
 Type=simple
-ExecStart=/opt/weather/server/archiver/collector.js /opt/weather/server/secrets.txt
+ExecStart=/opt/weather/archiver/collector.js /opt/weather/server/secrets.txt
 ExecReload=kill -HUP $MAINPID
 KillMode=process
 Restart=on-failure

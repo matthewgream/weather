@@ -2,8 +2,8 @@
 Description=Weather Archiver Server HTTP
 Wants=network-online.target
 After=network-online.target
-Requires=archiver-storage.service
-After=archiver-storage.service
+Requires=weather-archiver-storage.service
+After=weather-archiver-storage.service
 
 [Service]
 Type=simple
