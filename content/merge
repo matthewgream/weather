@@ -11,7 +11,7 @@ const { execSync } = require('child_process');
 
 //
 
-function readCompressedJsonFile(filePath) {
+function loadWeatherDataFromCompressedJsonFile(filePath) {
     let data = null;
     try {
         const tempFilePath = path.join('.', `temp_${Math.random().toString(36).substring(2, 15)}.json`);
@@ -19,53 +19,38 @@ function readCompressedJsonFile(filePath) {
         data = JSON.parse(fs.readFileSync(tempFilePath, 'utf8'));
         fs.unlinkSync(tempFilePath);
     } catch (error) {
-        console.error(`Error reading file ${filePath}:`, error.message);
+        console.error(`Error reading file ${filePath} or decoding JSON:`, error.message);
     }
     return data;
 }
-function loadWeatherData() {
+function loadWeatherData(directory) {
     const files = fs
-        .readdirSync(config.directory)
+        .readdirSync(directory)
         .filter((file) => file.match(/^wu-\d{6}\.json\.xz$/))
         .sort();
     console.log(`loadWeatherData: found ${files.length} weather data files.`);
     if (files.length === 0) return null;
     const masterData = { daily: {} };
-    let totalDays = 0;
+    let daysTotal = 0;
     files.forEach((file) => {
-        const data = readCompressedJsonFile(path.join(config.directory, file));
+        const data = loadWeatherDataFromCompressedJsonFile(path.join(directory, file));
         if (data?.daily) {
-            let removed = [];
+            let stripped = [];
             for (day of Object.keys(data.daily))
                 if (data.daily[day]?.observations?.length === 0) {
                     delete data.daily[day];
-                    removed.push(day);
+                    stripped.push(day);
                 }
             const days = Object.keys(data.daily).length;
-            totalDays += days;
-            console.log(
-                `loadWeatherData: load ${file} ... ${days} days${removed.length ? ', removed ' + removed.length + ' empty (' + removed.join(', ') + ')' : ''}`
-            );
+            daysTotal += days;
+            console.log(`loadWeatherData: load ${file} ... ${days} days${stripped.length ? ', stripped ' + stripped.length + ' empty (' + stripped.join(', ') + ')' : ''}`);
             Object.assign(masterData.daily, data.daily);
-        } else console.warn(`loadWeatherData: load ${file} ... no valid data found in ${file}`);
+        } else console.warn(`loadWeatherData: load ${file} ... no valid data found`);
     });
-    const uniqueDays = Object.keys(masterData.daily).length;
-    console.log(`loadWeatherData: loaded data for ${uniqueDays} days.`);
-    if (totalDays !== uniqueDays) console.log(`Note: ${totalDays - uniqueDays} duplicate days were found and overwritten.`);
+    const daysUnique = Object.keys(masterData.daily).length;
+    console.log(`loadWeatherData: loaded data for ${daysUnique} days.`);
+    if (daysTotal !== daysUnique) console.log(`loadWeatherData: warning - ${daysTotal - daysUnique} duplicate days were found and overwritten`);
     return masterData;
-}
-
-//
-
-function saveWeatherData(data, outputFilePath) {
-    try {
-        fs.writeFileSync(outputFilePath, JSON.stringify(data, null, 2));
-        console.log(`saveWeatherData: save ${outputFilePath}, size: ${(fs.statSync(outputFilePath).size / (1024 * 1024)).toFixed(2)} MB`);
-        return true;
-    } catch (error) {
-        console.error(`Error saving data:`, error.message);
-        return false;
-    }
 }
 
 //
@@ -95,8 +80,8 @@ function formatWeatherData(data) {
         return '';
     }
     const rows = [];
-    rows.push('DateTime            Temp    Dewpt   Humid  Wind     Gust    Pressure   PrecipRate PrecipTotal Solar');
-    rows.push('------------------- ------- ------- ------ -------- ------- ---------- ---------- ----------- ------');
+    rows.push('DateTime            Temp     Dewpt    Humid  Wind Speed     Gust      Pressure    PrecipRate PrecipTotal Solar');
+    rows.push('------------------- -------- -------- ------ ---- --------- --------- ----------- ---------- ----------- ----------');
     const dates = Object.keys(data.daily).sort(); // Sort by date for chronological order
     const processedObservations = dates
         .filter((date) => data.daily[date]?.observations && Array.isArray(data.daily[date].observations))
@@ -118,31 +103,32 @@ function formatObservation(obs) {
     const temp = formatValue(metric.tempAvg, 1, '°C');
     const dewpt = formatValue(metric.dewptAvg, 1, '°C');
     const humidity = formatValue(obs.humidityAvg, 0, '%');
-    const wind =
-        obs.winddirAvg !== null && metric.windspeedAvg !== null ? `${getWindDirection(obs.winddirAvg)} ${formatValue(metric.windspeedAvg, 1, 'km/h')}` : '-';
-    const gust = formatValue(metric.windgustAvg, 1, 'km/h');
+    const windDir = obs.winddirAvg !== null ? getWindDirection(obs.winddirAvg) : '-';
+    const windSpeed = formatValue(metric.windspeedAvg, 1, 'km/h');
+    const windGust = formatValue(metric.windgustAvg, 1, 'km/h');
     const pressure = metric.pressureMax !== null && metric.pressureMin !== null ? formatValue((metric.pressureMax + metric.pressureMin) / 2, 2, 'hPa') : '-';
     const precipRate = formatValue(metric.precipRate, 2, 'mm');
     const precipTotal = formatValue(metric.precipTotal, 2, 'mm');
     const solar = formatValue(obs.solarRadiationHigh, 0, 'w/m²');
-    const formattedRow = `${dateTime.padEnd(19)} ${temp.padEnd(7)} ${dewpt.padEnd(7)} ${humidity.padEnd(6)} ${wind.padEnd(8)} ${gust.padEnd(7)} ${pressure.padEnd(10)} ${precipRate.padEnd(10)} ${precipTotal.padEnd(11)} ${solar}`;
+    const formattedRow = `${dateTime.padEnd(19)} ${temp.padEnd(8)} ${dewpt.padEnd(8)} ${humidity.padEnd(6)} ${windDir.padEnd(4)} ${windSpeed.padEnd(9)} ${windGust.padEnd(9)} ${pressure.padEnd(11)} ${precipRate.padEnd(10)} ${precipTotal.padEnd(11)} ${solar.padEnd(10)}`;
     return {
         formattedRow,
         sortTime,
     };
 }
 function formatValue(value, decimals, unit) {
-    return value === null || value === undefined ? '-'.padEnd(unit.length + 2) : `${value.toFixed(decimals)} ${unit}`;
+    return value === null || value === undefined ? '-' : `${value.toFixed(decimals)} ${unit}`;
 }
 function getWindDirection(degrees) {
-    return degrees === null || degrees === undefined
-        ? '-'
-        : ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][Math.round(degrees / 22.5) % 16];
+    return degrees === null || degrees === undefined ? '-' : ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][Math.round(degrees / 22.5) % 16];
 }
-function saveWeatherTable(data, outputFilePath) {
+
+//
+
+function saveWeatherData(filePath, fileData) {
     try {
-        fs.writeFileSync(outputFilePath, formatWeatherData(data));
-        console.log(`saveWeatherTable: save ${outputFilePath}, size: ${(fs.statSync(outputFilePath).size / (1024 * 1024)).toFixed(2)} MB`);
+        fs.writeFileSync(filePath, fileData);
+        console.log(`saveWeatherData: save ${filePath}, size: ${(fs.statSync(filePath).size / (1024 * 1024)).toFixed(2)} MB`);
         return true;
     } catch (error) {
         console.error(`Error saving data:`, error.message);
@@ -153,7 +139,7 @@ function saveWeatherTable(data, outputFilePath) {
 //
 
 function main() {
-    const data = loadWeatherData();
+    const data = loadWeatherData(config.directory);
     if (!data) {
         console.error('Weather data load failed.');
         process.exit(1);
@@ -162,11 +148,11 @@ function main() {
         console.error('Weather data validation failed.');
         process.exit(1);
     }
-    if (!saveWeatherData(data, 'wu-master.json')) {
+    if (!saveWeatherData('wu-master.json', JSON.stringify(data, null, 2))) {
         console.error('Weather data save failed.');
         process.exit(1);
     }
-    if (!saveWeatherTable(data, 'wu-formatted.txt')) {
+    if (!saveWeatherData('wu-formatted.txt', formatWeatherData(data))) {
         console.error('Weather table save failed.');
         process.exit(1);
     }
