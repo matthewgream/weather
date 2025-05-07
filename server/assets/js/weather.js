@@ -450,7 +450,7 @@ function lunarEclipseVisibilityLocation(eclipseType, eclipseTimes, latitude, lon
         const time = eclipseTimes[phase];
         const altitude = getMoonAltitude(time, latitude, longitude);
         const visible = altitude > 0; // Above horizon
-        const localTime = new Date(phase.getTime() + hourAngleOffset * 60 * 60 * 1000);
+        const localTime = new Date(time + hourAngleOffset * 60 * 60 * 1000);
         result.phaseVisibility[phase] = { time, localTime, visible, altitude };
         if (visible) result.visible = true;
     }
@@ -1625,3 +1625,9 @@ class SolarCalc {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
+
+module.exports = {
+getLunarEclipse,
+getSolarEclipse,
+};
+
