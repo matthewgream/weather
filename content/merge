@@ -1,7 +1,12 @@
 #!/usr/bin/node
 
 const config = require('./config.js');
-console.log(config);
+console.log(
+    `config: ` +
+        Object.entries(config)
+            .map(([key, value]) => key + '=' + value)
+            .join(', ')
+);
 
 //
 
@@ -14,10 +19,10 @@ const { execSync } = require('child_process');
 function loadWeatherDataFromCompressedJsonFile(filePath) {
     let data = null;
     try {
-        const tempFilePath = path.join('.', `temp_${Math.random().toString(36).substring(2, 15)}.json`);
-        execSync(`xz -dc "${filePath}" > "${tempFilePath}"`);
-        data = JSON.parse(fs.readFileSync(tempFilePath, 'utf8'));
-        fs.unlinkSync(tempFilePath);
+        const filePathTemp = path.join('.', `temp_${Math.random().toString(36).substring(2, 15)}.json`);
+        execSync(`xz -dc "${filePath}" > "${filePathTemp}"`);
+        data = JSON.parse(fs.readFileSync(filePathTemp, 'utf8'));
+        fs.unlinkSync(filePathTemp);
     } catch (error) {
         console.error(`Error reading file ${filePath} or decoding JSON:`, error.message);
     }
@@ -74,53 +79,117 @@ function checkWeatherData(data) {
 
 //
 
-function formatWeatherData(data) {
-    if (!data?.daily || Object.keys(data.daily).length === 0) {
-        console.error('No valid weather data to process');
-        return '';
-    }
-    const rows = [];
-    rows.push('DateTime            Temp     Dewpt    Humid  Wind Speed     Gust      Pressure    PrecipRate PrecipTotal Solar');
-    rows.push('------------------- -------- -------- ------ ---- --------- --------- ----------- ---------- ----------- ----------');
-    const dates = Object.keys(data.daily).sort(); // Sort by date for chronological order
-    const processedObservations = dates
-        .filter((date) => data.daily[date]?.observations && Array.isArray(data.daily[date].observations))
-        .flatMap((date) => data.daily[date].observations.filter((obs) => obs?.obsTimeLocal).map((obs) => formatObservation(obs)));
-    processedObservations.sort((a, b) => a.sortTime.localeCompare(b.sortTime)).forEach((obs) => rows.push(obs.formattedRow));
-    rows.push('');
-    rows.push(`Total observations: ${processedObservations.length}`);
-    if (dates.length > 0) rows.push(`Date range: ${dates[0]} to ${dates[dates.length - 1]}`);
-    return rows.join('\n');
-}
-function formatObservation(obs) {
-    let dateTime = '-',
-        sortTime = '';
-    if (obs.obsTimeLocal) {
-        dateTime = obs.obsTimeLocal.replace(/-/g, '/').replace(' ', 'T');
-        sortTime = obs.obsTimeLocal; // Keep original for sorting
-    }
-    const metric = obs.metric || {};
-    const temp = formatValue(metric.tempAvg, 1, '°C');
-    const dewpt = formatValue(metric.dewptAvg, 1, '°C');
-    const humidity = formatValue(obs.humidityAvg, 0, '%');
-    const windDir = obs.winddirAvg !== null ? getWindDirection(obs.winddirAvg) : '-';
-    const windSpeed = formatValue(metric.windspeedAvg, 1, 'km/h');
-    const windGust = formatValue(metric.windgustAvg, 1, 'km/h');
-    const pressure = metric.pressureMax !== null && metric.pressureMin !== null ? formatValue((metric.pressureMax + metric.pressureMin) / 2, 2, 'hPa') : '-';
-    const precipRate = formatValue(metric.precipRate, 2, 'mm');
-    const precipTotal = formatValue(metric.precipTotal, 2, 'mm');
-    const solar = formatValue(obs.solarRadiationHigh, 0, 'w/m²');
-    const formattedRow = `${dateTime.padEnd(19)} ${temp.padEnd(8)} ${dewpt.padEnd(8)} ${humidity.padEnd(6)} ${windDir.padEnd(4)} ${windSpeed.padEnd(9)} ${windGust.padEnd(9)} ${pressure.padEnd(11)} ${precipRate.padEnd(10)} ${precipTotal.padEnd(11)} ${solar.padEnd(10)}`;
-    return {
-        formattedRow,
-        sortTime,
-    };
-}
+const COLUMNS = [
+    {
+        id: 'dateTime',
+        title: 'DateTime',
+        width: 19,
+        getValue: (obs) => (obs.obsTimeLocal !== null ? obs.obsTimeLocal.replace(/-/g, '/').replace(' ', 'T') : '-'),
+        getSortValue: (obs) => obs.obsTimeLocal || '',
+    },
+    {
+        id: 'temp',
+        title: 'Temp',
+        width: 8,
+        getValue: (obs) => formatValue(obs.metric?.tempAvg, 1, '°C'),
+    },
+    {
+        id: 'dewpt',
+        title: 'Dewpt',
+        width: 8,
+        getValue: (obs) => formatValue(obs.metric?.dewptAvg, 1, '°C'),
+    },
+    {
+        id: 'humid',
+        title: 'Humid',
+        width: 6,
+        getValue: (obs) => formatValue(obs.humidityAvg, 0, '%'),
+    },
+    {
+        id: 'windDir',
+        title: 'Wind',
+        width: 4,
+        getValue: (obs) => (obs.winddirAvg !== null ? getWindDirection(obs.winddirAvg) : '-'),
+    },
+    {
+        id: 'windSpeed',
+        title: 'Speed',
+        width: 9,
+        getValue: (obs) => formatValue(obs.metric?.windspeedAvg, 1, 'km/h'),
+    },
+    {
+        id: 'windGust',
+        title: 'Gust',
+        width: 9,
+        getValue: (obs) => formatValue(obs.metric?.windgustAvg, 1, 'km/h'),
+    },
+    {
+        id: 'pressure',
+        title: 'Pressure',
+        width: 11,
+        getValue: (obs) => (obs.metric?.pressureMax !== null && obs.metric?.pressureMin !== null ? formatValue((obs.metric.pressureMax + obs.metric.pressureMin) / 2, 2, 'hPa') : '-'),
+    },
+    {
+        id: 'precipRate',
+        title: 'PrecipRate',
+        width: 10,
+        getValue: (obs) => formatValue(obs.metric?.precipRate, 2, 'mm'),
+    },
+    {
+        id: 'precipTotal',
+        title: 'PrecipTotal',
+        width: 11,
+        getValue: (obs) => formatValue(obs.metric?.precipTotal, 2, 'mm'),
+    },
+    {
+        id: 'solar',
+        title: 'Solar',
+        width: 10,
+        getValue: (obs) => formatValue(obs.solarRadiationHigh, 0, 'w/m²'),
+    },
+];
+
 function formatValue(value, decimals, unit) {
     return value === null || value === undefined ? '-' : `${value.toFixed(decimals)} ${unit}`;
 }
 function getWindDirection(degrees) {
     return degrees === null || degrees === undefined ? '-' : ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][Math.round(degrees / 22.5) % 16];
+}
+function generateHeaderRow() {
+    return COLUMNS.map((col) => col.title.padEnd(col.width)).join(' ');
+}
+function generateSeparatorRow() {
+    return COLUMNS.map((col) => '-'.repeat(col.width)).join(' ');
+}
+function formatObservation(obs) {
+    return {
+        formattedRow: COLUMNS.map((col) => col.getValue(obs).padEnd(col.width)).join(' '),
+        sortTime: COLUMNS[0].getSortValue(obs),
+    };
+}
+function formatWeatherTable(data) {
+    if (!data?.daily || Object.keys(data.daily).length === 0) {
+        console.error('No valid weather data');
+        return '';
+    }
+    const dates = Object.keys(data.daily).sort();
+    const rows = dates
+        .filter((date) => data.daily[date]?.observations && Array.isArray(data.daily[date].observations))
+        .flatMap((date) => data.daily[date].observations.filter((obs) => obs && obs.obsTimeLocal).map((obs) => formatObservation(obs)));
+
+    return [
+        generateHeaderRow(),
+        generateSeparatorRow(),
+        ...rows.sort((a, b) => a.sortTime.localeCompare(b.sortTime)).map((obs) => obs.formattedRow),
+        '',
+        `Total observations: ${rows.length}` + (dates.length > 0 ? ` from ${dates[0]} to ${dates[dates.length - 1]}` : ''),
+    ].join('\n');
+}
+
+//
+
+function formatWeatherData(data) {
+    return JSON.stringify(data, null, 2);
 }
 
 //
@@ -148,11 +217,11 @@ function main() {
         console.error('Weather data validation failed.');
         process.exit(1);
     }
-    if (!saveWeatherData('wu-master.json', JSON.stringify(data, null, 2))) {
+    if (!saveWeatherData('wu-master.json', formatWeatherData(data))) {
         console.error('Weather data save failed.');
         process.exit(1);
     }
-    if (!saveWeatherData('wu-formatted.txt', formatWeatherData(data))) {
+    if (!saveWeatherData('wu-formatted.txt', formatWeatherTable(data))) {
         console.error('Weather table save failed.');
         process.exit(1);
     }

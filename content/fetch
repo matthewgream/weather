@@ -12,7 +12,12 @@ module.exports = config;
 */
 
 const config = require('./config.js');
-console.log(config);
+console.log(
+    `config: ` +
+        Object.entries(config)
+            .map(([key, value]) => key + '=' + value)
+            .join(', ')
+);
 
 //
 
@@ -21,12 +26,6 @@ const path = require('path');
 const { execSync } = require('child_process');
 const { promisify } = require('util');
 const exec = promisify(require('child_process').exec);
-
-const now = new Date();
-const CURRENT_YEAR = now.getFullYear();
-const CURRENT_MONTH = now.getMonth() + 1; // JavaScript months are 0-indexed
-const PREVIOUS_MONTH = CURRENT_MONTH === 1 ? 12 : CURRENT_MONTH - 1;
-const PREVIOUS_MONTH_YEAR = CURRENT_MONTH === 1 ? CURRENT_YEAR - 1 : CURRENT_YEAR;
 
 function fileExists(filePath) {
     try {
@@ -62,22 +61,21 @@ async function processMonth(year, month, directory, stationId, apiKey) {
     const monthFormatted = formatMonth(year, month);
     const filebase = path.join(directory, `wu-${monthFormatted}.json`);
     if (fileExists(filebase + '.xz')) {
-        console.log(`Fetch skip ${monthFormatted}, file ${filebase}.xz already exists ...`);
-        return;
+        //console.log(`Fetch skip ${monthFormatted}, file ${filebase}.xz already exists ...`);
+        return 0;
     }
     console.log(`Fetch data ${monthFormatted} ...`);
-    const monthData = { daily: {} };
-    const daysInMonth = getDaysInMonth(year, month);
-    for (let day = 1; day <= daysInMonth; day++) {
+    const data = { daily: {} };
+    for (let day = 1; day <= getDaysInMonth(year, month); day++) {
         const date = formatDate(year, month, day);
         await new Promise((resolve) => setTimeout(resolve, 500));
-        const data = await fetchWeatherData(date, stationId, apiKey);
-        if (data) {
-            console.log(`Fetch data ${date} ... ${Object.keys(data?.observations || []).length} entries / ${JSON.stringify(data).length} bytes`);
-            monthData.daily[date] = data;
+        const dataDay = await fetchWeatherData(date, stationId, apiKey);
+        if (dataDay) {
+            console.log(`Fetch data ${date} ... ${Object.keys(dataDay?.observations || []).length} entries / ${JSON.stringify(dataDay).length} bytes`);
+            data.daily[date] = dataDay;
         } else console.log(`Fetch data ${date} ... no data`);
     }
-    fs.writeFileSync(filebase, JSON.stringify(monthData, null, 2));
+    fs.writeFileSync(filebase, JSON.stringify(data, null, 2));
     console.log(`Created ${filebase} with ${fs.statSync(filebase).size} bytes`);
     try {
         execSync(`xz -9 -f ${filebase}`);
@@ -85,14 +83,24 @@ async function processMonth(year, month, directory, stationId, apiKey) {
     } catch (error) {
         console.error(`Error compressing ${filebase}:`, error.message);
     }
+    return 1;
 }
 async function main() {
+    const now = new Date(),
+        year = now.getFullYear(),
+        month = now.getMonth() + 1;
+    const previousMonth = month === 1 ? 12 : month - 1,
+        previousYear = month === 1 ? year - 1 : year;
     let currentYear = config.start_year,
         currentMonth = config.start_month;
-    while (currentYear < PREVIOUS_MONTH_YEAR || (currentYear === PREVIOUS_MONTH_YEAR && currentMonth <= PREVIOUS_MONTH)) {
-        await processMonth(currentYear, currentMonth, config.directory, config.station_id, config.api_key);
+    let count = 0,
+        total = 0;
+    while (currentYear < previousYear || (currentYear === previousYear && currentMonth <= previousMonth)) {
+        count += await processMonth(currentYear, currentMonth, config.directory, config.station_id, config.api_key);
+        total++;
         if (++currentMonth > 12) (currentMonth = 1), currentYear++;
     }
+    console.log(`Fetch retrieved ${count} months of ${total} candidates from ${config.start_year}/${config.start_month} to ${previousYear}/${previousMonth}`);
 }
 main().catch((error) => {
     console.error('Error running main:', error);
