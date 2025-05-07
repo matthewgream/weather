@@ -1,0 +1,94 @@
+#!/usr/bin/node
+
+/*
+const config = {
+    directory: '/opt/storage/weather/wunderground',
+    start_year: 2021,
+    start_month: 8, // August
+    api_key: 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+    station_id: 'XXXXXXXX',
+};
+module.exports = config;
+*/
+
+const config = require('./config.js');
+console.log(config);
+
+//
+
+const fs = require('fs');
+const path = require('path');
+const { execSync } = require('child_process');
+const { promisify } = require('util');
+const exec = promisify(require('child_process').exec);
+
+const now = new Date();
+const CURRENT_YEAR = now.getFullYear();
+const CURRENT_MONTH = now.getMonth() + 1; // JavaScript months are 0-indexed
+const PREVIOUS_MONTH = CURRENT_MONTH === 1 ? 12 : CURRENT_MONTH - 1;
+const PREVIOUS_MONTH_YEAR = CURRENT_MONTH === 1 ? CURRENT_YEAR - 1 : CURRENT_YEAR;
+
+function fileExists(filePath) {
+    try {
+        return fs.existsSync(filePath);
+    } catch (err) {
+        return false;
+    }
+}
+function getDaysInMonth(year, month) {
+    return new Date(year, month, 0).getDate();
+}
+function formatDate(year, month, day) {
+    return `${year}${month.toString().padStart(2, '0')}${day.toString().padStart(2, '0')}`;
+}
+function formatMonth(year, month) {
+    return `${year}${month.toString().padStart(2, '0')}`;
+}
+async function fetchWeatherData(dateStr) {
+    try {
+        const cmd = `wget --referer="https://www.wunderground.com/" "https://api.weather.com/v2/pws/history/all?stationId=${config.station_id}&format=json&units=m&date=${dateStr}&numericPrecision=decimal&apiKey=${config.api_key}" -O - -q`;
+        const { stdout } = await exec(cmd);
+        return JSON.parse(stdout);
+    } catch (error) {
+        console.error(`Error fetching data for ${dateStr}:`, error.message);
+        return null;
+    }
+}
+async function processMonth(year, month) {
+    const monthFormatted = formatMonth(year, month);
+    const filebase = path.join(config.directory, `wu-${monthFormatted}.json`);
+    if (fileExists(filebase + '.xz')) {
+        console.log(`File ${filebase}.xz already exists, skipping ...`);
+        return;
+    }
+    console.log(`Processing ${monthFormatted} ...`);
+    const monthData = { daily: {} };
+    const daysInMonth = getDaysInMonth(year, month);
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = formatDate(year, month, day);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const data = await fetchWeatherData(dateStr);
+        console.log(`Fetched data for ${dateStr} ... ${Object.keys(data.observations || []).length} entries / ${JSON.stringify(data).length} bytes`);
+        if (data) monthData.daily[dateStr] = data;
+    }
+    fs.writeFileSync(filebase, JSON.stringify(monthData, null, 2));
+    console.log(`Created ${filebase} with ${fs.statSync(filebase).size} bytes`);
+    try {
+        execSync(`xz -9 -f ${filebase}`);
+        console.log(`Successfully created ${filebase}.xz with ${fs.statSync(filebase + '.xz').size} bytes`);
+    } catch (error) {
+        console.error(`Error compressing ${filebase}:`, error.message);
+    }
+}
+async function main() {
+    let currentYear = config.start_year,
+        currentMonth = config.start_month;
+    while (currentYear < PREVIOUS_MONTH_YEAR || (currentYear === PREVIOUS_MONTH_YEAR && currentMonth <= PREVIOUS_MONTH)) {
+        await processMonth(currentYear, currentMonth);
+        if (++currentMonth > 12) (currentMonth = 1), currentYear++;
+    }
+}
+main().catch((error) => {
+    console.error('Error:', error);
+    process.exit(1);
+});
