@@ -13,7 +13,7 @@ configData.CONTENT_VIEW_VARS = ['weather/branna', 'sensors/radiation'];
 configData.DATA_VIEWS = configData.DATA + '/http';
 configData.DATA_ASSETS = configData.DATA + '/assets';
 configData.DATA_IMAGES = configData.DATA + '/images';
-configData.DATA_CACHE = '/dev/shm';
+configData.DATA_CACHE = '/dev/shm/weather';
 configData.FILE_SETS = require('path').join(__dirname, 'client.json');
 console.log(`Loaded 'config' using '${configPath}': ${configList}`);
 
@@ -41,6 +41,8 @@ console.log(`Loaded 'diagnostics' on '/status'`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+const fs = require('fs');
+fs.existsSync(configData.DATA_CACHE) || fs.mkdirSync(configData.DATA_CACHE, { recursive: true });
 app.use(exp.static(configData.DATA_CACHE));
 console.log(`Loaded 'static' using '${configData.DATA_CACHE}'`);
 app.use('/static', exp.static(configData.DATA_ASSETS));
