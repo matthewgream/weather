@@ -1,0 +1,59 @@
+#!/usr/bin/node
+const fs = require('fs');
+function analyseWeatherData(filePath) {
+    try {
+        const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        const metricsOfInterest = {
+            tempHigh: 'both',
+            tempLow: 'both',
+            tempAvg: 'both',
+            windspeedHigh: 'max',
+            windspeedLow: 'max',
+            windspeedAvg: 'max',
+            windgustHigh: 'max',
+            windgustLow: 'max',
+            windgustAvg: 'max',
+            windchillHigh: 'both',
+            windchillLow: 'both',
+            windchillAvg: 'both',
+            heatindexHigh: 'both',
+            heatindexLow: 'both',
+            heatindexAvg: 'both',
+            pressureMax: 'both',
+            pressureMin: 'both',
+            precipRate: 'max',
+            precipTotal: 'max',
+        };
+        const minValues = {},
+            maxValues = {};
+        for (const date in data.daily)
+            data.daily[date].observations
+                .filter((obs) => obs.metric)
+                .forEach((obs) =>
+                    Object.keys(metricsOfInterest)
+                        .filter((metric) => metric in obs.metric && typeof obs.metric[metric] === 'number')
+                        .forEach((metric) => {
+                            const trackType = metricsOfInterest[metric];
+                            const value = obs.metric[metric],
+                                timestamp = obs.obsTimeLocal;
+                            if (trackType === 'min' || trackType === 'both') {
+                                if (!minValues[metric]) minValues[metric] = { value: Infinity, timestamp: null };
+                                if (value < minValues[metric].value) minValues[metric] = { value, timestamp };
+                            }
+                            if (trackType === 'max' || trackType === 'both') {
+                                if (!maxValues[metric]) maxValues[metric] = { value: -Infinity, timestamp: null };
+                                if (value > maxValues[metric].value) maxValues[metric] = { value, timestamp };
+                            }
+                        })
+                );
+        Object.keys(metricsOfInterest).forEach((metric) => {
+            const trackType = metricsOfInterest[metric];
+            console.log(metric);
+            if ((trackType === 'min' || trackType === 'both') && minValues[metric]) console.log(`  Min: ${minValues[metric].value} (at ${minValues[metric].timestamp})`);
+            if ((trackType === 'max' || trackType === 'both') && maxValues[metric]) console.log(`  Max: ${maxValues[metric].value} (at ${maxValues[metric].timestamp})`);
+        });
+    } catch (error) {
+        console.error('Error analyzing weather data:', error.message);
+    }
+}
+analyseWeatherData('wu-master.json');

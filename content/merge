@@ -143,10 +143,28 @@ const COLUMNS = [
         getValue: (obs) => formatValue(obs.metric?.precipTotal, 2, 'mm'),
     },
     {
+        id: 'uv',
+        title: 'UV',
+        width: 2,
+        getValue: (obs) => formatValue(obs.uvHigh, 0, ''),
+    },
+    {
         id: 'solar',
         title: 'Solar',
         width: 10,
         getValue: (obs) => formatValue(obs.solarRadiationHigh, 0, 'w/m²'),
+    },
+    {
+        id: 'windChill',
+        title: 'TempWind',
+        width: 8,
+        getValue: (obs) => formatValue(obs.metric?.windchillAvg, 1, '°C'),
+    },
+    {
+        id: 'heatIndex',
+        title: 'TempHeat',
+        width: 8,
+        getValue: (obs) => formatValue(obs.metric?.heatindexAvg, 1, '°C'),
     },
 ];
 
