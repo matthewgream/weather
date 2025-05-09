@@ -38,7 +38,7 @@ const config = {
         username: '',
         password: '',
         clientId: 'archiver-collector-' + Math.random().toString(16).substring(2, 8),
-        topics: ['weather/#', 'sensors/#', 'snapshots/#'],
+        topics: ['weather/#', 'sensors/#', 'snapshots/#', 'server/#'],
     },
     storage: {
         messages: conf.STORAGE + '/messages',
@@ -64,7 +64,7 @@ const archiverConf = {
     messages: {
         enabled: true,
         functions: require('./collector-messages.js'),
-        topicPattern: (topic) => topic.startsWith('weather/') || topic.startsWith('sensors/'),
+        topicPattern: (topic) => topic.startsWith('weather/') || topic.startsWith('sensors/') || topic.startsWith('server/'),
     },
     snapshots: {
         enabled: true,

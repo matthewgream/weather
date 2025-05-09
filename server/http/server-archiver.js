@@ -8,6 +8,8 @@ const configData = require('./server-functions-config.js')(configPath);
 const configList = Object.entries(configData)
     .map(([k, v]) => k.toLowerCase() + '=' + v)
     .join(', ');
+configData.DIAGNOSTICS_PUBLISH_TOPIC = 'server/archiver';
+configData.DIAGNOSTICS_PUBLISH_PERIOD = 60;
 configData.DATA_VIEWS = configData.DATA + '/http';
 configData.DATA_ASSETS = configData.DATA + '/assets';
 console.log(`Loaded 'config' using '${configPath}': ${configList}`);
@@ -30,7 +32,7 @@ console.log(`Loaded 'redirect' using 'http -> https'`);
 const credentials = require('./server-functions-credentials.js')(configData.FQDN);
 console.log(`Loaded 'credentials' using '${configData.FQDN}'`);
 
-require('./server-functions-diagnostics')(app, { port: 80, path: '/status' }); // XXX PORT_EXTERNAL
+const diagnostics = require('./server-functions-diagnostics')(app, { port: 80, path: '/status' }); // XXX PORT_EXTERNAL
 console.log(`Loaded 'diagnostics' on '/status'`);
 
 app.use((req, res, next) => {
@@ -61,6 +63,18 @@ console.log(`Loaded 'snapshots' on '/snapshot', using '${configData.STORAGE}'`);
 
 app.get('/', (req, res) => res.redirect(server_snapshots.getUrlList()));
 console.log(`Loaded '/' using '${server_snapshots.getUrlList()}'`);
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+const mqtt_client = require('mqtt').connect(configData.MQTT, {
+    clientId: 'server-archiver-http-' + Math.random().toString(16).substring(2, 8),
+});
+mqtt_client.on('connect', () => console.log(`mqtt connected`));
+setInterval(() => {
+    mqtt_client.publish(configData.DIAGNOSTICS_PUBLISH_TOPIC, JSON.stringify(diagnostics.getPublishableStats()));
+}, configData.DIAGNOSTICS_PUBLISH_PERIOD * 1000);
+console.log(`Loaded 'mqtt:publisher' using 'topic=${configData.DIAGNOSTICS_PUBLISH_TOPIC}, period=${configData.DIAGNOSTICS_PUBLISH_PERIOD}'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
