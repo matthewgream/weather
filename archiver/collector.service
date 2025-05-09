@@ -1,5 +1,5 @@
 [Unit]
-Description=Weather Archiver Collector
+Description=Weather Archiver Collector Service
 Wants=network-online.target
 After=network-online.target
 Requires=weather-archiver-storage.service
@@ -8,8 +8,8 @@ After=weather-archiver-storage.service
 [Service]
 Type=simple
 ExecStart=/opt/bin/weather/weather-archiver-collector.js /opt/weather/server/secrets.txt
-ExecReload=kill -HUP $MAINPID
-KillMode=process
+TimeoutStopSec=15s
+KillMode=mixed
 Restart=on-failure
 RestartSec=5s
 

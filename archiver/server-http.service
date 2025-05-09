@@ -1,5 +1,5 @@
 [Unit]
-Description=Weather Archiver Server HTTP
+Description=Weather Archiver Server HTTP Service
 Wants=network-online.target
 After=network-online.target
 Requires=weather-archiver-storage.service
@@ -8,13 +8,10 @@ After=weather-archiver-storage.service
 [Service]
 Type=simple
 ExecStart=/opt/weather/server/http/server-archiver.js /opt/weather/server/secrets.txt
-ExecReload=kill -HUP $MAINPID
-KillMode=process
+TimeoutStopSec=10s
+KillMode=mixed
 Restart=on-failure
 RestartSec=5s
-TimeoutStopSec=10s
-KillSignal=SIGTERM
-SendSIGKILL=yes
 
 [Install]
 WantedBy=multi-user.target

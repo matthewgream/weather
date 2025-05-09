@@ -1,5 +1,5 @@
 [Unit]
-Description=Weather Mainview Server HTTP
+Description=Weather Mainview Server HTTP Service
 Wants=network-online.target
 After=network-online.target
 

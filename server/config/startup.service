@@ -1,5 +1,5 @@
 [Unit]
-Description=Weather Startup Script
+Description=Weather Startup Service
 After=network-online.target
 Wants=network-online.target
 

@@ -1,5 +1,5 @@
 [Unit]
-Description=Weather Snapshots Publisher
+Description=Weather Snapshots Publisher Service
 Wants=network-online.target
 After=network-online.target
 
