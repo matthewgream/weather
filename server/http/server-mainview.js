@@ -10,6 +10,8 @@ const configList = Object.entries(configData)
     .join(', ');
 configData.CONTENT_DATA_SUBS = ['weather/#', 'sensors/#', 'snapshots/#'];
 configData.CONTENT_VIEW_VARS = ['weather/branna', 'sensors/radiation'];
+configData.DIAGNOSTICS_PUBLISH_TOPIC = 'server/mainview';
+configData.DIAGNOSTICS_PUBLISH_PERIOD = 60;
 configData.DATA_VIEWS = configData.DATA + '/http';
 configData.DATA_ASSETS = configData.DATA + '/assets';
 configData.DATA_IMAGES = configData.DATA + '/images';
@@ -35,7 +37,7 @@ console.log(`Loaded 'redirect' using 'http -> https'`);
 const credentials = require('./server-functions-credentials.js')(configData.FQDN);
 console.log(`Loaded 'credentials' using '${configData.FQDN}'`);
 
-require('./server-functions-diagnostics')(app, { port: 8080, path: '/status' }); // XXX PORT_EXTERNAL
+const diagnostics = require('./server-functions-diagnostics')(app, { port: 8080, path: '/status' }); // XXX PORT_EXTERNAL
 console.log(`Loaded 'diagnostics' on '/status'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -114,6 +116,11 @@ mqtt_client.on('message', (topic, message) => {
     else server_vars.update(topic, message);
 });
 console.log(`Loaded 'mqtt:subscriber' using 'server=${configData.MQTT}, topics=[${configData.CONTENT_DATA_SUBS.join(', ')}]'`);
+
+setInterval (() => {
+	mqtt_client.publish (configData.DIAGNOSTICS_PUBLISH_TOPIC, JSON.stringify (diagnostics.getPublishableStats ()));
+}, configData.DIAGNOSTICS_PUBLISH_PERIOD * 1000);
+console.log(`Loaded 'mqtt:publisher' using 'topic=${configData.DIAGNOSTICS_PUBLISH_TOPIC}, period=${configData.DIAGNOSTICS_PUBLISH_PERIOD}'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------

@@ -194,6 +194,25 @@ class DiagnosticsManager {
     getLogs(limit = this.logLimitDisplay) {
         return this.memoryLogs.getLogs().slice(-limit);
     }
+	getPublishableStats() {
+		const stats = this.requestStats.getStats();
+    return {
+        totalRequests: stats.total,
+        uptime: new Date() - stats.startTime,
+        byRoute: stats.byRoute,
+        byMethod: stats.byMethod,
+        byStatus: stats.byStatus,
+        topIPs: Object.entries(stats.byIP)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .reduce((obj, [ip, count]) => {
+                obj[ip] = count;
+                return obj;
+            }, {}),
+        memoryUsage: process.memoryUsage(),
+        timestamp: new Date().toISOString()
+    };
+}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
