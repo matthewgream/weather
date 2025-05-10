@@ -97,7 +97,7 @@ function receive_snapshotMetadata(message) {
     if (!__snapshotImagedata) console.error('Received snapshot metadata but no image data is available');
     else {
         try {
-            server_snapshots.insert(`snapshot_${JSON.parse(message.toString()).timestamp}.jpg`, __snapshotImagedata);
+            server_snapshots.insert(`snapshot_${JSON.parse(message.toString()).time}.jpg`, __snapshotImagedata);
         } catch (error) {
             console.error('Error processing snapshot metadata:', error);
         }

@@ -46,7 +46,7 @@ function __snapshotStoreMetadata(message) {
         return;
     }
     const metadata = JSON.parse(message.toString());
-    const filename = `snapshot_${metadata.timestamp}.jpg`;
+    const filename = `snapshot_${metadata.time}.jpg`;
     const snapshotPath = __snapshotStoragePath(filename);
     if (snapshotPath) fs.writeFileSync(snapshotPath, __snapshotReceiveImagedata);
     __snapshotReceiveImagedata = null;
