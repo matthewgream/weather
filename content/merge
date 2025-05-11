@@ -41,7 +41,7 @@ function loadWeatherData(directory) {
         const data = loadWeatherDataFromCompressedJsonFile(path.join(directory, file));
         if (data?.daily) {
             let stripped = [];
-			let day;
+            let day;
             for (day of Object.keys(data.daily))
                 if (data.daily[day]?.observations?.length === 0) {
                     delete data.daily[day];

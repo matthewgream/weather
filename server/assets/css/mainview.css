@@ -65,7 +65,7 @@ h2 {
     margin-top: 16px;
     color: #666;
     font-size: 0.9em;
-	font-style: italic;
+    font-style: italic;
 }
 .external-links {
     text-align: center;
@@ -105,10 +105,10 @@ h2 {
     transition: opacity 0.3s ease;
     pointer-events: none;
 }
-.camera-container>a:hover .camera-hint {
+.camera-container > a:hover .camera-hint {
     opacity: 1;
 }
-.camera-container>a:hover .weather-camera {
+.camera-container > a:hover .weather-camera {
     opacity: 0.8;
 }
 .camera-container a {

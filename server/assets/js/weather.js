@@ -1627,7 +1627,6 @@ class SolarCalc {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 module.exports = {
-getLunarEclipse,
-getSolarEclipse,
+    getLunarEclipse,
+    getSolarEclipse,
 };
-
