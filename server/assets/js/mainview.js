@@ -458,7 +458,7 @@ const getMode = () => localStorage.getItem('displayMode') || 'text';
 const setMode = (mode) => localStorage.setItem('displayMode', mode) + create(varsLast);
 const displayMode = (mode) => `
 	<div class="mode-switch">
-		<a onclick="setMode('${mode === 'table' ? 'text' : 'table'}')">[switch to ${mode === 'table' ? 'table' : 'text'}]</a>
+		<a onclick="setMode('${mode === 'table' ? 'text' : 'table'}')">[switch to ${mode === 'table' ? 'text' : 'table'}]</a>
 	</div>`;
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
