@@ -91,7 +91,9 @@ class PushNotificationManager {
     }
 
     async sendNotification(payload, options = {}) {
-        console.log(`push: subscriptions notify request, title='${typeof payload === 'object' && payload.title ? payload.title : '-'}', body='${typeof payload === 'object' && payload.body ? payload.body : '-'}`);
+        console.log(
+            `push: subscriptions notify request, title='${typeof payload === 'object' && payload.title ? payload.title : '-'}', body='${typeof payload === 'object' && payload.body ? payload.body : '-'}`
+        );
         const startTime = Date.now();
         const failures = [];
         const promises = this.subscriptions.map(async (subscription, index) => {
@@ -107,8 +109,7 @@ class PushNotificationManager {
         const invalidIndices = results.filter((index) => index !== null).sort((a, b) => b - a);
         const initialCount = this.subscriptions.length;
         invalidIndices.forEach((index) => this.subscriptions.splice(index, 1));
-        if (invalidIndices.length > 0)
-            this.saveSubscriptions();
+        if (invalidIndices.length > 0) this.saveSubscriptions();
         console.log(`push: subscriptions notified, total=${initialCount}, invalid=${invalidIndices.length}, size=${this.subscriptions.length}`);
         const endTime = Date.now();
         const stats = {
