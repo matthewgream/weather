@@ -1,0 +1,170 @@
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+const webpush = require('web-push');
+const fs = require('fs');
+const path = require('path');
+
+class PushNotificationManager {
+    constructor(app, route, options = {}) {
+        this.app = app;
+        this.route = route;
+        this.options = Object.assign(
+            {
+                vapidKeyFile: options.vapidKeyFile || 'vapid-keys.json',
+                subscriptionsFile: options.subscriptionsFile || 'push-subscriptions.json',
+                dataDir: options.dataDir || process.cwd(),
+            },
+            options
+        );
+        this.vapidKeys = this.loadOrGenerateVapidKeys();
+        this.subscriptions = this.loadSubscriptions();
+        this.notificationHistory = [];
+        this.maxHistoryLength = options.maxHistoryLength || 20;
+        webpush.setVapidDetails(`mailto:${this.options.contactEmail || 'example@example.com'}`, this.vapidKeys.publicKey, this.vapidKeys.privateKey);
+        this.setupRoutes();
+    }
+
+    loadOrGenerateVapidKeys() {
+        const keyPath = path.join(this.options.dataDir, this.options.vapidKeyFile);
+        try {
+            if (fs.existsSync(keyPath)) return JSON.parse(fs.readFileSync(keyPath, 'utf8'));
+        } catch (error) {
+            console.warn(`push: VAPID keys load error: ${error.message}, generating new keys`);
+        }
+        const keys = webpush.generateVAPIDKeys();
+        try {
+            fs.writeFileSync(keyPath, JSON.stringify(keys, null, 2));
+            console.log(`push: VAPID keys generated and saved (${keyPath})`);
+        } catch (error) {
+            console.error(`push: VAPID keys save error: ${error.message}`);
+        }
+        return keys;
+    }
+
+    loadSubscriptions() {
+        const subscriptionsPath = path.join(this.options.dataDir, this.options.subscriptionsFile);
+        try {
+            if (fs.existsSync(subscriptionsPath)) return JSON.parse(fs.readFileSync(subscriptionsPath, 'utf8'));
+        } catch (error) {
+            console.warn(`push: subscription load error: ${error.message}, starting with empty list`);
+        }
+        return [];
+    }
+
+    saveSubscriptions() {
+        const subscriptionsPath = path.join(this.options.dataDir, this.options.subscriptionsFile);
+        try {
+            fs.writeFileSync(subscriptionsPath, JSON.stringify(this.subscriptions, null, 2));
+        } catch (error) {
+            console.error(`push: subscription save error: ${error.message}`);
+        }
+    }
+
+    setupRoutes() {
+        this.app.use(require('express').json());
+
+        this.app.get(`${this.route}/vapidPublicKey`, (req, res) => res.json({ publicKey: this.vapidKeys.publicKey }));
+
+        this.app.post(`${this.route}/subscribe`, (req, res) => {
+            const subscription = req.body;
+            if (!subscription || !subscription.endpoint) return res.status(400).json({ error: 'Invalid subscription object' });
+            if (!this.subscriptions.some((sub) => sub.endpoint === subscription.endpoint)) {
+                this.subscriptions.push(subscription);
+                this.saveSubscriptions();
+                console.log(`push: subscription inserted, size=${this.subscriptions.length}`);
+            }
+            res.status(201).json({ success: true });
+        });
+
+        this.app.post(`${this.route}/unsubscribe`, (req, res) => {
+            const { endpoint } = req.body;
+            if (!endpoint) return res.status(400).json({ error: 'Invalid request' });
+            const initialCount = this.subscriptions.length;
+            this.subscriptions = this.subscriptions.filter((sub) => sub.endpoint !== endpoint);
+            if (initialCount !== this.subscriptions.length) {
+                this.saveSubscriptions();
+                console.log(`push: subscription removed, size=${this.subscriptions.length}`);
+            }
+            res.json({ success: true });
+        });
+    }
+
+    async sendNotification(payload, options = {}) {
+        console.log(`push: subscriptions notify request, title='${typeof payload === 'object' && payload.title ? payload.title : '-'}', body='${typeof payload === 'object' && payload.body ? payload.body : '-'}`);
+        const startTime = Date.now();
+        const failures = [];
+        const promises = this.subscriptions.map(async (subscription, index) => {
+            try {
+                await webpush.sendNotification(subscription, typeof payload === 'string' ? payload : JSON.stringify(payload), options);
+                return null; // Success
+            } catch (error) {
+                if (error.statusCode === 404 || error.statusCode === 410) return index;
+                return null;
+            }
+        });
+        const results = await Promise.all(promises);
+        const invalidIndices = results.filter((index) => index !== null).sort((a, b) => b - a);
+        const initialCount = this.subscriptions.length;
+        invalidIndices.forEach((index) => this.subscriptions.splice(index, 1));
+        if (invalidIndices.length > 0)
+            this.saveSubscriptions();
+        console.log(`push: subscriptions notified, total=${initialCount}, invalid=${invalidIndices.length}, size=${this.subscriptions.length}`);
+        const endTime = Date.now();
+        const stats = {
+            timestamp: new Date().toISOString(),
+            duration: endTime - startTime,
+            total: this.subscriptions.length + invalidIndices.length,
+            sent: this.subscriptions.length,
+            failed: invalidIndices.length,
+            type: typeof payload === 'object' && payload.title ? payload.title : 'Notification',
+        };
+        this.notificationHistory.unshift(stats);
+        if (this.notificationHistory.length > this.maxHistoryLength) this.notificationHistory = this.notificationHistory.slice(0, this.maxHistoryLength);
+        return stats;
+    }
+
+    async sendAlert(message) {
+        const payload = {
+            title: 'Weather Alert',
+            body: message,
+            timestamp: new Date().toISOString(),
+        };
+        return this.sendNotification(payload);
+    }
+
+    getDiagnostics() {
+        return {
+            subscriptions: {
+                count: this.subscriptions.length,
+                lastUpdated: fs.existsSync(path.join(this.options.dataDir, this.options.subscriptionsFile))
+                    ? fs.statSync(path.join(this.options.dataDir, this.options.subscriptionsFile)).mtime.toISOString()
+                    : null,
+            },
+            vapidKeys: {
+                exists: !!this.vapidKeys,
+                lastUpdated: fs.existsSync(path.join(this.options.dataDir, this.options.vapidKeyFile))
+                    ? fs.statSync(path.join(this.options.dataDir, this.options.vapidKeyFile)).mtime.toISOString()
+                    : null,
+            },
+            status: {
+                enabled: true,
+                route: this.route,
+            },
+            history: this.notificationHistory,
+            performance: {
+                averageSendTime:
+                    this.notificationHistory.length > 0
+                        ? this.notificationHistory.reduce((sum, item) => sum + item.duration, 0) / this.notificationHistory.length
+                        : 0,
+            },
+        };
+    }
+}
+
+module.exports = function (app, route, options) {
+    return new PushNotificationManager(app, route, options);
+};
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------

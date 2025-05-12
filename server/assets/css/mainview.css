@@ -211,6 +211,32 @@ h2 {
 .snaps-nav-link:hover {
     text-decoration: underline;
 }
+.mode-links {
+    display: flex;
+    align-items: center;
+}
+.mode-links a {
+    display: inline-block;
+    text-decoration: none;
+    margin-right: 5px;
+}
+.mode-links a:hover {
+    text-decoration: underline;
+}
+.mode-switch {
+    display: flex;
+    align-items: center;
+}
+.mode-switch a {
+    display: inline-block;
+    text-decoration: none;
+}
+.mode-switch a:hover {
+    text-decoration: underline;
+}
+.alerts-toggle {
+    margin-left: 10px;
+}
 @media (max-width: 480px) {
     .dashboard {
         padding: var(--spacing-md);

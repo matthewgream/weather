@@ -458,7 +458,7 @@ const getMode = () => localStorage.getItem('displayMode') || 'text';
 const setMode = (mode) => localStorage.setItem('displayMode', mode) + create(varsLast);
 const displayMode = (mode) => `
 	<div class="mode-switch">
-		<a onclick="setMode('${mode === 'table' ? 'text' : 'table'}')">[${mode === 'table' ? 'table' : 'text'} view: click for ${mode === 'table' ? 'text' : 'table'}]</a>
+		<a onclick="setMode('${mode === 'table' ? 'text' : 'table'}')">[switch to ${mode === 'table' ? 'table' : 'text'}]</a>
 	</div>`;
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -481,7 +481,7 @@ function update(vars) {
 function request() {
     fetch('/vars')
         .then((response) => {
-            if (!response.ok) throw new Error('Error fetching vars: network failure');
+            if (!response.ok) throw new Error('vars: fetch error: network failure');
             return response.json();
         })
         .then((vars) => {
@@ -490,7 +490,7 @@ function request() {
             schedule(vars);
         })
         .catch((error) => {
-            console.error('Error fetching vars:', error);
+            console.error('vars: fetch error:', error);
             if (varsTimer) clearTimeout(varsTimer);
             varsTimer = setTimeout(request, varsInterval);
         });
@@ -503,7 +503,7 @@ function schedule(vars) {
         const timeSinceUpdate = new Date() - new Date(time.replace(/([+-]\d{2})Z$/, '$1:00'));
         const timeUntilUpdate = varsInterval - (timeSinceUpdate % varsInterval) + varsOffset;
         varsTimer = setTimeout(request, timeUntilUpdate);
-        console.log(`vars next update in ${timeUntilUpdate / 1000}s (interval=${varsInterval / 1000}s, offset=${varsOffset / 1000}s)`);
+        console.log(`vars: update in ${timeUntilUpdate / 1000}s (interval=${varsInterval / 1000}s, offset=${varsOffset / 1000}s)`);
     } else {
         varsOffset = 1 * 1000;
         varsTimer = setTimeout(request, varsInterval);

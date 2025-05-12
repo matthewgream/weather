@@ -4,6 +4,8 @@ build
 package-lock.json
 .theia
 server/assets/js/.prettierrc.json
+server/assets/css/.prettierrc.json
+server/store
 eslint.config.mjs
 [sS]ecrets*
 *.key

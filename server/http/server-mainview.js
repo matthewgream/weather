@@ -3,21 +3,30 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+const fs = require('fs');
+
 const configPath = process.argv[2] || 'secrets.txt';
 const configData = require('./server-functions-config.js')(configPath);
 const configList = Object.entries(configData)
     .map(([k, v]) => k.toLowerCase() + '=' + v)
     .join(', ');
-configData.CONTENT_DATA_SUBS = ['weather/#', 'sensors/#', 'snapshots/#'];
+configData.CONTENT_DATA_SUBS = ['weather/#', 'sensors/#', 'snapshots/#', 'alert/#'];
 configData.CONTENT_VIEW_VARS = ['weather/branna', 'sensors/radiation'];
 configData.DIAGNOSTICS_PUBLISH_TOPIC = 'server/mainview';
 configData.DIAGNOSTICS_PUBLISH_PERIOD = 60;
 configData.DATA_VIEWS = configData.DATA + '/http';
 configData.DATA_ASSETS = configData.DATA + '/assets';
 configData.DATA_IMAGES = configData.DATA + '/images';
+configData.DATA_STORE = configData.DATA + '/store';
 configData.DATA_CACHE = '/dev/shm/weather';
 configData.FILE_SETS = require('path').join(__dirname, 'client.json');
 console.log(`Loaded 'config' using '${configPath}': ${configList}`);
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+fs.existsSync(configData.DATA_STORE) || fs.mkdirSync(configData.DATA_STORE, { recursive: true });
+fs.existsSync(configData.DATA_CACHE) || fs.mkdirSync(configData.DATA_CACHE, { recursive: true });
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -43,8 +52,6 @@ console.log(`Loaded 'diagnostics' on '/status'`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const fs = require('fs');
-fs.existsSync(configData.DATA_CACHE) || fs.mkdirSync(configData.DATA_CACHE, { recursive: true });
 app.use(exp.static(configData.DATA_CACHE));
 console.log(`Loaded 'static' using '${configData.DATA_CACHE}'`);
 app.use('/static', exp.static(configData.DATA_ASSETS));
@@ -89,6 +96,19 @@ console.log(`Loaded '/' using 'server-mainview' && data/vars`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+const pushNotifications = require('./server-functions-push.js')(app, '/push', {
+    contactEmail: configData.ADMIN_EMAIL,
+    dataDir: configData.DATA_STORE,
+    vapidKeyFile: 'push-vapid-keys.json',
+    subscriptionsFile: 'push-subscriptions.json',
+    maxHistoryLength: 30,
+});
+diagnostics.registerDiagnosticsSource('PushNotifications', () => pushNotifications.getDiagnostics());
+console.log(`Loaded 'push-notifications' on '/push'`);
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 let __snapshotImagedata = null;
 function receive_snapshotImagedata(message) {
     __snapshotImagedata = message;
@@ -113,6 +133,7 @@ mqtt_client.on('connect', () =>
 mqtt_client.on('message', (topic, message) => {
     if (topic === 'snapshots/imagedata') receive_snapshotImagedata(message);
     else if (topic === 'snapshots/metadata') receive_snapshotMetadata(message);
+    else if (topic.startsWith('alert/')) pushNotifications.sendAlert(message.toString());
     else server_vars.update(topic, message);
 });
 console.log(`Loaded 'mqtt:subscriber' using 'server=${configData.MQTT}, topics=[${configData.CONTENT_DATA_SUBS.join(', ')}]'`);
