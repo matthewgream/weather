@@ -124,9 +124,9 @@ class PushNotificationManager {
         return stats;
     }
 
-    async sendAlert(message) {
+    async notify(message) {
         const payload = {
-            title: 'Weather Alert',
+            title: 'Weather Notification',
             body: message,
             timestamp: new Date().toISOString(),
         };

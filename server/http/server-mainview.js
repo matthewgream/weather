@@ -96,14 +96,14 @@ console.log(`Loaded '/' using 'server-mainview' && data/vars`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const pushNotifications = require('./server-functions-push.js')(app, '/push', {
+const notifications = require('./server-functions-push.js')(app, '/push', {
     contactEmail: configData.ADMIN_EMAIL,
     dataDir: configData.DATA_STORE,
     vapidKeyFile: 'push-vapid-keys.json',
     subscriptionsFile: 'push-subscriptions.json',
     maxHistoryLength: 30,
 });
-diagnostics.registerDiagnosticsSource('PushNotifications', () => pushNotifications.getDiagnostics());
+diagnostics.registerDiagnosticsSource('PushNotifications', () => notifications.getDiagnostics());
 console.log(`Loaded 'push-notifications' on '/push'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -133,7 +133,7 @@ mqtt_client.on('connect', () =>
 mqtt_client.on('message', (topic, message) => {
     if (topic === 'snapshots/imagedata') receive_snapshotImagedata(message);
     else if (topic === 'snapshots/metadata') receive_snapshotMetadata(message);
-    else if (topic.startsWith('alert/')) pushNotifications.sendAlert(message.toString());
+    else if (topic.startsWith('alert/')) notifications.notify(message.toString());
     else server_vars.update(topic, message);
 });
 console.log(`Loaded 'mqtt:subscriber' using 'server=${configData.MQTT}, topics=[${configData.CONTENT_DATA_SUBS.join(', ')}]'`);
