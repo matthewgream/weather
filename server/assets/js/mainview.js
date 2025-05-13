@@ -14,29 +14,146 @@ const model = [
         name: 'Outside',
         id: 'outside',
         elems: [
-            { label: 'Temperature', id: 'temp', unit: '°C', path: 'weather/branna.temp', decimals: 1, format },
-            { label: 'Humidity', id: 'humidity', unit: '%', path: 'weather/branna.humidity', format },
-            { label: 'Pressure', id: 'pressure', unit: 'hPa', path: 'weather/branna.baromrel', decimals: 2, format },
-            { label: 'Wind Speed', id: 'windspeed', unit: 'm/s', path: 'weather/branna.windspeed', decimals: 1, format: formatWindSpeed },
-            { label: 'Wind Gust', id: 'windgust', unit: 'm/s', path: 'weather/branna.windgust', decimals: 1, format: formatWindSpeed },
-            { label: 'Wind Direction', id: 'winddir', unit: '', path: 'weather/branna.winddir', format: formatWindDirection },
-            { label: 'Rain Rate', id: 'rainrate', unit: 'mm/hr', path: 'weather/branna.rainrate', decimals: 1, format },
-            { label: 'Rain Daily', id: 'raindaily', unit: 'mm', path: 'weather/branna.dailyrain', decimals: 1, format },
-            { label: 'Solar Radiation', id: 'solarrad', unit: 'W/m²', path: 'weather/branna.solarradiation', decimals: 1, format },
-            { label: 'Solar UVI', id: 'solaruv', unit: '', path: 'weather/branna.uv', decimals: 1, format },
-            { label: 'Snow Depth', id: 'snowdepth', unit: 'cm', path: 'weather/branna.depth_ch1', decimals: 0, format: formatDepthFromMMtoCM },
-            { label: 'Radiation', id: 'radiationcpm', unit: 'cpm', path: 'sensors/radiation.cpm', decimals: 1, format },
-            { label: 'Radiation (1 hour avg)', id: 'radiationacpm', unit: 'cpm', path: 'sensors/radiation.acpm', decimals: 1, format },
-            { label: 'Radiation (dosing)', id: 'radiationusvh', unit: 'uSv/h', path: 'sensors/radiation.usvh', decimals: 2, format },
+            {
+                label: 'Temperature',
+                id: 'temp',
+                unit: '°C',
+                path: 'weather/branna.temp',
+                decimals: 1,
+                format,
+            },
+            {
+                label: 'Humidity',
+                id: 'humidity',
+                unit: '%',
+                path: 'weather/branna.humidity',
+                format,
+            },
+            {
+                label: 'Pressure',
+                id: 'pressure',
+                unit: 'hPa',
+                path: 'weather/branna.baromrel',
+                decimals: 2,
+                format,
+            },
+            {
+                label: 'Wind Speed',
+                id: 'windspeed',
+                unit: 'm/s',
+                path: 'weather/branna.windspeed',
+                decimals: 1,
+                format: formatWindSpeed,
+            },
+            {
+                label: 'Wind Gust',
+                id: 'windgust',
+                unit: 'm/s',
+                path: 'weather/branna.windgust',
+                decimals: 1,
+                format: formatWindSpeed,
+            },
+            {
+                label: 'Wind Direction',
+                id: 'winddir',
+                unit: '',
+                path: 'weather/branna.winddir',
+                format: formatWindDirection,
+            },
+            {
+                label: 'Rain Rate',
+                id: 'rainrate',
+                unit: 'mm/hr',
+                path: 'weather/branna.rainrate',
+                decimals: 1,
+                format,
+            },
+            {
+                label: 'Rain Daily',
+                id: 'raindaily',
+                unit: 'mm',
+                path: 'weather/branna.dailyrain',
+                decimals: 1,
+                format,
+            },
+            {
+                label: 'Solar Radiation',
+                id: 'solarrad',
+                unit: 'W/m²',
+                path: 'weather/branna.solarradiation',
+                decimals: 1,
+                format,
+            },
+            {
+                label: 'Solar UVI',
+                id: 'solaruv',
+                unit: '',
+                path: 'weather/branna.uv',
+                decimals: 1,
+                format,
+            },
+            {
+                label: 'Snow Depth',
+                id: 'snowdepth',
+                unit: 'cm',
+                path: 'weather/branna.depth_ch1',
+                decimals: 0,
+                format: formatDepthFromMMtoCM,
+            },
+            {
+                label: 'Radiation',
+                id: 'radiationcpm',
+                unit: 'cpm',
+                path: 'sensors/radiation.cpm',
+                decimals: 1,
+                format,
+            },
+            {
+                label: 'Radiation (1 hour avg)',
+                id: 'radiationacpm',
+                unit: 'cpm',
+                path: 'sensors/radiation.acpm',
+                decimals: 1,
+                format,
+            },
+            {
+                label: 'Radiation (dosing)',
+                id: 'radiationusvh',
+                unit: 'uSv/h',
+                path: 'sensors/radiation.usvh',
+                decimals: 2,
+                format,
+            },
         ],
     },
     {
         name: 'Lake',
         id: 'lake',
         elems: [
-            { label: 'Surface (5-15cm)', id: 'surface', unit: '°C', path: 'weather/branna.tf_ch1', decimals: 1, format },
-            { label: 'Submerged (-1m)', id: 'submerged', unit: '°C', path: 'weather/branna.tf_ch2', decimals: 1, format },
-            { label: 'Ice Depth', id: 'icedepth', unit: 'cm', path: 'sensors/water.icedepth', decimals: 0, format: formatDepthFromMMtoCM },
+            {
+                label: 'Surface (5-15cm)',
+                id: 'surface',
+                unit: '°C',
+                path: 'weather/branna.tf_ch1',
+                decimals: 1,
+                format,
+            },
+            {
+                label: 'Submerged (-1m)',
+                id: 'submerged',
+                unit: '°C',
+                path: 'weather/branna.tf_ch2',
+                decimals: 1,
+                format,
+            },
+            {
+                label: 'Ice Depth',
+                id: 'icedepth',
+                unit: 'cm',
+                path: 'sensors/water.icedepth',
+                decimals: 0,
+                format: formatDepthFromMMtoCM,
+            },
         ],
     },
     {
@@ -194,7 +311,12 @@ function createViewTextSummary(vars) {
     summary.push(details);
 
     ////
-    const formatTime = (date) => date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', timeZone: CONFIG.timezone });
+    const formatTime = (date) =>
+        date.toLocaleTimeString(undefined, {
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZone: CONFIG.timezone,
+        });
     let timeinfo = '';
     const date = new Date();
     timeinfo += `Time <span class="value">${formatTime(date)}</span><sup>+${getDST(date) ? '2' : '1'}</sup>`;
@@ -442,7 +564,7 @@ function createSectionTime(mode, vars) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function createSectionLinks(mode) {
+function createSectionLinks() {
     const links = CONFIG.external_links?.map(({ title, link }) => `<a href="${link}" target="_blank"><strong>${title}</strong></a>`).join(' | ');
     return `
         <div class="external-links">
@@ -454,12 +576,17 @@ function createSectionLinks(mode) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const getMode = () => localStorage.getItem('displayMode') || 'text';
-const setMode = (mode) => localStorage.setItem('displayMode', mode) + create(varsLast);
-const displayMode = (mode) => `
-	<div class="mode-switch">
+function getMode() {
+    return localStorage.getItem('displayMode') || 'text';
+}
+function setMode(mode) {
+    localStorage.setItem('displayMode', mode) + create(varsLast);
+}
+function displayMode(mode) {
+    return `<div class="mode-switch">
 		<a onclick="setMode('${mode === 'table' ? 'text' : 'table'}')">[switch to ${mode === 'table' ? 'text' : 'table'}]</a>
 	</div>`;
+}
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------

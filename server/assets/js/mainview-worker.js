@@ -19,15 +19,20 @@ self.addEventListener('push', (event) => {
     } catch {
         if (event.data) notification.body = event.data.text();
     }
-    const options = {
-        body: notification.body,
-        icon: '/static/images/weather-icon.png',
-        badge: '/static/images/weather-badge.png',
-        timestamp: notification.timestamp || Date.now(),
-        tag: 'weather-alert',
-        requireInteraction: true,
-    };
-    event.waitUntil(self.registration.showNotification(notification.title, options));
+    const icon = '/static/images/alert-icon.png';
+    const badge = '/static/images/alert-badge.png';
+    const tag = 'weather-alert';
+    const requireInteraction = true;
+    event.waitUntil(
+        self.registration.showNotification(notification.title, {
+            body: notification.body,
+            icon,
+            badge,
+            timestamp: notification.timestamp || Date.now(),
+            tag,
+            requireInteraction,
+        })
+    );
 });
 
 self.addEventListener('notificationclick', (event) => {

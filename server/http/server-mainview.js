@@ -6,7 +6,7 @@
 const fs = require('fs');
 
 const configPath = process.argv[2] || 'secrets.txt';
-const configData = require('./server-functions-config.js')(configPath);
+const configData = require('./server-function-config.js')(configPath);
 const configList = Object.entries(configData)
     .map(([k, v]) => k.toLowerCase() + '=' + v)
     .join(', ');
@@ -43,10 +43,10 @@ app.use((req, res, next) => {
 });
 console.log(`Loaded 'redirect' using 'http -> https'`);
 
-const credentials = require('./server-functions-credentials.js')(configData.FQDN);
+const credentials = require('./server-function-credentials.js')(configData.FQDN);
 console.log(`Loaded 'credentials' using '${configData.FQDN}'`);
 
-const diagnostics = require('./server-functions-diagnostics')(app, { port: 8080, path: '/status' }); // XXX PORT_EXTERNAL
+const diagnostics = require('./server-function-diagnostics')(app, { port: 8080, path: '/status' }); // XXX PORT_EXTERNAL
 console.log(`Loaded 'diagnostics' on '/status'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -60,15 +60,15 @@ console.log(`Loaded 'static' using '/static -> ${configData.DATA_ASSETS}'`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-require('./server-functions-images.js')(app, '/images', { directory: configData.DATA_IMAGES, location: `http://${configData.HOST}:${configData.PORT}` });
+require('./server-function-images.js')(app, '/images', { directory: configData.DATA_IMAGES, location: `http://${configData.HOST}:${configData.PORT}` });
 console.log(`Loaded 'images' on '/images' using 'directory=${configData.DATA_IMAGES}'`);
-require('./server-functions-sets.js')(app, '/sets', { filename: configData.FILE_SETS });
+require('./server-function-sets.js')(app, '/sets', { filename: configData.FILE_SETS });
 console.log(`Loaded 'sets' on '/sets' using 'filename=${configData.FILE_SETS}`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const server_snapshots = require('./server-functions-snapshot-mainview.js')(app, '/snapshot', {
+const server_snapshots = require('./server-function-snapshot-mainview.js')(app, '/snapshot', {
     directory: configData.DATA_CACHE,
     server: configData.SERVER_ARCHIVER,
 });
@@ -82,7 +82,7 @@ const server_data = {
     },
 };
 console.log(`Loaded 'data' using 'data=thumbnails'`);
-const server_vars = require('./server-functions-vars.js')(app, '/vars', { vars: configData.CONTENT_VIEW_VARS, tz: configData.TZ });
+const server_vars = require('./server-function-vars.js')(app, '/vars', { vars: configData.CONTENT_VIEW_VARS, tz: configData.TZ });
 console.log(`Loaded 'vars' on '/vars' using 'vars=[${configData.CONTENT_VIEW_VARS.join(', ')}]'`);
 
 app.get('/', async (req, res) =>
@@ -96,7 +96,7 @@ console.log(`Loaded '/' using 'server-mainview' && data/vars`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const notifications = require('./server-functions-push.js')(app, '/push', {
+const notifications = require('./server-function-push.js')(app, '/push', {
     contactEmail: configData.ADMIN_EMAIL,
     dataDir: configData.DATA_STORE,
     vapidKeyFile: 'push-vapid-keys.json',

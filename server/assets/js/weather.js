@@ -50,7 +50,11 @@ function __jdToYMD(jd) {
         C = Math.floor((B - 122.1) / 365.25),
         D = Math.floor(365.25 * C),
         E = Math.floor((B - D) / 30.6001);
-    return { day: B - D - Math.floor(30.6001 * E) + f, month: E < 14 ? E - 1 : E - 13, year: (E < 14 ? E - 1 : E - 13) > 2 ? C - 4716 : C - 4715 };
+    return {
+        day: B - D - Math.floor(30.6001 * E) + f,
+        month: E < 14 ? E - 1 : E - 13,
+        year: (E < 14 ? E - 1 : E - 13) > 2 ? C - 4716 : C - 4715,
+    };
 }
 function __jdFromDate(date) {
     return __jdFromYMDHMS({
@@ -417,7 +421,14 @@ function lunarEclipseTimes(eclipseType, peak, duration) {
     const totalStart = totalDuration > 0 ? new Date(peak.getTime() - (totalDuration / 2) * 60 * 1000) : null,
         totalEnd = totalDuration > 0 ? new Date(peak.getTime() + (totalDuration / 2) * 60 * 1000) : null,
         total = totalDuration > 0 ? { start: totalStart, end: totalEnd } : null;
-    return { start: penumbralStart, peak, end: penumbralEnd, penumbral, partial, total };
+    return {
+        start: penumbralStart,
+        peak,
+        end: penumbralEnd,
+        penumbral,
+        partial,
+        total,
+    };
 }
 
 function lunarEclipseVisibilityDescription(eclipseType, phaseVisibility, moonRiseset) {
@@ -533,7 +544,15 @@ function __getLunarEclipse(date, latitude, longitude) {
             latitude !== null && longitude !== null ? lunarEclipseVisibilityLocation(type, times, latitude, longitude) : { visible: 'unknown' },
         visibilityRegions = lunarEclipseVisiblityRegions(times.peak);
 
-    return { isEclipse: true, type, magnitude, duration, visibilityRegions, times, visibilityLocation };
+    return {
+        isEclipse: true,
+        type,
+        magnitude,
+        duration,
+        visibilityRegions,
+        times,
+        visibilityLocation,
+    };
 }
 
 function getLunarEclipse(date = new Date(), latitude = null, longitude = null, daysWindow = 7) {
@@ -576,9 +595,18 @@ function solarEclipsePath(eclipseType, jd, moonPos, sunPos) {
             southernLimit = -10 + moonPos.latitude * 10;
         const centralLongitudegitude = (sunPos.longitude - 180) % 360;
         simplifiedPath = [
-            { latitude: northernLimit, longitude: (centralLongitudegitude - 60) % 360 },
-            { latitude: (northernLimit + southernLimit) / 2, longitude: centralLongitudegitude % 360 },
-            { latitude: southernLimit, longitude: (centralLongitudegitude + 60) % 360 },
+            {
+                latitude: northernLimit,
+                longitude: (centralLongitudegitude - 60) % 360,
+            },
+            {
+                latitude: (northernLimit + southernLimit) / 2,
+                longitude: centralLongitudegitude % 360,
+            },
+            {
+                latitude: southernLimit,
+                longitude: (centralLongitudegitude + 60) % 360,
+            },
         ];
     } else {
         pathType = 'partial';
@@ -663,7 +691,17 @@ function __getSolarEclipse(date, latitude, longitude) {
     const visibilityLocation = latitude !== null && longitude !== null ? solarEclipseVisibilityLocation(type, path, latitude, longitude) : 'unknown',
         visibilityRegions = solarEclipseVisibiltyRegions(path);
 
-    return { isEclipse: true, type, magnitude, duration, obscuration, visibilityRegions, visibilityLocation, times, path: path.simplifiedPath };
+    return {
+        isEclipse: true,
+        type,
+        magnitude,
+        duration,
+        obscuration,
+        visibilityRegions,
+        visibilityLocation,
+        times,
+        path: path.simplifiedPath,
+    };
 }
 
 function getSolarEclipse(date = new Date(), latitude = null, longitude = null, daysWindow = 7) {
@@ -701,9 +739,19 @@ function isNearSolstice(date = new Date(), hemisphere = 'northern', daysWindow =
         daysToCurrYearShortest = (currentYearShortestDay.getTime() - date.getTime()) / msPerDay,
         daysToOtherYearSolstice = (otherYearRelevantSolstice.getTime() - date.getTime()) / msPerDay;
     if (Math.abs(daysToCurrYearLongest) <= daysWindow)
-        return { near: true, type: 'longest day', exact: Math.abs(daysToCurrYearLongest) < 1, days: daysToCurrYearLongest };
+        return {
+            near: true,
+            type: 'longest day',
+            exact: Math.abs(daysToCurrYearLongest) < 1,
+            days: daysToCurrYearLongest,
+        };
     else if (Math.abs(daysToCurrYearShortest) <= daysWindow)
-        return { near: true, type: 'shortest day', exact: Math.abs(daysToCurrYearShortest) < 1, days: daysToCurrYearShortest };
+        return {
+            near: true,
+            type: 'shortest day',
+            exact: Math.abs(daysToCurrYearShortest) < 1,
+            days: daysToCurrYearShortest,
+        };
     else if (Math.abs(daysToOtherYearSolstice) <= daysWindow)
         return {
             near: true,
@@ -732,13 +780,33 @@ function isNearEquinox(date = new Date(), hemisphere = 'northern', daysWindow = 
     const nextYearFirstEquinox = new Date(year + 1, 2, 20),
         daysToNextYearFirst = (nextYearFirstEquinox.getTime() - date.getTime()) / msPerDay;
     if (Math.abs(daysToFirst) <= daysWindow)
-        return { near: true, type: isNorthern ? 'spring equinox' : 'autumn equinox', exact: Math.abs(daysToFirst) < 1, days: daysToFirst };
+        return {
+            near: true,
+            type: isNorthern ? 'spring equinox' : 'autumn equinox',
+            exact: Math.abs(daysToFirst) < 1,
+            days: daysToFirst,
+        };
     else if (Math.abs(daysToSecond) <= daysWindow)
-        return { near: true, type: isNorthern ? 'autumn equinox' : 'spring equinox', exact: Math.abs(daysToSecond) < 1, days: daysToSecond };
+        return {
+            near: true,
+            type: isNorthern ? 'autumn equinox' : 'spring equinox',
+            exact: Math.abs(daysToSecond) < 1,
+            days: daysToSecond,
+        };
     else if (Math.abs(daysToPrevYearSecond) <= daysWindow)
-        return { near: true, type: isNorthern ? 'autumn equinox' : 'spring equinox', exact: Math.abs(daysToPrevYearSecond) < 1, days: daysToPrevYearSecond };
+        return {
+            near: true,
+            type: isNorthern ? 'autumn equinox' : 'spring equinox',
+            exact: Math.abs(daysToPrevYearSecond) < 1,
+            days: daysToPrevYearSecond,
+        };
     else if (Math.abs(daysToNextYearFirst) <= daysWindow)
-        return { near: true, type: isNorthern ? 'spring equinox' : 'autumn equinox', exact: Math.abs(daysToNextYearFirst) < 1, days: daysToNextYearFirst };
+        return {
+            near: true,
+            type: isNorthern ? 'spring equinox' : 'autumn equinox',
+            exact: Math.abs(daysToNextYearFirst) < 1,
+            days: daysToNextYearFirst,
+        };
     return { near: false };
 }
 
@@ -758,13 +826,29 @@ function getCrossQuarterDay(date = new Date(), hemisphere = 'northern', daysWind
         daysToLughnasadh = Math.abs(date.getTime() - lughnasadh.getTime()) / msPerDay,
         daysToSamhain = Math.abs(date.getTime() - samhain.getTime()) / msPerDay;
     if (daysToImbolc <= daysWindow)
-        return { isCrossQuarter: true, name: isNorthern ? 'Imbolc (early spring)' : 'Lughnasadh (early autumn)', days: daysToImbolc };
+        return {
+            isCrossQuarter: true,
+            name: isNorthern ? 'Imbolc (early spring)' : 'Lughnasadh (early autumn)',
+            days: daysToImbolc,
+        };
     else if (daysToBeltane <= daysWindow)
-        return { isCrossQuarter: true, name: isNorthern ? 'Beltane (early summer)' : 'Samhain (early winter)', days: daysToBeltane };
+        return {
+            isCrossQuarter: true,
+            name: isNorthern ? 'Beltane (early summer)' : 'Samhain (early winter)',
+            days: daysToBeltane,
+        };
     else if (daysToLughnasadh <= daysWindow)
-        return { isCrossQuarter: true, name: isNorthern ? 'Lughnasadh (early autumn)' : 'Imbolc (early spring)', days: daysToLughnasadh };
+        return {
+            isCrossQuarter: true,
+            name: isNorthern ? 'Lughnasadh (early autumn)' : 'Imbolc (early spring)',
+            days: daysToLughnasadh,
+        };
     else if (daysToSamhain <= daysWindow)
-        return { isCrossQuarter: true, name: isNorthern ? 'Samhain (early winter)' : 'Beltane (early summer)', days: daysToSamhain };
+        return {
+            isCrossQuarter: true,
+            name: isNorthern ? 'Samhain (early winter)' : 'Beltane (early summer)',
+            days: daysToSamhain,
+        };
     return { isCrossQuarter: false };
 }
 
@@ -773,10 +857,24 @@ function getCrossQuarterDay(date = new Date(), hemisphere = 'northern', daysWind
 
 function getAuroraPotential(latitude, month, solarActivity = null) {
     const isDarkSeason = month <= 2 || month >= 9;
-    if (latitude >= 65) return { potential: isDarkSeason ? 'very high' : 'moderate', visible: isDarkSeason, bestTime: '22:00-02:00' };
-    else if (latitude >= 60) return { potential: isDarkSeason ? 'high' : 'low', visible: isDarkSeason && solarActivity === 'high', bestTime: '23:00-01:00' };
+    if (latitude >= 65)
+        return {
+            potential: isDarkSeason ? 'very high' : 'moderate',
+            visible: isDarkSeason,
+            bestTime: '22:00-02:00',
+        };
+    else if (latitude >= 60)
+        return {
+            potential: isDarkSeason ? 'high' : 'low',
+            visible: isDarkSeason && solarActivity === 'high',
+            bestTime: '23:00-01:00',
+        };
     else if (latitude >= 55)
-        return { potential: isDarkSeason ? 'moderate' : 'very low', visible: isDarkSeason && solarActivity === 'very high', bestTime: '00:00-01:00' };
+        return {
+            potential: isDarkSeason ? 'moderate' : 'very low',
+            visible: isDarkSeason && solarActivity === 'very high',
+            bestTime: '00:00-01:00',
+        };
     return { potential: 'very low', visible: false };
 }
 
@@ -1625,4 +1723,3 @@ class SolarCalc {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
-

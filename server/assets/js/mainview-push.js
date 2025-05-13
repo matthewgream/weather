@@ -18,7 +18,7 @@ const weatherPushNotifications = (function () {
         }
         try {
             vapidPublicKey = (await (await fetch('/push/vapidPublicKey')).json()).publicKey;
-            serviceWorker = await navigator.serviceWorker.register('/static/js/service-worker.js');
+            serviceWorker = await navigator.serviceWorker.register('/static/js/mainview-worker.js');
             isSubscribed = (await serviceWorker.pushManager.getSubscription()) !== null;
             pushToggleListen();
             console.log('push: initialised with service-worker:', serviceWorker);

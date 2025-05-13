@@ -4,7 +4,7 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const configPath = process.argv[2] || 'secrets.txt';
-const configData = require('./server-functions-config.js')(configPath);
+const configData = require('./server-function-config.js')(configPath);
 const configList = Object.entries(configData)
     .map(([k, v]) => k.toLowerCase() + '=' + v)
     .join(', ');
@@ -29,10 +29,10 @@ app.use((req, res, next) => {
 });
 console.log(`Loaded 'redirect' using 'http -> https'`);
 
-const credentials = require('./server-functions-credentials.js')(configData.FQDN);
+const credentials = require('./server-function-credentials.js')(configData.FQDN);
 console.log(`Loaded 'credentials' using '${configData.FQDN}'`);
 
-const diagnostics = require('./server-functions-diagnostics')(app, { port: 80, path: '/status' }); // XXX PORT_EXTERNAL
+const diagnostics = require('./server-function-diagnostics')(app, { port: 80, path: '/status' }); // XXX PORT_EXTERNAL
 console.log(`Loaded 'diagnostics' on '/status'`);
 
 app.use((req, res, next) => {
@@ -58,7 +58,7 @@ console.log(`Loaded 'authentication' using 'pass=${configData.PASS}'`);
 app.use('/static', exp.static(configData.DATA_ASSETS));
 console.log(`Loaded 'static' using '/static -> ${configData.DATA_ASSETS}'`);
 
-const server_snapshots = require('./server-functions-snapshot-archiver.js')(app, '/snapshot', { directory: configData.STORAGE });
+const server_snapshots = require('./server-function-snapshot-archiver.js')(app, '/snapshot', { directory: configData.STORAGE });
 console.log(`Loaded 'snapshots' on '/snapshot', using '${configData.STORAGE}'`);
 
 app.get('/', (req, res) => res.redirect(server_snapshots.getUrlList()));
