@@ -1,3 +1,4 @@
+
 self.addEventListener('install', (event) => {
     self.skipWaiting();
     console.log('push: service-worker installed');
@@ -9,7 +10,7 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('push', (event) => {
-    console.log('push: notification received');
+    console.log('push: service-worker notification received');
     let notification = {
         title: 'Weather Alert',
         body: 'New weather alert',
@@ -40,10 +41,8 @@ self.addEventListener('notificationclick', (event) => {
                 includeUncontrolled: true,
             })
             .then((windowClients) => {
-                for (let i = 0; i < windowClients.length; i++) {
-                    const client = windowClients[i];
-                    if ('focus' in client) return client.focus();
-                }
+                for (let i = 0; i < windowClients.length; i++)
+                    if ('focus' in windowClients[i]) return windowClients[i].focus();
                 if (clients.openWindow) return clients.openWindow('/');
             })
     );

@@ -1,6 +1,7 @@
+
 const weatherPushNotifications = (function () {
     let isSubscribed = false;
-    let swRegistration = null;
+    let serviceWorker = null;
     let vapidPublicKey = null;
     let observerActive = false;
 
@@ -13,52 +14,47 @@ const weatherPushNotifications = (function () {
             const response = await fetch('/push/vapidPublicKey');
             const keyData = await response.json();
             vapidPublicKey = keyData.publicKey;
-            swRegistration = await navigator.serviceWorker.register('/static/js/service-worker.js');
-            console.log('push: service-worker registered:', swRegistration);
-            const subscription = await swRegistration.pushManager.getSubscription();
+            serviceWorker = await navigator.serviceWorker.register('/static/js/service-worker.js');
+            const subscription = await serviceWorker.pushManager.getSubscription();
             isSubscribed = subscription !== null;
-            setupDomObserver();
+			pushToggleListener();
+			console.log('push: initialised with service-worker:', serviceWorker);
             return true;
         } catch (error) {
-            console.error('push: error initializing:', error);
+            console.error('push: error initialising:', error);
             return false;
         }
     }
 
-    function setupDomObserver() {
+    function pushToggleListener() {
         if (observerActive) return;
         const observer = new MutationObserver((mutations) =>
             mutations
                 .filter((mutation) => mutation.type === 'childList')
-                .forEach((mutation) => document.querySelectorAll('.mode-switch')?.forEach(enhanceModeSwitchElement))
+                .forEach((mutation) => document.querySelectorAll('.mode-switch')?.forEach(pushToggleSetup))
         );
         const dashboard = document.getElementById('weather-dashboard');
         if (dashboard) {
             observer.observe(dashboard, { childList: true, subtree: true });
             observerActive = true;
-            const modeSwitchElements = document.querySelectorAll('.mode-switch');
-            modeSwitchElements.forEach(enhanceModeSwitchElement);
+            document.querySelectorAll('.mode-switch').forEach(pushToggleSetup);
         }
     }
-
-    function enhanceModeSwitchElement(modeSwitchElement) {
-        if (modeSwitchElement.querySelector('.alerts-toggle')) return;
-        const alertsToggle = document.createElement('a');
-        alertsToggle.className = 'alerts-toggle';
-        alertsToggle.style.marginLeft = '10px';
-        alertsToggle.style.cursor = 'pointer';
-        updateAlertToggleState(alertsToggle);
-        alertsToggle.addEventListener('click', async function (e) {
+    function pushToggleSetup(element) {
+        if (element.querySelector('.alerts-toggle')) return;
+        const toggle = document.createElement('a');
+        toggle.className = 'alerts-toggle';
+        pushToggleUpdate(toggle);
+        toggle.addEventListener('click', async function (e) {
             e.preventDefault();
             e.stopPropagation();
-            if (isSubscribed) await unsubscribeUser();
-            else await subscribeUser();
-            document.querySelectorAll('.alerts-toggle').forEach(updateAlertToggleState);
+            if (isSubscribed) await unsubscribe();
+            else await subscribe();
+            document.querySelectorAll('.alerts-toggle').forEach(pushToggleUpdate);
         });
-        modeSwitchElement.appendChild(alertsToggle);
+        element.appendChild(toggle);
     }
-
-    function updateAlertToggleState(element) {
+    function pushToggleUpdate(element) {
         if (!element) return;
         if (Notification.permission === 'denied') {
             element.textContent = '[alerts blocked]';
@@ -69,23 +65,19 @@ const weatherPushNotifications = (function () {
         element.style.color = isSubscribed ? 'var(--primary-color)' : '#666';
     }
 
-    function urlBase64ToUint8Array(base64String) {
-        const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-        const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
-        const rawData = window.atob(base64);
+    function __urlBase64ToUint8Array(base64String) {
+        const rawData = window.atob((base64String + '='.repeat((4 - (base64String.length % 4)) % 4)).replace(/\-/g, '+').replace(/_/g, '/'));
         const outputArray = new Uint8Array(rawData.length);
         for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
         return outputArray;
     }
 
-    async function subscribeUser() {
+    async function subscribe() {
         try {
-            const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
-            const subscription = await swRegistration.pushManager.subscribe({
+            const subscription = await serviceWorker.pushManager.subscribe({
                 userVisibleOnly: true,
-                applicationServerKey: applicationServerKey,
+                applicationServerKey: __urlBase64ToUint8Array(vapidPublicKey)
             });
-            console.log('push: user subscription enabled:', subscription);
             await fetch('/push/subscribe', {
                 method: 'POST',
                 headers: {
@@ -94,21 +86,21 @@ const weatherPushNotifications = (function () {
                 body: JSON.stringify(subscription),
             });
             isSubscribed = true;
-            document.querySelectorAll('.alerts-toggle').forEach(updateAlertToggleState);
+            document.querySelectorAll('.push-toggle').forEach(pushToggleUpdate);
+            console.log('push: user subscription enabled:', subscription);
             return true;
         } catch (error) {
             console.error('push: user subscription failed:', error);
             return false;
         }
     }
-
-    async function unsubscribeUser() {
+    async function unsubscribe() {
         try {
-            const subscription = await swRegistration.pushManager.getSubscription();
+            const subscription = await serviceWorker.pushManager.getSubscription();
             if (!subscription) {
-                console.log('push: user subscripotion not found (for unsubscribe)');
                 isSubscribed = false;
-                document.querySelectorAll('.alerts-toggle').forEach(updateAlertToggleState);
+                document.querySelectorAll('.push-toggle').forEach(pushToggleUpdate);
+                console.log('push: user subscripotion not found (for unsubscribe)');
                 return true;
             }
             const endpoint = subscription.endpoint;
@@ -121,7 +113,7 @@ const weatherPushNotifications = (function () {
                 body: JSON.stringify({ endpoint }),
             });
             isSubscribed = false;
-            document.querySelectorAll('.alerts-toggle').forEach(updateAlertToggleState);
+            document.querySelectorAll('.push-toggle').forEach(pushToggleUpdate);
             console.log('push: user subscription disabled');
             return true;
         } catch (error) {
@@ -129,11 +121,12 @@ const weatherPushNotifications = (function () {
             return false;
         }
     }
+
     return {
-        init: init,
+        init,
         isSubscribed: () => isSubscribed,
-        subscribe: subscribeUser,
-        unsubscribe: unsubscribeUser,
+        subscribe,
+        unsubscribe,
     };
 })();
 

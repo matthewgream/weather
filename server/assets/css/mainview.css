@@ -236,6 +236,7 @@ h2 {
 }
 .alerts-toggle {
     margin-left: 10px;
+    cursor: pointer;
 }
 @media (max-width: 480px) {
     .dashboard {
