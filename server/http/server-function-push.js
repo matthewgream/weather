@@ -92,7 +92,7 @@ class PushNotificationManager {
 
     async sendNotification(payload, options = {}) {
         console.log(
-            `push: subscriptions notify request, title='${typeof payload === 'object' && payload.title ? payload.title : '-'}', body='${typeof payload === 'object' && payload.body ? payload.body : '-'}`
+            `push: subscriptions notify request, title='${typeof payload === 'object' && payload.title ? payload.title : '-'}', body='${typeof payload === 'object' && payload.body ? payload.body : '-'}'`
         );
         const startTime = Date.now();
         const promises = this.subscriptions.map(async (subscription, index) => {
