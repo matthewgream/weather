@@ -1,4 +1,3 @@
-
 self.addEventListener('install', (event) => {
     self.skipWaiting();
     console.log('push: service-worker installed');
@@ -17,7 +16,7 @@ self.addEventListener('push', (event) => {
     };
     try {
         if (event.data) notification = event.data.json();
-    } catch (e) {
+    } catch {
         if (event.data) notification.body = event.data.text();
     }
     const options = {
@@ -35,15 +34,14 @@ self.addEventListener('notificationclick', (event) => {
     console.log('push: notification clicked');
     event.notification.close();
     event.waitUntil(
-        clients
+        self.clients
             .matchAll({
                 type: 'window',
                 includeUncontrolled: true,
             })
             .then((windowClients) => {
-                for (let i = 0; i < windowClients.length; i++)
-                    if ('focus' in windowClients[i]) return windowClients[i].focus();
-                if (clients.openWindow) return clients.openWindow('/');
+                for (let i = 0; i < windowClients.length; i++) if ('focus' in windowClients[i]) return windowClients[i].focus();
+                if (self.clients.openWindow) return self.clients.openWindow('/');
             })
     );
 });

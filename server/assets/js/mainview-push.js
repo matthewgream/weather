@@ -1,9 +1,15 @@
+function __urlBase64ToUint8Array(base64String) {
+    const rawData = window.atob((base64String + '='.repeat((4 - (base64String.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/'));
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+    return outputArray;
+}
 
 const weatherPushNotifications = (function () {
-    let isSubscribed = false;
-    let serviceWorker = null;
     let vapidPublicKey = null;
-    let observerActive = false;
+    let serviceWorker = null;
+    let isSubscribed = false;
+    let isObserved = false;
 
     async function init() {
         if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -11,14 +17,11 @@ const weatherPushNotifications = (function () {
             return false;
         }
         try {
-            const response = await fetch('/push/vapidPublicKey');
-            const keyData = await response.json();
-            vapidPublicKey = keyData.publicKey;
+            vapidPublicKey = (await (await fetch('/push/vapidPublicKey')).json()).publicKey;
             serviceWorker = await navigator.serviceWorker.register('/static/js/service-worker.js');
-            const subscription = await serviceWorker.pushManager.getSubscription();
-            isSubscribed = subscription !== null;
-			pushToggleListener();
-			console.log('push: initialised with service-worker:', serviceWorker);
+            isSubscribed = (await serviceWorker.pushManager.getSubscription()) !== null;
+            pushToggleListen();
+            console.log('push: initialised with service-worker:', serviceWorker);
             return true;
         } catch (error) {
             console.error('push: error initialising:', error);
@@ -26,57 +29,53 @@ const weatherPushNotifications = (function () {
         }
     }
 
-    function pushToggleListener() {
-        if (observerActive) return;
-        const observer = new MutationObserver((mutations) =>
-            mutations
-                .filter((mutation) => mutation.type === 'childList')
-                .forEach((mutation) => document.querySelectorAll('.mode-switch')?.forEach(pushToggleSetup))
-        );
-        const dashboard = document.getElementById('weather-dashboard');
-        if (dashboard) {
-            observer.observe(dashboard, { childList: true, subtree: true });
-            observerActive = true;
-            document.querySelectorAll('.mode-switch').forEach(pushToggleSetup);
+    function pushToggleListen() {
+        if (isObserved) return;
+        const observer = new MutationObserver((mutations) => {
+            if (mutations.some((mutation) => mutation.type === 'childList')) pushToggleSetup();
+        });
+        const element = document.getElementById('weather-dashboard');
+        if (element) {
+            observer.observe(element, { childList: true, subtree: true });
+            isObserved = true;
+            pushToggleSetup();
         }
     }
-    function pushToggleSetup(element) {
-        if (element.querySelector('.alerts-toggle')) return;
-        const toggle = document.createElement('a');
-        toggle.className = 'alerts-toggle';
-        pushToggleUpdate(toggle);
-        toggle.addEventListener('click', async function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (isSubscribed) await unsubscribe();
-            else await subscribe();
-            document.querySelectorAll('.alerts-toggle').forEach(pushToggleUpdate);
-        });
-        element.appendChild(toggle);
-    }
-    function pushToggleUpdate(element) {
-        if (!element) return;
+    function __pushToggleSet(element) {
         if (Notification.permission === 'denied') {
             element.textContent = '[alerts blocked]';
             element.style.color = '#999';
-            return;
+        } else {
+            element.textContent = isSubscribed ? '[alerts are on]' : '[alerts are off]';
+            element.style.color = isSubscribed ? 'var(--primary-color)' : '#666';
         }
-        element.textContent = isSubscribed ? '[alerts are on]' : '[alerts are off]';
-        element.style.color = isSubscribed ? 'var(--primary-color)' : '#666';
     }
-
-    function __urlBase64ToUint8Array(base64String) {
-        const rawData = window.atob((base64String + '='.repeat((4 - (base64String.length % 4)) % 4)).replace(/\-/g, '+').replace(/_/g, '/'));
-        const outputArray = new Uint8Array(rawData.length);
-        for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
-        return outputArray;
+    function pushToggleSetup() {
+        document.querySelectorAll('.mode-switch').forEach((element) => {
+            if (!element.querySelector('.alerts-toggle')) {
+                const toggle = document.createElement('a');
+                toggle.className = 'alerts-toggle';
+                __pushToggleSet(toggle);
+                toggle.addEventListener('click', async function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (isSubscribed) await unsubscribe();
+                    else await subscribe();
+                    pushToggleUpdate();
+                });
+                element.appendChild(toggle);
+            }
+        });
+    }
+    function pushToggleUpdate() {
+        document.querySelectorAll('.alerts-toggle').forEach((element) => element && __pushToggleSet(element));
     }
 
     async function subscribe() {
         try {
             const subscription = await serviceWorker.pushManager.subscribe({
                 userVisibleOnly: true,
-                applicationServerKey: __urlBase64ToUint8Array(vapidPublicKey)
+                applicationServerKey: __urlBase64ToUint8Array(vapidPublicKey),
             });
             await fetch('/push/subscribe', {
                 method: 'POST',
@@ -86,38 +85,34 @@ const weatherPushNotifications = (function () {
                 body: JSON.stringify(subscription),
             });
             isSubscribed = true;
-            document.querySelectorAll('.push-toggle').forEach(pushToggleUpdate);
+            pushToggleUpdate();
             console.log('push: user subscription enabled:', subscription);
             return true;
         } catch (error) {
-            console.error('push: user subscription failed:', error);
+            console.error('push: user subscription enable failed:', error);
             return false;
         }
     }
     async function unsubscribe() {
         try {
             const subscription = await serviceWorker.pushManager.getSubscription();
-            if (!subscription) {
-                isSubscribed = false;
-                document.querySelectorAll('.push-toggle').forEach(pushToggleUpdate);
-                console.log('push: user subscripotion not found (for unsubscribe)');
-                return true;
+            if (subscription) {
+                const endpoint = subscription.endpoint;
+                await subscription.unsubscribe();
+                await fetch('/push/unsubscribe', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ endpoint }),
+                });
             }
-            const endpoint = subscription.endpoint;
-            await subscription.unsubscribe();
-            await fetch('/push/unsubscribe', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ endpoint }),
-            });
             isSubscribed = false;
-            document.querySelectorAll('.push-toggle').forEach(pushToggleUpdate);
-            console.log('push: user subscription disabled');
+            pushToggleUpdate();
+            console.log('push: user subscription disabled' + (subscription ? '' : ' (was not active)'));
             return true;
         } catch (error) {
-            console.error('push: error unsubscribing', error);
+            console.error('push: user subscription disable failed:', error);
             return false;
         }
     }

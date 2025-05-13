@@ -95,7 +95,6 @@ class PushNotificationManager {
             `push: subscriptions notify request, title='${typeof payload === 'object' && payload.title ? payload.title : '-'}', body='${typeof payload === 'object' && payload.body ? payload.body : '-'}`
         );
         const startTime = Date.now();
-        const failures = [];
         const promises = this.subscriptions.map(async (subscription, index) => {
             try {
                 await webpush.sendNotification(subscription, typeof payload === 'string' ? payload : JSON.stringify(payload), options);

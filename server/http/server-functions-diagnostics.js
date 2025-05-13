@@ -145,7 +145,7 @@ class DiagnosticsManager {
                 const sourceData = source.sourceFunction();
                 if (sourceData && typeof sourceData === 'object') baseStats[source.name] = sourceData;
             } catch (error) {
-                baseStats[source.name] = { error: 'Failed to retrieve diagnostics' };
+                baseStats[source.name] = { error: `Failed to retrieve diagnostics: ${error.message}` };
             }
         });
 
@@ -163,7 +163,7 @@ class DiagnosticsManager {
                     console.error(`Error rendering diagnostics from source ${source.name}:`, error);
                     return `<div class="stats-box">
                     <h2>${source.name}</h2>
-                    <div class="error">Error retrieving diagnostics: ${error.message}</div>
+                    <div class="error">Failed to retrieve diagnostics: ${error.message}</div>
                     </div>`;
                 }
             })
@@ -290,7 +290,7 @@ class DiagnosticsManager {
                     <h3>${this._formatTitle(key)}</h3>
                     ${this._formatObjectData(value)}
                 </div>`;
-        const simpleProps = Object.entries(data).filter(([_, v]) => typeof v !== 'object' || v === null);
+        const simpleProps = Object.values(data).filter((v) => typeof v !== 'object' || v === null);
         if (simpleProps.length > 0)
             html += `<div class="stats-box">
                 <h3>General</h3>
