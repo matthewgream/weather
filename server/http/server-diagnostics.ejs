@@ -1,0 +1,298 @@
+<%
+
+function renderSectionNavigation(items) {
+    return `<div class="nav">
+        ${items.map((item) => `<a href="#${item.id}">${item.name}</a>`).join('\n    ')}
+      </div>`;
+}
+
+function formatStats(statsObj) {
+    return Object.entries(statsObj)
+        .sort((a, b) => b[1] - a[1])
+        .map(([key, value]) => ({ key, value }));
+}
+
+function renderStatsBox(title, data, columns, keyField, valueField) {
+    const header = columns ? `<tr>${columns.map((column) => `<th>${column}</th>`).join('')}</tr>` : '';
+    const content = data
+        .map((item) =>
+            Array.isArray(item)
+                ? `<tr>${item.map((value) => `<td>${value}</td>`).join('')}</tr>`
+                : `<tr><td>${item[keyField || 'key']}</td><td>${item[valueField || 'value']}</td></tr>`
+        )
+        .join('');
+    return `<div class="stats-box">
+        <h3>${title}</h3>
+        <table>${header}${content}</table>
+      </div>`;
+}
+
+function renderSection(id, title, statsBoxes) {
+    return `<div id="${id}" class="section">
+        <h2>${title}</h2>
+        ${statsBoxes.map((box) => renderStatsBox(box.title, box.data, box.columns, box.keyField, box.valueField)).join('')}
+      </div>`;
+}
+
+function renderProperty(prop) {
+    let content;
+    if (prop.isArray && prop.isEmpty) content = `<p>No items</p>`;
+    else if (prop.isObjectArray)
+        content = `<table><tr>${prop.headers.map((header) => `<th>${header}</th>`).join('')}</tr>${prop.rows.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join('')}</tr>`).join('')}</table>`;
+    else if (prop.isArray) content = `<ul>${prop.items.map((item) => `<li>${item}</li>`).join('')}</ul>`;
+    else content = `<table>${prop.entries.map((entry) => `<tr><th>${entry.key}</th><td>${entry.value}</td></tr>`).join('')}</table>`;
+    return `<div class="stats-box">
+        <h3>${prop.key}</h3>
+        ${content}
+      </div>`;
+}
+
+function renderSectionDiagnostics(diagnostics) {
+    return diagnostics
+        .map((result) => {
+            const [id, name] = result.success ? [result.data.id, result.data.name] : [result.id, result.name];
+            let content;
+            if (!result.success) content = `<div class="stats-box"><div class="error">Failed to retrieve diagnostics: ${result.errorMessage}</div></div>`;
+            else if (!result.data.hasData) content = `<div class="stats-box"><p>No data available</p></div>`;
+            else
+                content =
+                    result.data.complexProps.map((prop) => renderProperty(prop)).join('') +
+                    (result.data.simpleProps.length > 0 ? renderStatsBox('General', result.data.simpleProps) : '');
+            return `<div id="${id}" class="section">
+                <h2>${name}</h2>
+                ${content}
+              </div>`;
+    })
+    .join('\n');
+}
+
+function renderSectionLogs(logs) {
+    return `<div id="logs" class="section">
+        <h2>Recent Logs</h2>
+        <div class="log-container">
+          <pre><code>${logs.join('')}</code></pre>
+        </div>
+      </div>`;
+}
+
+const routeStats = formatStats(stats.byRoute);
+const methodStats = formatStats(stats.byMethod);
+const statusStats = formatStats(stats.byStatus);
+const topIPs = formatStats(stats.byIP).slice(0, 10);
+const memoryUsageFormatted = Object.entries(process.memoryUsage()).map(([type, bytes]) => ({
+    key: type,
+    value: `${Math.round((bytes / 1024 / 1024) * 100) / 100} MB`,
+}));
+
+const generalStatsBoxes = [
+    {
+        title: 'Basic Stats',
+        data: [
+            { key: 'Total Requests', value: stats.total },
+            { key: 'Server Uptime', value: uptime },
+            { key: 'Node.js Version', value: process.version },
+            { key: 'Platform', value: process.platform },
+        ],
+    },
+    {
+        title: 'Memory Usage',
+        data: memoryUsageFormatted,
+    },
+];
+
+const requestStatsBoxes = [
+    { title: 'Routes', data: routeStats, columns: ['Path', 'Count'] },
+    { title: 'Methods', data: methodStats, columns: ['Method', 'Count'] },
+    { title: 'Status Codes', data: statusStats, columns: ['Status', 'Count'] },
+    { title: 'Top IPs', data: topIPs, columns: ['IP', 'Count'] },
+];
+
+const diagnostics = additionalDiagnostics.map((source) => {
+    try {
+        const data = source.sourceFunction();
+        const processedData = {
+            name: source.name,
+            id: source.name.toLowerCase(),
+            hasData: data && typeof data === 'object',
+            complexProps: [],
+            simpleProps: [],
+        };
+        if (processedData.hasData)
+            for (const [key, value] of Object.entries(data)) {
+                if (typeof value === 'object' && value !== null) {
+                    const prop = {
+                        key: formatTitle(key),
+                        originalKey: key,
+                        isArray: Array.isArray(value),
+                        isEmpty: Array.isArray(value) && value.length === 0,
+                        isObjectArray: Array.isArray(value) && value.length > 0 && typeof value[0] === 'object' && value[0] !== null,
+                        value: value,
+                    };
+                    if (prop.isObjectArray) {
+                        prop.headers = Object.keys(value[0]).map((k) => formatTitle(k));
+                        prop.rows = value.map((item) => Object.keys(value[0]).map((k) => formatValue(item[k])));
+                    } else if (prop.isArray && !prop.isEmpty && !prop.isObjectArray) prop.items = value.map((item) => formatValue(item));
+                    else if (!prop.isArray) prop.entries = Object.entries(value).map(([k, v]) => ({ key: formatTitle(k), value: formatValue(v) }));
+                    processedData.complexProps.push(prop);
+                } else processedData.simpleProps.push({ key: formatTitle(key), value: formatValue(value) });
+            }
+        return {
+            success: true,
+            data: processedData,
+        };
+    } catch (error) {
+        return {
+            success: false,
+            name: source.name,
+            id: source.name.toLowerCase(),
+            errorMessage: error.message,
+        };
+    }
+});
+
+const navigation = [
+    { id: 'general', name: 'General' },
+    { id: 'requests', name: 'Requests' },
+    ...additionalDiagnostics.map((source) => ({ id: source.name.toLowerCase(), name: source.name })),
+    { id: 'logs', name: 'Logs' },
+];
+
+const sections = [
+    renderSectionNavigation(navigation),
+    renderSection('general', 'Server Information', generalStatsBoxes),
+    renderSection('requests', 'Request Statistics', requestStatsBoxes),
+    renderSectionDiagnostics(diagnostics),
+    renderSectionLogs(logs),
+].join('');
+%>
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Server Diagnostics</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        margin: 0 auto;
+        max-width: 1200px;
+        padding: 20px;
+        line-height: 1.5;
+        color: #333;
+      }
+      h1, h2, h3 {
+        color: #2d3748;
+        margin-top: 1.5em;
+      }
+      h1 {
+        font-size: 2rem;
+        border-bottom: 2px solid #edf2f7;
+        padding-bottom: 0.5rem;
+      }
+      h2 {
+        font-size: 1.5rem;
+        border-bottom: 1px solid #edf2f7;
+        padding-bottom: 0.3rem;
+      }
+      h3 {
+        font-size: 1.2rem;
+      }
+      .stats-box {
+        background: #f8fafc;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        border: 1px solid #e2e8f0;
+      }
+      .section {
+        margin: 20px 0 40px 0;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        margin-bottom: 1rem;
+      }
+      th, td {
+        text-align: left;
+        padding: 12px 8px;
+        border-bottom: 1px solid #e2e8f0;
+      }
+      th {
+        background-color: #f7fafc;
+        font-weight: 600;
+      }
+      tr:hover {
+        background-color: #f1f5f9;
+      }
+      pre, code {
+        font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+        background: #f1f5f9;
+        border-radius: 4px;
+        padding: 0.2em 0.4em;
+        font-size: 0.9em;
+      }
+      pre {
+        max-height: 300px;
+        overflow: auto;
+        padding: 12px;
+        border: 1px solid #e2e8f0;
+      }
+      pre code {
+        background: none;
+        padding: 0;
+      }
+      .error {
+        color: #e53e3e;
+        padding: 10px;
+        background: #fff5f5;
+        border-radius: 5px;
+        border-left: 4px solid #fc8181;
+      }
+      .good {
+        color: #38a169;
+        font-weight: 500;
+      }
+      .warning {
+        color: #d69e2e;
+        font-weight: 500;
+      }
+      .nav {
+        background: #f8fafc;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 30px;
+        border: 1px solid #e2e8f0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+      }
+      .nav a {
+        color: #3182ce;
+        text-decoration: none;
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-weight: 500;
+      }
+      .nav a:hover {
+        background: #ebf8ff;
+        text-decoration: none;
+      }
+      .log-container {
+        background: #1a202c;
+        color: #edf2f7;
+        border-radius: 8px;
+        margin-top: 10px;
+      }
+      .log-container pre {
+        background: transparent;
+        color: #edf2f7;
+        border: none;
+        padding: 20px;
+        max-height: 500px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Diagnostics</h1>
+    <%- sections %>
+  </body>
+</html>

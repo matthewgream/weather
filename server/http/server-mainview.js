@@ -103,7 +103,7 @@ const notifications = require('./server-function-push.js')(app, '/push', {
     subscriptionsFile: 'push-subscriptions.json',
     maxHistoryLength: 30,
 });
-diagnostics.registerDiagnosticsSource('PushNotifications', () => notifications.getDiagnostics());
+diagnostics.registerDiagnosticsSource('Notifications', () => notifications.getDiagnostics());
 console.log(`Loaded 'push-notifications' on '/push'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

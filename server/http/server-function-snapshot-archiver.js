@@ -18,7 +18,7 @@ function initialise(app, prefix, directory) {
         SnapshotContentsManager,
         SnapshotTimelapseManager,
         getThumbnailData,
-    } = require('./server-functions-snapshot.js');
+    } = require('./server-function-snapshot.js');
     const snapshotThumbnailsManager = new SnapshotThumbnailsManager({ size: THUMBNAIL_CACHE_SIZE, time: THUMBNAIL_CACHE_TIME });
     const snapshotDirectoryManager = new SnapshotDirectoryManager({ directory: directorySnapshot });
     const snapshotContentsManager = new SnapshotContentsManager({ directory: directorySnapshot });
