@@ -28,7 +28,7 @@ class PushNotificationManager {
     loadOrGenerateVapidKeys() {
         const keyPath = path.join(this.options.dataDir, this.options.vapidKeyFile);
         try {
-            if (fs.existsSync(keyPath)) return JSON.parse(fs.readFileSync(keyPath, 'buffer'));
+            if (fs.existsSync(keyPath)) return JSON.parse(fs.readFileSync(keyPath, 'utf8'));
         } catch (e) {
             console.warn(`push: VAPID keys load error, generating new keys, error:`, e);
         }
@@ -45,7 +45,7 @@ class PushNotificationManager {
     loadSubscriptions() {
         const subscriptionsPath = path.join(this.options.dataDir, this.options.subscriptionsFile);
         try {
-            if (fs.existsSync(subscriptionsPath)) return JSON.parse(fs.readFileSync(subscriptionsPath, 'buffer'));
+            if (fs.existsSync(subscriptionsPath)) return JSON.parse(fs.readFileSync(subscriptionsPath, 'utf8'));
         } catch (e) {
             console.warn(`push: subscription load error, starting with empty list, error:`, e);
         }

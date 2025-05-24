@@ -11,7 +11,7 @@ function initialise(app, prefix, filename) {
             return res.status(400).json({ error: 'MAC address required' });
         }
         try {
-            const sets = JSON.parse(fs.readFileSync(filename, 'buffer'));
+            const sets = JSON.parse(fs.readFileSync(filename, 'utf8'));
             if (!sets[mac]) {
                 console.log(`sets request failed: no client for ${mac}`);
                 return res.status(404).json({ error: 'MAC address unknown' });
