@@ -23,12 +23,6 @@ function initialise(app, prefix, directory) {
     const snapshotDirectoryManager = new SnapshotDirectoryManager({ directory: directorySnapshot });
     const snapshotContentsManager = new SnapshotContentsManager({ directory: directorySnapshot });
     const snapshotTimelapseManager = new SnapshotTimelapseManager({ directory: directoryTimelapse });
-    process.on('SIGTERM', () => {
-        snapshotDirectoryManager.dispose();
-        snapshotContentsManager.dispose();
-        snapshotThumbnailsManager.dispose();
-        snapshotTimelapseManager.dispose();
-    });
 
     //
 

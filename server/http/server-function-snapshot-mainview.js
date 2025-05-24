@@ -19,9 +19,6 @@ const SNAPSHOT_REBUILD_TIME = 30 * 1000;
 function initialise(app, prefix, directory, server) {
     const { SnapshotThumbnailsManager, getThumbnailData } = require('./server-function-snapshot.js');
     const snapshotThumbnailsManager = new SnapshotThumbnailsManager({ maxEntries: THUMBNAIL_CACHE_SIZE, ttl: THUMBNAIL_CACHE_TIME });
-    process.on('SIGTERM', () => {
-        snapshotThumbnailsManager.dispose();
-    });
 
     //
 

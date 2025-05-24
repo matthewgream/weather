@@ -19,8 +19,8 @@ self.addEventListener('push', (event) => {
     } catch {
         if (event.data) notification.body = event.data.text();
     }
-    const icon = '/static/images/alert-icon.png';
-    const badge = '/static/images/alert-badge.png';
+    const icon = '/static/images/weather-icon.png';
+    const badge = '/static/images/weather-badge.png';
     const tag = 'weather-alert';
     const requireInteraction = true;
     event.waitUntil(

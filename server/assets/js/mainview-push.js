@@ -51,7 +51,7 @@ const weatherPushNotifications = (function () {
         }
     }
     function pushToggleSetup() {
-        document.querySelectorAll('.mode-switch').forEach((element) => {
+        document.querySelectorAll('.alerts-switch').forEach((element) => {
             if (!element.querySelector('.alerts-toggle')) {
                 const toggle = document.createElement('a');
                 toggle.className = 'alerts-toggle';
@@ -63,6 +63,7 @@ const weatherPushNotifications = (function () {
                     else await subscribe();
                     pushToggleUpdate();
                 });
+                element.innerHTML = '';
                 element.appendChild(toggle);
             }
         });

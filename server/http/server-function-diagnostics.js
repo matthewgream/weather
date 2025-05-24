@@ -3,7 +3,6 @@
 
 const morgan = require('morgan');
 const expressStatus = require('express-status-monitor');
-const path = require('path');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -115,7 +114,13 @@ class DiagnosticsManager {
             const formatTitle = this._formatTitle;
             const formatValue = this._formatValue;
             res.render('server-diagnostics', {
-                stats, uptime, logs, additionalDiagnostics, process, formatTitle, formatValue,
+                stats,
+                uptime,
+                logs,
+                additionalDiagnostics,
+                process,
+                formatTitle,
+                formatValue,
             });
         });
     }

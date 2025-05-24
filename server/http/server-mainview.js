@@ -11,7 +11,7 @@ const configList = Object.entries(configData)
     .map(([k, v]) => k.toLowerCase() + '=' + v)
     .join(', ');
 configData.CONTENT_DATA_SUBS = ['weather/#', 'sensors/#', 'snapshots/#', 'alert/#'];
-configData.CONTENT_VIEW_VARS = ['weather/branna', 'sensors/radiation'];
+configData.CONTENT_VIEW_VARS = ['weather/branna', 'sensors/radiation', 'aircraft'];
 configData.DIAGNOSTICS_PUBLISH_TOPIC = 'server/mainview';
 configData.DIAGNOSTICS_PUBLISH_PERIOD = 60;
 configData.DATA_VIEWS = configData.DATA + '/http';
@@ -19,6 +19,7 @@ configData.DATA_ASSETS = configData.DATA + '/assets';
 configData.DATA_IMAGES = configData.DATA + '/images';
 configData.DATA_STORE = configData.DATA + '/store';
 configData.DATA_CACHE = '/dev/shm/weather';
+configData.MQTT_CLIENT = 'server-mainview-http-' + Math.random().toString(16).substring(2, 8);
 configData.FILE_SETS = require('path').join(__dirname, 'client.json');
 console.log(`Loaded 'config' using '${configPath}': ${configList}`);
 
@@ -125,7 +126,7 @@ function receive_snapshotMetadata(message) {
     }
 }
 const mqtt_client = require('mqtt').connect(configData.MQTT, {
-    clientId: 'server-mainview-http-' + Math.random().toString(16).substring(2, 8),
+    clientId: configData.MQTT_CLIENT,
 });
 mqtt_client.on('connect', () =>
     mqtt_client.subscribe(configData.CONTENT_DATA_SUBS, () => console.log(`mqtt connected & subscribed for '${configData.CONTENT_DATA_SUBS}'`))
@@ -133,8 +134,10 @@ mqtt_client.on('connect', () =>
 mqtt_client.on('message', (topic, message) => {
     if (topic === 'snapshots/imagedata') receive_snapshotImagedata(message);
     else if (topic === 'snapshots/metadata') receive_snapshotMetadata(message);
-    else if (topic.startsWith('alert/')) notifications.notify(message.toString());
-    else server_vars.update(topic, message);
+    else {
+        if (topic.startsWith('alert/')) notifications.notify(message.toString());
+        server_vars.update(topic, JSON.parse(message.toString()));
+    }
 });
 console.log(`Loaded 'mqtt:subscriber' using 'server=${configData.MQTT}, topics=[${configData.CONTENT_DATA_SUBS.join(', ')}]'`);
 
@@ -142,6 +145,43 @@ setInterval(() => {
     mqtt_client.publish(configData.DIAGNOSTICS_PUBLISH_TOPIC, JSON.stringify(diagnostics.getPublishableStats()));
 }, configData.DIAGNOSTICS_PUBLISH_PERIOD * 1000);
 console.log(`Loaded 'mqtt:publisher' using 'topic=${configData.DIAGNOSTICS_PUBLISH_TOPIC}, period=${configData.DIAGNOSTICS_PUBLISH_PERIOD}'`);
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+if (configData.SOURCE_AIRCRAFT_ADSB_MQTT_SERVER) {
+    const alerts_active = {},
+        alerts_expiry = 30 * 60 * 1000,
+        alerts_check = 5 * 60 * 1000;
+    setInterval(
+        () =>
+            Object.values(alerts_active)
+                .filter((alert) => alert.expiry < Date.now())
+                .forEach((alert) => delete alerts_active[alert.id]),
+        alerts_check
+    );
+    const alerts_update = () => server_vars.update('aircraft', { alerts: Object.values(alerts_active) });
+    const source_aircraft_adsb = require('./server-function-source-aircraft-adsb.js')({
+        mqtt: {
+            server: configData.SOURCE_AIRCRAFT_ADSB_MQTT_SERVER,
+            client: configData.MQTT_CLIENT,
+        },
+        onAlertInserted: (id, warn, flight, text) => {
+            if (warn && text) {
+                alerts_active[id] = { id, flight, text, expiry: Date.now() + alerts_expiry };
+                notifications.notify('aircraft', `${flight}: ${text}`);
+                alerts_update();
+            }
+        },
+        onAlertRemoved: (id) => {
+            if (alerts_active[id]) {
+                delete alerts_active[id];
+                alerts_update();
+            }
+        },
+    });
+    console.log(`Loaded 'source-aircraft-adsb' using 'server=${configData.SOURCE_AIRCRAFT_ADSB_MQTT_SERVER}'`);
+}
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------

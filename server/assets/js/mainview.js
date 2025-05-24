@@ -171,14 +171,14 @@ const formatBanner = (timestamp, timediff) =>
     `Weather data was last received at ${timestamp} (more than ${Math.floor(timediff)} minutes ago), thus the local weather station connection is offline.
      Please use <a href="https://www.wunderground.com/dashboard/pws/IBRUNS40">Weather Underground</a>. The Camera image is up to date.`;
 
-function updateBanner(mode, vars) {
+function updateBanner(vars) {
     const timestamp = locate(vars, CONFIG.var_timestamp);
     const timediff = Math.floor((new Date() - new Date(timestamp.replace(/([+-]\d{2})Z$/, '$1:00'))) / (60 * 1000));
     const element = document.getElementById('banner');
     if (element) element.innerHTML = timediff > 60 ? formatBanner(timestamp, timediff) : '';
 }
 
-function createBanner(mode, vars) {
+function createBanner(vars) {
     const timestamp = locate(vars, CONFIG.var_timestamp);
     const timediff = Math.floor((new Date() - new Date(timestamp.replace(/([+-]\d{2})Z$/, '$1:00'))) / (60 * 1000));
     return timediff > 60
@@ -194,7 +194,7 @@ function createBanner(mode, vars) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function createViewTextSummary(vars) {
+function createSectionDataSummary(vars) {
     const outside = model[0].elems;
     const lake = model[1].elems;
     const internal = model[2].elems;
@@ -217,6 +217,7 @@ function createViewTextSummary(vars) {
     const lakeSubmerged = locate(vars, lake[1].path);
     const lakeIceDepth = null;
     const internalBatteryWH65 = locate(vars, internal[0].path);
+    const aircraft = vars.aircraft;
 
     let summary = [];
 
@@ -322,9 +323,11 @@ function createViewTextSummary(vars) {
     timeinfo += `Time <span class="value">${formatTime(date)}</span><sup>+${getDST(date) ? '2' : '1'}</sup>`;
     const solar = new SolarCalc(new Date(), CONFIG.location_data.latitude, CONFIG.location_data.longitude);
     timeinfo += `, daylight <span class="value">${formatTime(solar.sunrise)}</span><sup>-${Math.round((solar.sunrise - solar.civilDawn) / 60 / 1000)}</sup> to <span class="value">${formatTime(solar.sunset)}</span><sup>+${Math.round((solar.civilDusk - solar.sunset) / 60 / 1000)}</sup>`;
-    timeinfo += `.<br>`;
+    timeinfo += `.`;
 
     summary.push(timeinfo);
+
+    summary.push('');
 
     ////
     let analysis = '';
@@ -356,78 +359,31 @@ function createViewTextSummary(vars) {
     if (warnings) summary.push(warnings);
 
     ////
+    if (aircraft?.alerts?.length > 0) {
+        const flights = aircraft.alerts.reduce((flights, alert) => ({ ...flights, [alert.flight]: [...(flights[alert.flight] || []), alert.text] }), {});
+        const text = Object.entries(flights)
+            .map(([flight, alerts]) => `${flight} ${alerts.join(', ')}`)
+            .join('; ');
+        summary.push('');
+        summary.push(`Aircraft ${text}.`);
+    }
+
+    ////
     return summary.join('<br>');
 }
 
-function updateViewText(vars) {
+function updateSectionData(vars) {
     const element = document.getElementById('text-summary-details');
-    if (element) element.innerHTML = createViewTextSummary(vars);
+    if (element) element.innerHTML = createSectionDataSummary(vars);
 }
-function createViewText(vars) {
+function createSectionData(vars) {
     return `
     	<section class="section">
         	<div class="text-summary" id="text-summary-details">
-				${createViewTextSummary(vars)}
+				${createSectionDataSummary(vars)}
 			</div>
     	</section>
 	`;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-function updateViewData(vars) {
-    model
-        .filter((item) => item.name)
-        .forEach((item) =>
-            item.elems.forEach((elem) => {
-                const value = locate(vars, elem.path);
-                if (value !== null && value !== undefined) {
-                    const element = document.getElementById(`${item.id}-${elem.id}`);
-                    if (element) element.textContent = elem.format(elem, value);
-                }
-            })
-        );
-}
-function createViewData(vars) {
-    return model
-        .filter((item) => item.name)
-        .map((item) => {
-            const __table = (sect, elem, vars) => `
-   				<div class="data-row">
-       				<span class="label">
-						${elem.label}
-					</span>
-       				<span class="value">
-           				<span id="${sect}-${elem.id}">
-							${elem.format(elem, locate(vars, elem.path))}
-						</span>
-           				<span class="unit">
-							${elem.unit || ''}
-						</span>
-       				</span>
-   				</div>
-			`;
-            return `
-      			<section class="section">
-         			<h2>${item.name}</h2>
-          			${item.elems.map((elem) => __table(item.id, elem, vars)).join('')}
-       			</section>
-			`;
-        })
-        .join('');
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-function updateSectionData(mode, vars) {
-    if (mode === 'text') updateViewText(vars);
-    else updateViewData(vars);
-}
-function createSectionData(mode, vars) {
-    if (mode === 'text') return createViewText(vars);
-    else return createViewData(vars);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -500,12 +456,11 @@ function updateSectionCamera() {
     const element = document.getElementById('main-camera');
     if (element) element.src = `/snapshot/thumb/snapshot.jpg?w=${MAIN_CAMERA_WIDTH}&t=${Date.now()}`;
 }
-function createSectionCamera(mode, data) {
+function createSectionCamera(data) {
     setTimeout(() => updateSectionCamera(), UPDATE_CAMERA_PERIOD);
     const img = data?.thumbnails?.['current'] ? data.thumbnails['current'] : `/snapshot/thumb/snapshot.jpg?w=${MAIN_CAMERA_WIDTH}&t=${Date.now()}`;
     return `
         <section class="section">
-            ${mode === 'text' ? '' : '<h2>Camera</h2>'}
         	<div class="camera-container">
             	<a href="/snapshot.jpg" target="_blank" id="main-camera-link">
                 	<img src="${img}" alt="Camera View" id="main-camera" class="weather-camera">
@@ -542,7 +497,7 @@ function scheduleSectionTimeElementTimecount(time) {
         updateSectionTimeElementTimecount(time);
     }, UPDATE_TIMECOUNT_PERIOD);
 }
-function updateSectionTime(mode, vars) {
+function updateSectionTime(vars) {
     const time = locate(vars, CONFIG.var_timestamp);
     if (time) {
         updateSectionTimeElementTimestamp(time);
@@ -550,7 +505,7 @@ function updateSectionTime(mode, vars) {
         scheduleSectionTimeElementTimecount(time);
     }
 }
-function createSectionTime(mode, vars) {
+function createSectionTime(vars) {
     const time = locate(vars, CONFIG.var_timestamp);
     if (time) scheduleSectionTimeElementTimecount(time);
     return `
@@ -576,16 +531,8 @@ function createSectionLinks() {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function getMode() {
-    return localStorage.getItem('displayMode') || 'text';
-}
-function setMode(mode) {
-    localStorage.setItem('displayMode', mode) + create(varsLast);
-}
-function displayMode(mode) {
-    return `<div class="mode-switch">
-		<a onclick="setMode('${mode === 'table' ? 'text' : 'table'}')">[switch to ${mode === 'table' ? 'text' : 'table'}]</a>
-	</div>`;
+function createHeader() {
+    return `<div class="alerts-switch">&nbsp;</div>`;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -598,11 +545,10 @@ let varsTimer;
 
 function update(vars) {
     varsLast = vars;
-    const mode = getMode();
 
-    updateBanner(mode, vars);
-    updateSectionData(mode, vars);
-    updateSectionTime(mode, vars);
+    updateBanner(vars);
+    updateSectionData(vars);
+    updateSectionTime(vars);
 }
 
 function request() {
@@ -639,17 +585,14 @@ function schedule(vars) {
 
 function create(vars, data) {
     varsLast = vars;
-    const mode = getMode();
-
     document.getElementById('weather-dashboard').innerHTML = [
-        displayMode(mode),
-        createBanner(mode, vars),
-        createSectionData(mode, vars),
-        createSectionCamera(mode, data),
-        createSectionTime(mode, vars),
-        createSectionLinks(mode),
+        createHeader(),
+        createBanner(vars),
+        createSectionData(vars),
+        createSectionCamera(data),
+        createSectionTime(vars),
+        createSectionLinks(),
     ].join('');
-
     schedule(vars);
 }
 
