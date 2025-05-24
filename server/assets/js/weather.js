@@ -28,9 +28,16 @@ function radToDeg(angleRad) {
 function degToRad(angleDeg) {
     return (Math.PI * angleDeg) / 180;
 }
+function normalizeAngle(angle) {
+    return ((angle % 360) + 360) % 360;
+}
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
+
+const isLeapYear = (yr) => (yr % 4 === 0 && yr % 100 !== 0) || yr % 400 === 0;
+
+const normalizeTime = (time) => (time < 0 ? time + 24 : time >= 24 ? time - 24 : time);
 
 function __jdFromYMDHMS(ymdhms) {
     let { year, month, day, hour, minute, second } = ymdhms;
@@ -40,7 +47,7 @@ function __jdFromYMDHMS(ymdhms) {
     }
     const a = Math.floor(year / 100),
         b = 2 - a + Math.floor(a / 4);
-    return Math.floor(365.25 * (year + 4716)) + Math.floor(30.6001 * (month + 1)) + day + hour / 24.0 + minute / 1440.0 + second / 86400.0 + b - 1524.5;
+    return Math.floor(365.25 * (year + 4716)) + Math.floor(30.6001 * (month + 1)) + day + hour / 24 + minute / 1440 + second / 86400 + b - 1524.5;
 }
 function __jdToYMD(jd) {
     const z = Math.floor(jd + 0.5),
@@ -71,7 +78,6 @@ function __jdToDate(jd) {
     return new Date(Date.UTC(ymd.year, ymd.month - 1, ymd.day, 0, 0, 0));
 }
 function __jdToDoy(jd) {
-    const isLeapYear = (yr) => (yr % 4 === 0 && yr % 100 !== 0) || yr % 400 === 0;
     const ymd = __jdToYMD(jd);
     return Math.floor((275 * ymd.month) / 9) - (isLeapYear(ymd.year) ? 1 : 2) * Math.floor((ymd.month + 9) / 12) + ymd.day - 30;
 }
@@ -97,7 +103,7 @@ function eclipticToEquatorial(jd, longitude, latitude) {
 
 function localSiderealTime(jd, longitude) {
     const T = __jdTimeCentury(jd);
-    const gmst = 280.46061837 + 360.98564736629 * (jd - 2451545.0) + 0.000387933 * T * T - (T * T * T) / 38710000.0;
+    const gmst = 280.46061837 + 360.98564736629 * (jd - 2451545) + 0.000387933 * T * T - (T * T * T) / 38710000;
     return degToRad(((((((gmst % 360) + 360) % 360) + longitude) % 360) + 360) % 360);
 }
 
@@ -148,7 +154,6 @@ function getMoonPosition(jd) {
     //const A2 = 53.09 + 479264.29 * T;
     //const A3 = 313.45 + 481266.484 * T;
     // Normalize to [0, 360] range
-    const normalizeAngle = (angle) => ((angle % 360) + 360) % 360;
     const L0n = normalizeAngle(L0);
     const Dn = normalizeAngle(D);
     const Mn = normalizeAngle(M);
@@ -267,11 +272,11 @@ function getMoonRiseset(date, latitude, longitude) {
         moonEquatorial = eclipticToEquatorial(jd, moonPos.longitude, moonPos.latitude);
     const decDeg = radToDeg(moonEquatorial.dec);
     if (latitude > 0) {
-        if (decDeg > 90 - latitude) return { alwaysUp: true, neverUp: false, rise: null, set: null };
-        else if (decDeg < latitude - 90) return { alwaysUp: false, neverUp: true, rise: null, set: null };
+        if (decDeg > 90 - latitude) return { alwaysUp: true, neverUp: false };
+        else if (decDeg < latitude - 90) return { alwaysUp: false, neverUp: true };
     } else {
-        if (decDeg < -(90 + latitude)) return { alwaysUp: true, neverUp: false, rise: null, set: null };
-        else if (decDeg > 90 + latitude) return { alwaysUp: false, neverUp: true, rise: null, set: null };
+        if (decDeg < -(90 + latitude)) return { alwaysUp: true, neverUp: false };
+        else if (decDeg > 90 + latitude) return { alwaysUp: false, neverUp: true };
     }
     const gmst = localSiderealTime(jd, 0) * (180 / Math.PI);
     const moonHourAngle = (((gmst - radToDeg(moonEquatorial.ra) + longitude) % 360) + 360) % 360;
@@ -279,8 +284,7 @@ function getMoonRiseset(date, latitude, longitude) {
     const cosLHA =
         (Math.sin(degToRad(-0.583)) - Math.sin(degToRad(latitude)) * Math.sin(moonEquatorial.dec)) /
         (Math.cos(degToRad(latitude)) * Math.cos(moonEquatorial.dec));
-    let riseTime = null,
-        setTime = null;
+    let riseTime, setTime;
     if (Math.abs(cosLHA) <= 1) {
         const LHA = Math.acos(cosLHA) * (180 / Math.PI),
             riseHourAngle = (360 - LHA) / 15,
@@ -324,7 +328,6 @@ function getSunPosition(jd) {
     const omega = 125.04 - 1934.136 * T;
     const apparentL = trueL - 0.00569 - 0.00478 * Math.sin((omega * Math.PI) / 180);
     // Normalize to [0, 360] range
-    const normalizeAngle = (angle) => ((angle % 360) + 360) % 360;
     const longitude = normalizeAngle(apparentL);
     // Distance to the sun (in AU)
     const R = (1.000001018 * (1 - e * e)) / (1 + e * Math.cos((M * Math.PI) / 180));
@@ -377,9 +380,9 @@ function eclipsePeakTime(date, nodeProximity, moonVelocity) {
 
 function lunarEclipseMagnitude(umbralDistance) {
     if (umbralDistance < 0.5)
-        return 1.0 + ((0.5 - umbralDistance) / 0.5) * 0.5; // Total (1.0-1.5)
-    else if (umbralDistance < 1.0)
-        return 1.0 - umbralDistance; // Partial (0-1.0)
+        return 1 + ((0.5 - umbralDistance) / 0.5) * 0.5; // Total (1.0-1.5)
+    else if (umbralDistance < 1)
+        return 1 - umbralDistance; // Partial (0-1.0)
     else return (1.6 - umbralDistance) / 0.6; // Penumbral (0-1.0)
 }
 function lunarEclipseDuration(umbralDistance, moonVelocity) {
@@ -387,7 +390,7 @@ function lunarEclipseDuration(umbralDistance, moonVelocity) {
     if (umbralDistance < 0.5)
         // Total eclipse - typically around 100 minutes total
         baseDuration = 100;
-    else if (umbralDistance < 1.0)
+    else if (umbralDistance < 1)
         // Partial eclipse - typically around 200 minutes
         baseDuration = 200;
     else baseDuration = 240; // Penumbral eclipse - typically around 240 minutes
@@ -396,31 +399,37 @@ function lunarEclipseDuration(umbralDistance, moonVelocity) {
 function lunarEclipseTimes(eclipseType, peak, duration) {
     let penumbralDuration, partialDuration, totalDuration;
     switch (eclipseType) {
-        case 'total': // For total eclipses, the total phase is shorter than the partial phase
+        case 'total': {
+            // For total eclipses, the total phase is shorter than the partial phase
             totalDuration = duration; // as provided
             partialDuration = totalDuration * 2.5; // approximation
             penumbralDuration = partialDuration * 1.5; // approximation
             break;
-        case 'partial': // No total phase for partial eclipses
+        }
+        case 'partial': {
+            // No total phase for partial eclipses
             totalDuration = 0;
             partialDuration = duration; // as provided
             penumbralDuration = partialDuration * 1.5; // approximation
             break;
-        case 'penumbral': // Only penumbral phase
+        }
+        case 'penumbral': {
+            // Only penumbral phase
             totalDuration = 0;
             partialDuration = 0;
             penumbralDuration = duration; // as provided
             break;
+        }
     }
     const penumbralStart = new Date(peak.getTime() - (penumbralDuration / 2) * 60 * 1000),
         penumbralEnd = new Date(peak.getTime() + (penumbralDuration / 2) * 60 * 1000),
         penumbral = { start: penumbralStart, end: penumbralEnd };
-    const partialStart = partialDuration > 0 ? new Date(peak.getTime() - (partialDuration / 2) * 60 * 1000) : null,
-        partialEnd = partialDuration > 0 ? new Date(peak.getTime() + (partialDuration / 2) * 60 * 1000) : null,
-        partial = partialDuration > 0 ? { start: partialStart, end: partialEnd } : null;
-    const totalStart = totalDuration > 0 ? new Date(peak.getTime() - (totalDuration / 2) * 60 * 1000) : null,
-        totalEnd = totalDuration > 0 ? new Date(peak.getTime() + (totalDuration / 2) * 60 * 1000) : null,
-        total = totalDuration > 0 ? { start: totalStart, end: totalEnd } : null;
+    const partialStart = partialDuration > 0 ? new Date(peak.getTime() - (partialDuration / 2) * 60 * 1000) : undefined,
+        partialEnd = partialDuration > 0 ? new Date(peak.getTime() + (partialDuration / 2) * 60 * 1000) : undefined,
+        partial = partialDuration > 0 ? { start: partialStart, end: partialEnd } : undefined;
+    const totalStart = totalDuration > 0 ? new Date(peak.getTime() - (totalDuration / 2) * 60 * 1000) : undefined,
+        totalEnd = totalDuration > 0 ? new Date(peak.getTime() + (totalDuration / 2) * 60 * 1000) : undefined,
+        total = totalDuration > 0 ? { start: totalStart, end: totalEnd } : undefined;
     return {
         start: penumbralStart,
         peak,
@@ -452,7 +461,7 @@ function lunarEclipseVisibilityLocation(eclipseType, eclipseTimes, latitude, lon
         visible: false,
         moonAboveHorizon: false,
         phaseVisibility: {},
-        bestViewingTime: null,
+        bestViewingTime: undefined,
         localCircumstances: {},
     };
     const hourAngleOffset = longitude / 15; // 15 degrees = 1 hour
@@ -532,7 +541,7 @@ function __getLunarEclipse(date, latitude, longitude) {
     const umbralDistance = calculateUmbralDistance(moonPos, sunPos);
     let type = '';
     if (umbralDistance < 0.5) type = 'total';
-    else if (umbralDistance < 1.0) type = 'partial';
+    else if (umbralDistance < 1) type = 'partial';
     else if (umbralDistance < 1.6) type = 'penumbral';
     else return { isEclipse: false };
 
@@ -541,7 +550,7 @@ function __getLunarEclipse(date, latitude, longitude) {
         peak = eclipsePeakTime(date, nodeProximity, moonPos.velocity),
         times = lunarEclipseTimes(type, peak, duration);
     const visibilityLocation =
-            latitude !== null && longitude !== null ? lunarEclipseVisibilityLocation(type, times, latitude, longitude) : { visible: 'unknown' },
+            latitude !== undefined && longitude !== undefined ? lunarEclipseVisibilityLocation(type, times, latitude, longitude) : { visible: 'unknown' },
         visibilityRegions = lunarEclipseVisiblityRegions(times.peak);
 
     return {
@@ -555,7 +564,7 @@ function __getLunarEclipse(date, latitude, longitude) {
     };
 }
 
-function getLunarEclipse(date = new Date(), latitude = null, longitude = null, daysWindow = 7) {
+function getLunarEclipse(date = new Date(), latitude = undefined, longitude = undefined, daysWindow = 7) {
     let result,
         daysOffset = 0;
     do {
@@ -578,7 +587,7 @@ function solarEclipseMagnitude(angularSeparation, moonDiameter, sunDiameter) {
 }
 function solarEclipseObscuration(angularSeparation, moonDiameter, sunDiameter) {
     const magnitude = solarEclipseMagnitude(angularSeparation, moonDiameter, sunDiameter);
-    return magnitude >= 1.0 ? 1.0 : Math.min(1.0, magnitude * (2 - magnitude));
+    return magnitude >= 1 ? 1 : Math.min(1, magnitude * (2 - magnitude));
 }
 function solarEclipseDuration(eclipseType, angularSeparation, moonDiameter, sunDiameter) {
     if (eclipseType === 'total' || eclipseType === 'annular') {
@@ -623,15 +632,12 @@ function solarEclipseVisibilityLocation(eclipseType, pathData, latitude, longitu
         const distanceToCenter = Math.sqrt(
             Math.pow(latitude - pathData.simplifiedPath[1].latitude, 2) + Math.pow(((longitude - pathData.simplifiedPath[1].longitude + 180) % 360) - 180, 2)
         );
-        if (distanceToCenter < 70) return 'partial visibility';
-        else return 'not visible';
+        return distanceToCenter < 70 ? 'partial visibility' : 'not visible';
     } else {
         const pathLatitude = pathData.simplifiedPath[1].latitude,
             pathLongitude = pathData.simplifiedPath[1].longitude;
         const distanceToPath = Math.sqrt(Math.pow(latitude - pathLatitude, 2) + Math.pow(((longitude - pathLongitude + 180) % 360) - 180, 2));
-        if (distanceToPath < 0.5) return `in path of ${pathData.pathType}`;
-        else if (distanceToPath < 70) return 'partial visibility';
-        else return 'not visible';
+        return distanceToPath < 0.5 ? `in path of ${pathData.pathType}` : distanceToPath < 70 ? 'partial visibility' : 'not visible';
     }
 }
 function solarEclipseVisibiltyRegions(pathData) {
@@ -668,7 +674,7 @@ function __getSolarEclipse(date, latitude, longitude) {
     const moonPos = getMoonPosition(jd),
         sunPos = getSunPosition(jd);
     const angularSeparation = calculateAngularSeparation(moonPos, sunPos);
-    if (angularSeparation > 1.0) return { isEclipse: false };
+    if (angularSeparation > 1) return { isEclipse: false };
     const nodeProximity = calculateSolarNodeProximity(moonPos, sunPos);
     if (Math.abs(nodeProximity) > 1.5) return { isEclipse: false };
 
@@ -688,7 +694,7 @@ function __getSolarEclipse(date, latitude, longitude) {
         peak = eclipsePeakTime(date, nodeProximity, moonPos.velocity),
         times = { peak },
         path = solarEclipsePath(type, jd, moonPos, sunPos);
-    const visibilityLocation = latitude !== null && longitude !== null ? solarEclipseVisibilityLocation(type, path, latitude, longitude) : 'unknown',
+    const visibilityLocation = latitude !== undefined && longitude !== undefined ? solarEclipseVisibilityLocation(type, path, latitude, longitude) : 'unknown',
         visibilityRegions = solarEclipseVisibiltyRegions(path);
 
     return {
@@ -704,7 +710,7 @@ function __getSolarEclipse(date, latitude, longitude) {
     };
 }
 
-function getSolarEclipse(date = new Date(), latitude = null, longitude = null, daysWindow = 7) {
+function getSolarEclipse(date = new Date(), latitude = undefined, longitude = undefined, daysWindow = 7) {
     let result,
         daysOffset = 0;
     do {
@@ -855,7 +861,7 @@ function getCrossQuarterDay(date = new Date(), hemisphere = 'northern', daysWind
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function getAuroraPotential(latitude, month, solarActivity = null) {
+function getAuroraPotential(latitude, month, solarActivity) {
     const isDarkSeason = month <= 2 || month >= 9;
     if (latitude >= 65)
         return {
@@ -889,7 +895,7 @@ function __generateDescription(results) {
         details = details.charAt(0).toUpperCase() + details.slice(1);
         if (!details.endsWith('.')) details += '.';
     }
-    return details || null;
+    return details || undefined;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -909,7 +915,7 @@ function getWeatherInterpretation(location_data, data) {
         radationUsvh,
         snowDepth,
         iceDepth,
-        cloudCover = null,
+        cloudCover = undefined,
         season = getSeason(location_data.hemisphere),
     } = data;
 
@@ -925,14 +931,14 @@ function getWeatherInterpretation(location_data, data) {
     const results = {
         conditions: [],
         phenomena: [],
-        comfort: null,
+        comfort: undefined,
         alerts: [],
-        details: null,
+        details: undefined,
         feelsLike,
     };
 
     // Atmospheric pressure conditions - Nordic context
-    if (pressure !== null) {
+    if (pressure !== undefined) {
         const elevationAdjustment = Math.exp(location_data.elevation / (29.3 * (temp + 273))); // Adjust pressure for elevation (approximately 150m)
         const adjustedPressure = pressure * elevationAdjustment;
         if (adjustedPressure < 970) {
@@ -954,7 +960,7 @@ function getWeatherInterpretation(location_data, data) {
     }
 
     // Temperature conditions - adjusted for Swedish climate where cold is more common and heat more exceptional
-    if (temp !== null) {
+    if (temp !== undefined) {
         if (temp < -25) {
             results.conditions.push('extremely cold');
             results.alerts.push('extreme cold');
@@ -981,7 +987,7 @@ function getWeatherInterpretation(location_data, data) {
     }
 
     // Humidity conditions
-    if (humidity !== null) {
+    if (humidity !== undefined) {
         if (humidity > 90) results.conditions.push('very humid');
         else if (humidity > 70) results.conditions.push('humid');
         else if (humidity >= 30 && humidity <= 60);
@@ -993,7 +999,7 @@ function getWeatherInterpretation(location_data, data) {
     }
 
     // Wind conditions - using Beaufort scale as reference
-    if (windSpeed !== null) {
+    if (windSpeed !== undefined) {
         if (windSpeed < 0.5) results.conditions.push('calm');
         else if (windSpeed < 1.5) results.conditions.push('light air');
         else if (windSpeed < 3.3) results.conditions.push('light breeze');
@@ -1023,7 +1029,7 @@ function getWeatherInterpretation(location_data, data) {
     }
 
     // Cloud cover conditions
-    if (cloudCover !== null) {
+    if (cloudCover !== undefined) {
         if (cloudCover < 10) results.conditions.push('clear sky');
         else if (cloudCover < 30) results.conditions.push('mostly clear');
         else if (cloudCover < 70) results.conditions.push('partly cloudy');
@@ -1032,7 +1038,7 @@ function getWeatherInterpretation(location_data, data) {
     }
 
     // Precipitation conditions
-    if (rainRate !== null) {
+    if (rainRate !== undefined) {
         if (rainRate > 0 && rainRate < 0.5) results.conditions.push('light rain');
         else if (rainRate >= 0.5 && rainRate < 4) results.conditions.push('moderate rain');
         else if (rainRate >= 4 && rainRate < 8) results.conditions.push('heavy rain');
@@ -1043,10 +1049,10 @@ function getWeatherInterpretation(location_data, data) {
     }
 
     // Solar radiation and UV conditions
-    if (solarRad !== null || solarUvi !== null) {
+    if (solarRad !== undefined || solarUvi !== undefined) {
         if (solarRad > 800) results.conditions.push('intense sunlight');
         else if (solarRad > 500) results.conditions.push('strong sunlight');
-        if (solarUvi !== null) {
+        if (solarUvi !== undefined) {
             if (solarUvi >= 11) {
                 results.conditions.push('extreme UV');
                 results.alerts.push('extreme UV');
@@ -1059,7 +1065,7 @@ function getWeatherInterpretation(location_data, data) {
     }
 
     // Snow and Ice Depth Interpretation
-    if (snowDepth !== null) {
+    if (snowDepth !== undefined) {
         if (snowDepth === 0) {
             if (month >= 11 || month <= 2) results.phenomena.push('no snow cover during winter');
         } else if (snowDepth < 50) {
@@ -1095,7 +1101,7 @@ function getWeatherInterpretation(location_data, data) {
     }
 
     // Ice Depth Interpretation
-    if (iceDepth !== null) {
+    if (iceDepth !== undefined) {
         if (iceDepth === 0) {
             if (month >= 11 || month <= 3) if (temp < -5) results.phenomena.push('ice formation beginning');
         } else if (iceDepth < 50) {
@@ -1130,9 +1136,9 @@ function getWeatherInterpretation(location_data, data) {
     }
 
     // Radiation Interpretation: prefer ACPM (rolling average) but fall back to CPM if needed
-    const radiationValue = radiationAcpm !== null ? radiationAcpm : radiationCpm;
-    const radiationSource = radiationAcpm !== null ? 'average' : 'instant';
-    if (radiationValue !== null) {
+    const radiationValue = radiationAcpm === undefined ? radiationCpm : radiationAcpm;
+    const radiationSource = radiationAcpm === undefined ? 'instant' : 'average';
+    if (radiationValue !== undefined) {
         // Interpret radiation levels based on available readings
         if (radiationValue <= 30) {
             // Background radiation in Sweden normally ranges from 5-30 CPM
@@ -1162,7 +1168,7 @@ function getWeatherInterpretation(location_data, data) {
             // Radiation health context
             results.phenomena.push('combined radiation and UV exposure');
         // Add µSv/h context if available
-        if (radationUsvh !== null) {
+        if (radationUsvh !== undefined) {
             if (radationUsvh > 0.5) results.alerts.push(`radiation dose rate: ${radationUsvh.toFixed(2)} µSv/h`);
             // Additional health context based on dose rate
             if (radationUsvh > 0.3 && radationUsvh <= 1) {
@@ -1176,7 +1182,7 @@ function getWeatherInterpretation(location_data, data) {
     }
 
     // Weather phenomena interpretations - Nordic forest context
-    if (temp !== null && humidity !== null) {
+    if (temp !== undefined && humidity !== undefined) {
         if (temp < 0 && humidity > 70) {
             // Snow conditions - common in this region
             if (rainRate > 0) {
@@ -1211,13 +1217,13 @@ function getWeatherInterpretation(location_data, data) {
     }
 
     // Precipitation predictions based on pressure and humidity
-    if (pressure !== null && humidity !== null) {
+    if (pressure !== undefined && humidity !== undefined) {
         if (pressure < 1000 && humidity > 75) results.phenomena.push('rain likely');
         else if (pressure > 1020 && humidity < 40) results.phenomena.push('clear and dry');
     }
 
     // Wind chill effect
-    if (temp !== null && windSpeed !== null) {
+    if (temp !== undefined && windSpeed !== undefined) {
         if (temp < 10 && windSpeed > 3) {
             const windChillDiff = Math.round(temp - windChill);
             if (windChillDiff >= 3) results.phenomena.push(`feels ${windChillDiff}°C colder due to wind`);
@@ -1225,7 +1231,7 @@ function getWeatherInterpretation(location_data, data) {
     }
 
     // Heat index effect
-    if (temp !== null && humidity !== null) {
+    if (temp !== undefined && humidity !== undefined) {
         if (temp > 20 && humidity > 60) {
             const heatIndexDiff = Math.round(heatIndex - temp);
             if (heatIndexDiff >= 3) results.phenomena.push(`feels ${heatIndexDiff}°C warmer due to humidity`);
@@ -1233,7 +1239,7 @@ function getWeatherInterpretation(location_data, data) {
     }
 
     // Time of day specific phenomena - Nordic daylight considerations with precise calculations
-    if (temp !== null) {
+    if (temp !== undefined) {
         if (month >= 5 && month <= 7) {
             // Summer months with very long days
             if (daylight.isDaytime && hour > 20) results.phenomena.push('extended Nordic summer evening light');
@@ -1268,30 +1274,34 @@ function getWeatherInterpretation(location_data, data) {
     }
 
     // Season-specific interpretations for Nordic region
-    if (season && temp !== null) {
+    if (season && temp !== undefined) {
         switch (season.toLowerCase()) {
-            case 'winter':
+            case 'winter': {
                 if (temp > 5) results.phenomena.push('unusually mild winter day');
                 if (temp < -20) results.phenomena.push('severe Nordic winter conditions');
                 if (daylight.daylightHours < 7)
                     // Winter darkness phenomenon
                     results.phenomena.push('short winter day');
                 break;
-            case 'summer':
+            }
+            case 'summer': {
                 if (temp < 12) results.phenomena.push('cool summer day');
                 if (temp > 25) results.phenomena.push('hot Nordic summer day');
                 if (daylight.daylightHours > 18)
                     // Midnight sun approximation (not quite at this latitude but still very bright evenings)
                     results.phenomena.push('extended Nordic summer daylight');
                 break;
-            case 'spring':
+            }
+            case 'spring': {
                 if (month === 3 && temp > 10) results.phenomena.push('early spring warmth');
                 if (month === 4 && rainRate > 0 && temp > 5) results.phenomena.push('spring forest rain');
                 break;
-            case 'autumn':
+            }
+            case 'autumn': {
                 if (month === 9 && temp < 5) results.phenomena.push('early autumn chill');
                 if (month === 10 && rainRate > 0 && temp < 10) results.phenomena.push('cold autumn rain');
                 break;
+            }
         }
     }
 
@@ -1308,13 +1318,13 @@ function getWeatherInterpretation(location_data, data) {
         if (solsticeInfo.type === 'longest day') {
             if (daylight.daylightHours > 16) results.phenomena.push('extended daylight');
             if (isHighLatitude) {
-                // && cloudCover !== null && cloudCover < 50) { // XXX
+                // && cloudCover !== undefined && cloudCover < 50) { // XXX
                 results.phenomena.push('near-midnight sun');
                 if (location_data.latitude > 66) results.phenomena.push('true midnight sun (sun never sets)');
                 else if (location_data.latitude > 60) results.phenomena.push('bright nights (civil twilight all night)');
             }
             if (moonPhase >= 0.48 && moonPhase <= 0.52)
-                // && cloudCover !== null && cloudCover < 40) // XXX
+                // && cloudCover !== undefined && cloudCover < 40) // XXX
                 results.phenomena.push('solstice full moon (rare)'), (moonPhaseReported = true);
         } else if (solsticeInfo.type === 'shortest day') {
             if (daylight.daylightHours < 8) results.phenomena.push('brief daylight');
@@ -1325,7 +1335,7 @@ function getWeatherInterpretation(location_data, data) {
                 else if (location_data.latitude > 59) results.phenomena.push('short days (approx 6 hours of daylight)');
             }
             if (moonPhase >= 0.48 && moonPhase <= 0.52)
-                // && cloudCover !== null && cloudCover < 40) // XXX
+                // && cloudCover !== undefined && cloudCover < 40) // XXX
                 results.phenomena.push('winter solstice full moon (special illumination)'), (moonPhaseReported = true);
         }
     }
@@ -1334,14 +1344,14 @@ function getWeatherInterpretation(location_data, data) {
     if (!moonPhaseReported && moonPhase >= 0.48 && moonPhase <= 0.52) {
         // Full moon (within 4% of exact full)
         results.phenomena.push('full moon tonight');
-        if (cloudCover !== null && cloudCover < 40) results.phenomena.push('good visibility for night activities');
-        if ((temp < 0 || snowDepth > 0) && cloudCover !== null && cloudCover < 30)
+        if (cloudCover !== undefined && cloudCover < 40) results.phenomena.push('good visibility for night activities');
+        if ((temp < 0 || snowDepth > 0) && cloudCover !== undefined && cloudCover < 30)
             // XXX
             results.phenomena.push('enhanced snow reflection in moonlight');
     } else if (moonPhase >= 0.98 || moonPhase <= 0.02) {
         // New moon (within 2% of new)
         results.phenomena.push('new moon tonight');
-        if (location_data.lightPollution === 'low' && cloudCover !== null && cloudCover < 30)
+        if (location_data.lightPollution === 'low' && cloudCover !== undefined && cloudCover < 30)
             // XXX
             results.phenomena.push('excellent stargazing conditions');
     } else if ((moonPhase >= 0.23 && moonPhase <= 0.27) || (moonPhase >= 0.73 && moonPhase <= 0.77))
@@ -1379,9 +1389,9 @@ function getWeatherInterpretation(location_data, data) {
                     const bestTime = lunarEclipseInfo.visibilityLocation.bestViewingTime;
                     results.phenomena.push(`best viewing at ${bestTime.getHours()}:${String(bestTime.getMinutes()).padStart(2, '0')}`);
                 }
-                if (cloudCover !== null && cloudCover < 30) results.phenomena.push('excellent viewing conditions for lunar eclipse');
-                else if (cloudCover !== null && cloudCover < 60) results.phenomena.push('fair viewing conditions for lunar eclipse');
-                else if (cloudCover !== null) results.phenomena.push('poor viewing conditions for lunar eclipse');
+                if (cloudCover !== undefined && cloudCover < 30) results.phenomena.push('excellent viewing conditions for lunar eclipse');
+                else if (cloudCover !== undefined && cloudCover < 60) results.phenomena.push('fair viewing conditions for lunar eclipse');
+                else if (cloudCover !== undefined) results.phenomena.push('poor viewing conditions for lunar eclipse');
             } else results.phenomena.push('lunar eclipse not visible from this location');
         }
         if (lunarEclipseInfo.type === 'total' && lunarEclipseInfo.magnitude > 1.2) results.alerts.push('rare deep total lunar eclipse');
@@ -1393,14 +1403,26 @@ function getWeatherInterpretation(location_data, data) {
         if (solarEclipseInfo.magnitude) results.phenomena.push(`(magnitude: ${solarEclipseInfo.magnitude.toFixed(2)})`);
         if (solarEclipseInfo.obscuration) results.phenomena.push(`${Math.round(solarEclipseInfo.obscuration * 100)}% of sun's disk covered`);
         if (solarEclipseInfo.visibilityLocation) {
-            if (solarEclipseInfo.visibilityLocation === 'in path of totality') {
-                results.phenomena.push('total solar eclipse visible from this location');
-                results.alerts.push('rare total solar eclipse today');
-            } else if (solarEclipseInfo.visibilityLocation === 'in path of annularity') {
-                results.phenomena.push('annular "ring of fire" eclipse visible from this location');
-                results.alerts.push('annular solar eclipse today');
-            } else if (solarEclipseInfo.visibilityLocation === 'partial visibility') results.phenomena.push('partial solar eclipse visible from this location');
-            else results.phenomena.push('solar eclipse not visible from this location');
+            switch (solarEclipseInfo.visibilityLocation) {
+                case 'in path of totality': {
+                    results.phenomena.push('total solar eclipse visible from this location');
+                    results.alerts.push('rare total solar eclipse today');
+                    break;
+                }
+                case 'in path of annularity': {
+                    results.phenomena.push('annular "ring of fire" eclipse visible from this location');
+                    results.alerts.push('annular solar eclipse today');
+                    break;
+                }
+                case 'partial visibility': {
+                    results.phenomena.push('partial solar eclipse visible from this location');
+                    break;
+                }
+                default: {
+                    results.phenomena.push('solar eclipse not visible from this location');
+                    break;
+                }
+            }
         }
         if (
             (solarEclipseInfo.type === 'total' || solarEclipseInfo.type === 'annular') &&
@@ -1412,18 +1434,18 @@ function getWeatherInterpretation(location_data, data) {
                 durationSeconds = Math.round((solarEclipseInfo.duration - durationMinutes) * 60);
             results.phenomena.push(`eclipse duration: ${durationMinutes}m ${durationSeconds}s`);
         }
-        if (cloudCover !== null && cloudCover < 20) results.phenomena.push('excellent viewing conditions for solar eclipse');
-        else if (cloudCover !== null && cloudCover < 50) results.phenomena.push('fair viewing conditions for solar eclipse');
-        else if (cloudCover !== null) results.phenomena.push('poor viewing conditions for solar eclipse');
+        if (cloudCover !== undefined && cloudCover < 20) results.phenomena.push('excellent viewing conditions for solar eclipse');
+        else if (cloudCover !== undefined && cloudCover < 50) results.phenomena.push('fair viewing conditions for solar eclipse');
+        else if (cloudCover !== undefined) results.phenomena.push('poor viewing conditions for solar eclipse');
         if (solarEclipseInfo.visibilityLocation && solarEclipseInfo.visibilityLocation !== 'not visible')
             results.alerts.push('use proper eye protection for solar eclipse viewing');
     }
 
-    const auroraPotential = getAuroraPotential(location_data.latitude, date.getMonth(), null); // replace null with actual solar activity if available
+    const auroraPotential = getAuroraPotential(location_data.latitude, date.getMonth());
     if (auroraPotential.potential !== 'very low') {
         if (auroraPotential.visible)
             results.phenomena.push(
-                `aurora borealis likely visible (best time: ${auroraPotential.bestTime}${cloudCover !== null && cloudCover < 30 && moonPhase < 0.3 ? ', with good visbility' : ''})`
+                `aurora borealis likely visible (best time: ${auroraPotential.bestTime}${cloudCover !== undefined && cloudCover < 30 && moonPhase < 0.3 ? ', with good visbility' : ''})`
             );
         else if (auroraPotential.potential === 'high' || auroraPotential.potential === 'very high')
             results.phenomena.push('potential for aurora activity (if dark enough)');
@@ -1451,7 +1473,7 @@ const calculateDewPoint = (temp, humidity) => {
 const calculateHeatIndex = (temp, rh) => {
     if (temp < 20) return temp; // Only applicable for temps > 20°C
     const tempF = (temp * 9) / 5 + 32; // Convert to Fahrenheit for the standard formula
-    let heatIndexF = 0.5 * (tempF + 61.0 + (tempF - 68.0) * 1.2 + rh * 0.094); // Simplified heat index formula
+    let heatIndexF = 0.5 * (tempF + 61 + (tempF - 68) * 1.2 + rh * 0.094); // Simplified heat index formula
     if (tempF >= 80) {
         // Use more precise formula if hot enough
         heatIndexF =
@@ -1545,12 +1567,10 @@ function getDST(date = new Date()) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function getDaylightHours(latitude, longitude, date = new Date()) {
-    const normalizeTime = (time) => (time < 0 ? time + 24 : time >= 24 ? time - 24 : time);
-    const isLeapYear = (date.getFullYear() % 4 === 0 && date.getFullYear() % 100 !== 0) || date.getFullYear() % 400 === 0;
     let dayOfYear = date.getDate();
-    for (let i = 0; i < date.getMonth(); i++) dayOfYear += [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][i];
+    for (let i = 0; i < date.getMonth(); i++) dayOfYear += [31, isLeapYear(date.getFullYear()) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][i];
     const latitudeRad = (latitude * Math.PI) / 180;
-    const fracYear = ((2 * Math.PI) / (isLeapYear ? 366 : 365)) * (dayOfYear - 1 + (date.getHours() - 12) / 24);
+    const fracYear = ((2 * Math.PI) / (isLeapYear(date.getFullYear()) ? 366 : 365)) * (dayOfYear - 1 + (date.getHours() - 12) / 24);
     const declination =
         0.006918 -
         0.399912 * Math.cos(fracYear) +
@@ -1609,7 +1629,7 @@ function calcSunApparentLong(t) {
     return calcSunTrueLong(t) - 0.00569 - 0.00478 * Math.sin(degToRad(125.04 - 1934.136 * t)); // in degrees
 }
 function calcMeanObliquityOfEcliptic(t) {
-    return 23.0 + (26.0 + (21.448 - t * (46.815 + t * (0.00059 - t * 0.001813))) / 60) / 60; // in degrees
+    return 23 + (26 + (21.448 - t * (46.815 + t * (0.00059 - t * 0.001813))) / 60) / 60; // in degrees
 }
 function calcObliquityCorrection(t) {
     return calcMeanObliquityOfEcliptic(t) + 0.00256 * Math.cos(degToRad(125.04 - 1934.136 * t)); // in degrees
@@ -1654,8 +1674,8 @@ function calcJDofNextPrevRiseSet(next, rise, type, jd, latitude, longitude) {
 }
 function calcSunriseSet(rise, angle, jd, date, latitude, longitude) {
     // rise = 1 for sunrise, 0 for sunset
-    const newTimeUTC = calcSunriseSetUTC(rise, angle, jd + calcSunriseSetUTC(rise, angle, jd, latitude, longitude) / 1440, latitude, longitude);
-    if (isNumber(newTimeUTC)) return formatDate(date, newTimeUTC);
+    const timeUTCNew = calcSunriseSetUTC(rise, angle, jd + calcSunriseSetUTC(rise, angle, jd, latitude, longitude) / 1440, latitude, longitude);
+    if (isNumber(timeUTCNew)) return formatDate(date, timeUTCNew);
     const doy = __jdToDoy(jd),
         next = (latitude > 66.4 && doy > 79 && doy < 267) || (latitude < -66.4 && (doy < 83 || doy > 263)) ? !rise : rise; // no sunrise/set found
     return __jdToDate(calcJDofNextPrevRiseSet(next, rise, angle, jd, latitude, longitude)); //previous sunrise/next sunset OR previous sunset/next sunrise

@@ -9,7 +9,7 @@ const formatWindDirection = (e, v) =>
         : `${v.toFixed(e.decimals ?? 0)}° ${['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][Math.floor(((v + 11.25) % 360) / 22.5)]}`;
 const formatDepthFromMMtoCM = (e, v) => (v === undefined ? 'n/a' : (v / 10).toFixed(e.decimals ?? 0));
 
-const model = [
+const formatList = [
     {
         name: 'Outside',
         id: 'outside',
@@ -173,14 +173,14 @@ const formatBanner = (timestamp, timediff) =>
 
 function updateBanner(vars) {
     const timestamp = locate(vars, CONFIG.var_timestamp);
-    const timediff = Math.floor((new Date() - new Date(timestamp.replace(/([+-]\d{2})Z$/, '$1:00'))) / (60 * 1000));
+    const timediff = Math.floor((Date.now() - new Date(timestamp.replace(/([+-]\d{2})Z$/, '$1:00')).getTime()) / (60 * 1000));
     const element = document.querySelector('#banner');
     if (element) element.innerHTML = timediff > 60 ? formatBanner(timestamp, timediff) : '';
 }
 
 function createBanner(vars) {
     const timestamp = locate(vars, CONFIG.var_timestamp);
-    const timediff = Math.floor((new Date() - new Date(timestamp.replace(/([+-]\d{2})Z$/, '$1:00'))) / (60 * 1000));
+    const timediff = Math.floor((Date.now() - new Date(timestamp.replace(/([+-]\d{2})Z$/, '$1:00')).getTime()) / (60 * 1000));
     return timediff > 60
         ? `<section class="section>
 			<div style="background-color: #fee2e2; border: 1px solid #ef4444; padding: 1rem; margin-bottom: 1rem; border-radius: 0.375rem; font-weight: bold;" id="banner">
@@ -195,9 +195,9 @@ function createBanner(vars) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function createSectionDataSummary(vars) {
-    const outside = model[0].elems;
-    const lake = model[1].elems;
-    const internal = model[2].elems;
+    const outside = formatList[0].elems;
+    const lake = formatList[1].elems;
+    const internal = formatList[2].elems;
 
     const temp = locate(vars, outside[0].path);
     const humidity = locate(vars, outside[1].path);
@@ -337,8 +337,8 @@ function createSectionDataSummary(vars) {
             radiationCpm,
             radiationAcpm,
             radiationUsvh,
-            snowDepth: snowDepth || null,
-            iceDepth: lakeIceDepth || null,
+            snowDepth,
+            iceDepth: lakeIceDepth,
         }); // XXX
     if (weather?.details) analysis += `${weather.details}`;
     if (analysis) summary.push(analysis);
@@ -474,7 +474,7 @@ const UPDATE_TIMECOUNT_PERIOD = 1 * 1000;
 
 let timecountInterval;
 
-const calculateTimeSince = (time) => `${Math.max(Math.floor((new Date() - new Date(time.replace(/([+-]\d{2})Z$/, '$1:00'))) / 1000), 0)} secs ago`;
+const calculateTimeSince = (time) => `${Math.max(Math.floor((Date.now() - new Date(time.replace(/([+-]\d{2})Z$/, '$1:00')).getTime()) / 1000), 0)} secs ago`;
 
 function updateSectionTimeElementTimestamp(time) {
     const element = document.querySelector('#time-update');
@@ -566,7 +566,7 @@ function schedule(vars) {
     if (varsTimer) clearTimeout(varsTimer);
     const time = locate(vars, CONFIG.var_timestamp);
     if (time) {
-        const timeSinceUpdate = new Date() - new Date(time.replace(/([+-]\d{2})Z$/, '$1:00'));
+        const timeSinceUpdate = Date.now() - new Date(time.replace(/([+-]\d{2})Z$/, '$1:00')).getTime();
         const timeUntilUpdate = varsInterval - (timeSinceUpdate % varsInterval) + varsOffset;
         varsTimer = setTimeout(request, timeUntilUpdate);
         console.log(`vars: update in ${timeUntilUpdate / 1000}s (interval=${varsInterval / 1000}s, offset=${varsOffset / 1000}s)`);

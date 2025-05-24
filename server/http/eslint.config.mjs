@@ -34,6 +34,7 @@ export default [
                 ...globals.node,
                 ...globals.commonjs,
                 ...googleappsscriptPlugin.environments.googleappsscript.globals,
+                CONFIG: 'readonly',
             },
         },
         plugins: {
@@ -70,6 +71,7 @@ export default [
             'unicorn/no-lonely-if': 'off',
             'unicorn/no-await-expression-member': 'off',
             'unicorn/prefer-global-this': 'off',
+            'unicorn/prefer-single-call': 'off',
 
             'sonarjs/no-clear-text-protocols': 'off',
             'sonarjs/prefer-single-boolean-return': 'off',
