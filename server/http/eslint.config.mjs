@@ -72,6 +72,7 @@ export default [
             'unicorn/no-await-expression-member': 'off',
             'unicorn/prefer-global-this': 'off',
             'unicorn/prefer-single-call': 'off',
+            'unicorn/prefer-json-parse-buffer': 'off',
 
             'sonarjs/no-clear-text-protocols': 'off',
             'sonarjs/prefer-single-boolean-return': 'off',
