@@ -8,6 +8,22 @@ const THUMBNAIL_CACHE_SIZE = 128;
 const THUMBNAIL_CACHE_TIME = 60 * 60 * 1000;
 const THUMBNAIL_WIDTH_SNAPSHOT = 200;
 
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+function getFormattedDate(date) {
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    if (!date || date.length < 8) return 'Invalid date';
+    return `${date.slice(0, 4)} ${months[Number.parseInt(date.slice(4, 6)) - 1]} ${Number.parseInt(date.slice(6, 8))}`;
+}
+function getFormattedTime(time) {
+    if (!time || time.length < 6) return 'Invalid time';
+    return `${Number.parseInt(time.slice(0, 2)).toString().padStart(2, '0')}:${Number.parseInt(time.slice(2, 4)).toString().padStart(2, '0')}:${Number.parseInt(time.slice(4, 6)).toString().padStart(2, '0')}`;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 function initialise(app, prefix, directory) {
     const directorySnapshot = directory + '/snapshots';
     const directoryTimelapse = directory + '/timelapse';
@@ -26,15 +42,6 @@ function initialise(app, prefix, directory) {
 
     //
 
-    function getFormattedDate(date) {
-        const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-        if (!date || date.length < 8) return 'Invalid date';
-        return `${date.substring(0, 4)} ${months[parseInt(date.substring(4, 6)) - 1]} ${parseInt(date.substring(6, 8))}`;
-    }
-    function getFormattedTime(time) {
-        if (!time || time.length < 6) return 'Invalid time';
-        return `${parseInt(time.substring(0, 2)).toString().padStart(2, '0')}:${parseInt(time.substring(2, 4)).toString().padStart(2, '0')}:${parseInt(time.substring(4, 6)).toString().padStart(2, '0')}`;
-    }
     function getSnapshotListOfDates() {
         return {
             entries: snapshotDirectoryManager.getListOfDates().map(({ dateCode }) => ({ dateCode, dateFormatted: getFormattedDate(dateCode) })),
@@ -55,20 +62,20 @@ function initialise(app, prefix, directory) {
     }
     function getSnapshotFilename(file) {
         const date = file.match(/snapshot_(\d{8})\d{6}\.jpg$/)?.[1];
-        if (!date) return null;
+        if (!date) return undefined;
         const filePath = path.join(directorySnapshot, date, file); // subdirectory
-        if (!fs.existsSync(filePath)) return null;
+        if (!fs.existsSync(filePath)) return undefined;
         return filePath;
     }
     function getTimelapseFilename(file) {
-        if (!file.match(/timelapse_(\d{8})\.mp4$/)?.[1]) return null;
+        if (!file.match(/timelapse_(\d{8})\.mp4$/)?.[1]) return undefined;
         const filePath = path.join(directoryTimelapse, file);
-        if (!fs.existsSync(filePath)) return null;
+        if (!fs.existsSync(filePath)) return undefined;
         return filePath;
     }
     async function getThumbnailImage(file, width) {
         const date = file.match(/snapshot_(\d{8})\d{6}\.jpg$/)?.[1];
-        if (!date) return null;
+        if (!date) return undefined;
         return getThumbnailData(snapshotThumbnailsManager, path.join(directorySnapshot, date, file), width, width > THUMBNAIL_WIDTH_SNAPSHOT ? 80 : 70); // subdirectory
     }
 
@@ -89,15 +96,15 @@ function initialise(app, prefix, directory) {
     });
     app.get(prefix + '/thumb/:file', async (req, res) => {
         const file = req.params.file;
-        const width = parseInt(req.query.w) || THUMBNAIL_WIDTH_SNAPSHOT;
+        const width = Number.parseInt(req.query.w) || THUMBNAIL_WIDTH_SNAPSHOT;
         try {
             const imagedata = await getThumbnailImage(file, width);
             if (!imagedata) return res.status(404).send('Thumbnail not found');
             res.set('Content-Type', 'image/jpeg');
             res.set('Cache-Control', 'public, max-age=300');
             return res.send(imagedata);
-        } catch (error) {
-            console.error('Error generating thumbnail:', error);
+        } catch (e) {
+            console.error('Error generating thumbnail:', e);
             return res.status(500).send('Error generating thumbnail');
         }
     });

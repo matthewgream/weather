@@ -38,13 +38,13 @@ const lzma = require('lzma-native');
 
 const __messageCheckInterval = 60 * 1000;
 let __messageDirectory = '';
-let __messageInterval = null;
+let __messageInterval;
 let __messageCurrentDate = '';
 let __messageCurrentPath = '';
-let __messageCurrentStream = null;
+let __messageCurrentStream;
 
 function __messageDirectoryPath(dateString) {
-    const dirPath = path.join(__messageDirectory, dateString.substring(0, 6));
+    const dirPath = path.join(__messageDirectory, dateString.slice(0, 6));
     if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
     return dirPath;
 }
@@ -88,9 +88,9 @@ function __messageCompressPath(filePath, dateString) {
                 console.error(prefix + `error (stream read): ${err}`);
                 reject(err);
             });
-        } catch (err) {
-            console.error(prefix + `error (exception): ${err}`);
-            reject(err);
+        } catch (e) {
+            console.error(prefix + `error (exception): ${e}`);
+            reject(e);
         }
     });
 }
@@ -103,7 +103,7 @@ function __messageWriteStream() {
     if (dateString !== __messageCurrentDate) {
         if (__messageCurrentStream) {
             __messageCurrentStream.end();
-            __messageCurrentStream = null;
+            __messageCurrentStream = undefined;
         }
         const previousDate = __messageCurrentDate;
         if (previousDate) {
@@ -133,17 +133,17 @@ async function __messageMonthlyVerifyAndCleanup(dateString, messagesDir, message
                     messagesFiles.forEach((file) => fs.unlinkSync(path.join(messagesDir, file)));
                     fs.rmdirSync(messagesDir);
                     console.log(prefix + `cleanup complete`);
-                } catch (err) {
-                    console.error(prefix + `cleanup error: ${err}`);
+                } catch (e) {
+                    console.error(prefix + `cleanup error: ${e}`);
                 }
             } else {
                 console.error(prefix + `failed (original ${originalContent.length}, decompressed ${decompressedContent.length})`);
             }
-        } catch (err) {
-            console.error(prefix + `error (lzma decompress): ${err}`);
+        } catch (e) {
+            console.error(prefix + `error (lzma decompress): ${e}`);
         }
-    } catch (err) {
-        console.error(prefix + `error (exception): ${err}`);
+    } catch (e) {
+        console.error(prefix + `error (exception): ${e}`);
     }
 }
 
@@ -161,10 +161,10 @@ async function messageMonthly() {
             .readdirSync(messagesDir)
             .filter((file) => file.startsWith(dateString) && file.endsWith('json.xz'))
             .sort();
-    } catch (error) {
-        console.error(prefix + `error reading files: ${error.message}`);
+    } catch (e) {
+        console.error(prefix + `error reading files: ${e.message}`);
     }
-    if (files.length == 0) return;
+    if (files.length === 0) return;
 
     console.log(prefix + `using ${files.length} files (${files[0]} ... ${files[files.length - 1]})`);
     try {
@@ -175,20 +175,20 @@ async function messageMonthly() {
                     const decompressedStr = decompressedData.toString('utf8').replace(/\n$/, '');
                     if (!JSON.parse(decompressedStr)) throw 'could not parse JSON (individual file)';
                     return decompressedStr;
-                } catch (err) {
-                    console.error(prefix + `error (processing ${file}): ${err}`);
-                    return null;
+                } catch (e) {
+                    console.error(prefix + `error (processing ${file}): ${e}`);
+                    return undefined;
                 }
             })
         );
-        const monthly = fileContents.filter((content) => content !== null).join('\n');
+        const monthly = fileContents.filter((content) => content !== undefined).join('\n');
         if (!JSON.parse(monthly)) throw 'could not parse JSON (aggregate file)';
         fs.writeFileSync(monthlyFile, monthly);
         console.log(prefix + `wrote ${formatFileSize(monthly.length)}`);
         await __messageCompressPath(monthlyFile, `${dateString}: monthly ${monthlyFile}`);
         __messageMonthlyVerifyAndCleanup(dateString, messagesDir, files, monthly, __messageCompressedName(monthlyFile));
-    } catch (err) {
-        console.error(prefix + `error (exception): ${err}`);
+    } catch (e) {
+        console.error(prefix + `error (exception): ${e}`);
     }
 }
 
@@ -231,7 +231,7 @@ function messageBegin(config) {
 function messageEnd() {
     if (__messageCurrentStream) {
         __messageCurrentStream.end();
-        __messageCurrentStream = null;
+        __messageCurrentStream = undefined;
     }
     if (__messageInterval) clearInterval(__messageInterval);
 }

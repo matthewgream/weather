@@ -19,7 +19,7 @@ configData.DATA_ASSETS = configData.DATA + '/assets';
 configData.DATA_IMAGES = configData.DATA + '/images';
 configData.DATA_STORE = configData.DATA + '/store';
 configData.DATA_CACHE = '/dev/shm/weather';
-configData.MQTT_CLIENT = 'server-mainview-http-' + Math.random().toString(16).substring(2, 8);
+configData.MQTT_CLIENT = 'server-mainview-http-' + Math.random().toString(16).slice(2, 8);
 configData.FILE_SETS = require('path').join(__dirname, 'client.json');
 console.log(`Loaded 'config' using '${configPath}': ${configList}`);
 
@@ -110,20 +110,19 @@ console.log(`Loaded 'push-notifications' on '/push'`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-let __snapshotImagedata = null;
+let __snapshotImagedata;
 function receive_snapshotImagedata(message) {
     __snapshotImagedata = message;
 }
 function receive_snapshotMetadata(message) {
-    if (!__snapshotImagedata) console.error('Received snapshot metadata but no image data is available');
-    else {
+    if (__snapshotImagedata) {
         try {
             server_snapshots.insert(`snapshot_${JSON.parse(message.toString()).time}.jpg`, __snapshotImagedata);
-        } catch (error) {
-            console.error('Error processing snapshot metadata:', error);
+        } catch (e) {
+            console.error('Error processing snapshot metadata:', e);
         }
-        __snapshotImagedata = null;
-    }
+        __snapshotImagedata = undefined;
+    } else console.error('Received snapshot metadata but no image data is available');
 }
 const mqtt_client = require('mqtt').connect(configData.MQTT, {
     clientId: configData.MQTT_CLIENT,
@@ -161,7 +160,7 @@ if (configData.SOURCE_AIRCRAFT_ADSB_MQTT_SERVER) {
         alerts_check
     );
     const alerts_update = () => server_vars.update('aircraft', { alerts: Object.values(alerts_active) });
-    const source_aircraft_adsb = require('./server-function-source-aircraft-adsb.js')({
+    require('./server-function-source-aircraft-adsb.js')({
         mqtt: {
             server: configData.SOURCE_AIRCRAFT_ADSB_MQTT_SERVER,
             client: configData.MQTT_CLIENT,

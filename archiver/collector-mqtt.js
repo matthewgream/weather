@@ -4,62 +4,54 @@
 const mqtt = require('mqtt');
 
 let config = {};
-let client = null;
-let receiver = null;
 
-function mqttReceive(topic, message) {
+function mqttReceive(server, receiver, topic, message) {
     try {
-        if (receiver) receiver(topic, message);
-    } catch (error) {
-        console.error(`mqtt: receiver on '${topic}', error (exception):`, error);
+        receiver(topic, message);
+    } catch (e) {
+        console.error(`mqtt: [${server.server}] receiver on '${topic}', error (exception):`, e);
     }
 }
 
-function mqttSubscribe() {
-    if (client) {
-        config.topics.forEach((topic) =>
-            client.subscribe(topic, (err) => {
-                if (err) console.error(`mqtt: subscribe to '${topic}', error:`, err);
-                else console.log(`mqtt: subscribe to '${topic}', succeeded`);
-            })
-        );
-    }
+function mqttSubscribe(server) {
+    server.topics.forEach((topic) =>
+        server.client.subscribe(topic, (err) => {
+            if (err) console.error(`mqtt: [${server.server}] subscribe to '${topic}', error:`, err);
+            else console.log(`mqtt: [${server.server}] subscribe to '${topic}', succeeded`);
+        })
+    );
 }
 
-function mqttBegin(r) {
-    const options = {
-        clientId: config.clientId,
-    };
-    if (config.username && config.password) {
-        options.username = config.username;
-        options.password = config.password;
-    }
+function mqttBegin(receiver) {
+    const clientId = config.clientId;
+    config.servers.forEach((server) => {
+        const options = { clientId };
+        if (server.username) options.username = server.username;
+        if (server.password) options.password = server.password;
 
-    receiver = r;
-    console.log(`mqtt: connecting to '${config.broker}'`);
-    client = mqtt.connect(config.broker, options);
+        console.log(`mqtt: [${server.server}] connecting`);
+        server.client = mqtt.connect(server.server, options);
 
-    if (client) {
-        client.on('connect', () => {
-            console.log('mqtt: connected');
-            mqttSubscribe();
-        });
-        client.on('message', (topic, message) => {
-            mqttReceive(topic, message);
-        });
-        client.on('error', (err) => console.error('mqtt: error:', err));
-        client.on('offline', () => console.warn('mqtt: offline'));
-        client.on('reconnect', () => console.log('mqtt: reconnect'));
-    }
-
-    console.log(`mqtt: loaded using 'broker=${config.broker}'`);
+        if (server.client) {
+            server.client.on('connect', () => {
+                console.log(`mqtt: [${server.server}] connected`);
+                mqttSubscribe(server);
+            });
+            if (receiver) server.client.on('message', (topic, message) => mqttReceive(server, receiver, topic, message));
+            server.client.on('error', (error) => console.error(`mqtt: [${server.server}] error:`, error));
+            server.client.on('offline', () => console.warn(`mqtt: [${server.server}] offline`));
+            server.client.on('reconnect', () => console.log(`mqtt: [${server.server}] reconnect`));
+        }
+    });
 }
 
 function mqttEnd() {
-    if (client) {
-        client.end();
-        client = null;
-    }
+    config.servers
+        .filter((server) => server.client)
+        .forEach((server) => {
+            server.client.end();
+            server.client = undefined;
+        });
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

@@ -4,6 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const chokidar = require('chokidar');
+// eslint-disable-next-line no-redeclare
 const crypto = require('crypto');
 const sharp = require('sharp');
 
@@ -29,8 +30,8 @@ class SnapshotDirectoryManager {
             this.isInitialized = true;
             this.setupWatcher();
             debugSnapshotFunctions && console.log(`SnapshotDirectoryManager(${this.snapshotsDir}): initialized with ${this.snapshotsCache.length} entries`);
-        } catch (error) {
-            console.error(`SnapshotDirectoryManager(${this.snapshotsDir}): failed to initialize:`, error);
+        } catch (e) {
+            console.error(`SnapshotDirectoryManager(${this.snapshotsDir}): failed to initialize:`, e);
         }
     }
     readSnapshotDirectories() {
@@ -40,8 +41,8 @@ class SnapshotDirectoryManager {
                 .filter((item) => fs.statSync(path.join(this.snapshotsDir, item)).isDirectory() && /^\d{8}$/.test(item))
                 .sort((a, b) => b.localeCompare(a))
                 .map((dateCode) => ({ dateCode }));
-        } catch (error) {
-            console.error(`SnapshotDirectoryManager(${this.snapshotsDir}): error reading directory:`, error);
+        } catch (e) {
+            console.error(`SnapshotDirectoryManager(${this.snapshotsDir}): error reading directory:`, e);
             return [];
         }
     }
@@ -52,7 +53,7 @@ class SnapshotDirectoryManager {
             ignoreInitial: true,
             depth: 0,
             awaitWriteFinish: true,
-            ignored: /(^|[\/\\])\../, // eslint-disable-line no-useless-escape
+            ignored: /(^|[/\\])\../,
         });
         watcher.on('addDir', (dirPath) => {
             const dirName = path.basename(dirPath);
@@ -98,8 +99,8 @@ class SnapshotDirectoryManager {
         this.watchers.forEach((watcher) => {
             try {
                 watcher.close();
-            } catch (error) {
-                console.error(`SnapshotDirectoryManager(${this.snapshotsDir}): watcher error (on close):`, error);
+            } catch (e) {
+                console.error(`SnapshotDirectoryManager(${this.snapshotsDir}): watcher error (on close):`, e);
             }
         });
         this.watchers = [];
@@ -107,7 +108,7 @@ class SnapshotDirectoryManager {
     dispose() {
         if (this.cleanupInterval) {
             clearInterval(this.cleanupInterval);
-            this.cleanupInterval = null;
+            this.cleanupInterval = undefined;
         }
         this.closeWatchers();
         this.snapshotsCache = [];
@@ -142,8 +143,8 @@ class SnapshotContentsManager {
             this.cache.set(date, snapshots);
             this.watchDirectory(date, dateDir);
             return snapshots;
-        } catch (error) {
-            console.error(`SnapshotContentsManager(${this.snapshotsDir}): (date=${date}) error reading entries:`, error);
+        } catch (e) {
+            console.error(`SnapshotContentsManager(${this.snapshotsDir}): (date=${date}) error reading entries:`, e);
             return [];
         }
     }
@@ -162,8 +163,8 @@ class SnapshotContentsManager {
                 this.watcherTimestamps.delete(date);
                 debugSnapshotFunctions &&
                     console.log(`SnapshotContentsManager(${this.snapshotsDir}): (date=${date}) watcher closed (watchers=${this.watchers.size})`);
-            } catch (error) {
-                console.error(`SnapshotContentsManager(${this.snapshotsDir}): (date=${date}) watcher error:`, error);
+            } catch (e) {
+                console.error(`SnapshotContentsManager(${this.snapshotsDir}): (date=${date}) watcher error:`, e);
             }
         }
     }
@@ -175,7 +176,7 @@ class SnapshotContentsManager {
             ignoreInitial: true,
             depth: 0,
             awaitWriteFinish: true,
-            ignored: /(^|[\/\\])\../, // eslint-disable-line no-useless-escape
+            ignored: /(^|[/\\])\../,
         });
         watcher.on('all', (event, filePath) => {
             const fileName = path.basename(filePath);
@@ -195,7 +196,7 @@ class SnapshotContentsManager {
     }
     enforceWatcherLimit() {
         if (this.watchers.size < this.maxWatchers) return;
-        const entries = Array.from(this.watcherTimestamps.entries()).sort((a, b) => a[1] - b[1]);
+        const entries = [...this.watcherTimestamps.entries()].sort((a, b) => a[1] - b[1]);
         const numToClose = this.watchers.size - this.maxWatchers + 1; // +1 for the new one
         for (let i = 0; i < numToClose; i++) {
             if (i < entries.length) {
@@ -224,14 +225,14 @@ class SnapshotContentsManager {
     dispose() {
         if (this.cleanupInterval) {
             clearInterval(this.cleanupInterval);
-            this.cleanupInterval = null;
+            this.cleanupInterval = undefined;
         }
         this.watchers.forEach((watcher, date) => {
             try {
                 watcher.close();
                 debugSnapshotFunctions && console.log(`SnapshotContentsManager(${this.snapshotsDir}): (date=${date}) watcher closed`);
-            } catch (error) {
-                console.error(`SnapshotContentsManager(${this.snapshotsDir}): watcher error (on close):`, error);
+            } catch (e) {
+                console.error(`SnapshotContentsManager(${this.snapshotsDir}): watcher error (on close):`, e);
             }
         });
         this.watchers.clear();
@@ -301,7 +302,7 @@ class SnapshotThumbnailsManager {
         if (cacheKeys.length - keysToRemove.length > this.cacheSize) {
             const additionalToRemove = cacheKeys.length - keysToRemove.length - Math.floor(this.cacheSize * 0.9);
             if (additionalToRemove > 0)
-                keysToRemove = keysToRemove.concat(sortedKeys.filter((key) => !keysToRemove.includes(key)).slice(0, additionalToRemove));
+                keysToRemove = [...keysToRemove, ...sortedKeys.filter((key) => !keysToRemove.includes(key)).slice(0, additionalToRemove)];
         }
         keysToRemove.forEach((key) => {
             delete this.cacheEntries[key];
@@ -311,7 +312,7 @@ class SnapshotThumbnailsManager {
     dispose() {
         if (this.cleanupTimer) {
             clearInterval(this.cleanupTimer);
-            this.cleanupTimer = null;
+            this.cleanupTimer = undefined;
         }
         this.clear();
     }
@@ -325,7 +326,7 @@ class SnapshotTimelapseManager {
         this.timelapseDir = directory;
         this.timelapseCache = [];
         this.isInitialized = false;
-        this.watcher = null;
+        this.watcher = undefined;
         this.expiryTime = 30 * 60 * 1000;
         this.cleanupInterval = setInterval(() => this.checkCacheExpiry(), this.expiryTime);
         this.lastAccessed = Date.now();
@@ -337,8 +338,8 @@ class SnapshotTimelapseManager {
             this.isInitialized = true;
             this.setupWatcher();
             debugSnapshotFunctions && console.log(`SnapshotTimelapseManager(${this.timelapseDir}): initialized with ${this.timelapseCache.length} entries`);
-        } catch (error) {
-            console.error(`SnapshotTimelapseManager(${this.timelapseDir}): failed to initialize:`, error);
+        } catch (e) {
+            console.error(`SnapshotTimelapseManager(${this.timelapseDir}): failed to initialize:`, e);
         }
     }
     readTimelapseFiles() {
@@ -348,8 +349,8 @@ class SnapshotTimelapseManager {
                 .filter((file) => file.startsWith('timelapse_') && file.endsWith('.mp4'))
                 .sort((a, b) => b.localeCompare(a))
                 .map((file) => ({ file }));
-        } catch (error) {
-            console.error(`SnapshotTimelapseManager(${this.timelapseDir}): error reading directory:`, error);
+        } catch (e) {
+            console.error(`SnapshotTimelapseManager(${this.timelapseDir}): error reading directory:`, e);
             return [];
         }
     }
@@ -363,7 +364,7 @@ class SnapshotTimelapseManager {
                 stabilityThreshold: 2000,
                 pollInterval: 100,
             },
-            ignored: /(^|[\/\\])\../, // eslint-disable-line no-useless-escape
+            ignored: /(^|[/\\])\../,
         });
         watcher.on('add', (filePath) => {
             const fileName = path.basename(filePath);
@@ -381,15 +382,7 @@ class SnapshotTimelapseManager {
     updateCacheWithNewFile(fileName, filePath) {
         const dateCode = fileName.slice(10, 18);
         const existingIndex = this.timelapseCache.findIndex((item) => item.file === fileName);
-        if (existingIndex !== -1) {
-            this.timelapseCache[existingIndex] = {
-                file: fileName,
-                dateCode,
-                filePath,
-                fileSizeBytes: fs.statSync(filePath).size,
-            };
-            debugSnapshotFunctions && console.log(`SnapshotTimelapseManager(${this.timelapseDir}): updated file: ${fileName}`);
-        } else {
+        if (existingIndex === -1) {
             this.timelapseCache.push({
                 file: fileName,
                 dateCode,
@@ -398,6 +391,14 @@ class SnapshotTimelapseManager {
             });
             this.timelapseCache.sort((a, b) => b.file.localeCompare(a.file));
             debugSnapshotFunctions && console.log(`SnapshotTimelapseManager(${this.timelapseDir}): adding new file: ${fileName}`);
+        } else {
+            this.timelapseCache[existingIndex] = {
+                file: fileName,
+                dateCode,
+                filePath,
+                fileSizeBytes: fs.statSync(filePath).size,
+            };
+            debugSnapshotFunctions && console.log(`SnapshotTimelapseManager(${this.timelapseDir}): updated file: ${fileName}`);
         }
     }
     removeFileFromCache(fileName) {
@@ -425,16 +426,16 @@ class SnapshotTimelapseManager {
             try {
                 this.watcher.close();
                 debugSnapshotFunctions && console.log(`SnapshotTimelapseManager(${this.timelapseDir}): watcher closed`);
-            } catch (error) {
-                console.error(`SnapshotTimelapseManager(${this.timelapseDir}): watcher error (on close):`, error);
+            } catch (e) {
+                console.error(`SnapshotTimelapseManager(${this.timelapseDir}): watcher error (on close):`, e);
             }
-            this.watcher = null;
+            this.watcher = undefined;
         }
     }
     dispose() {
         if (this.cleanupInterval) {
             clearInterval(this.cleanupInterval);
-            this.cleanupInterval = null;
+            this.cleanupInterval = undefined;
         }
         this.closeWatcher();
         this.timelapseCache = [];
@@ -448,7 +449,7 @@ function getThumbnailKey(file, width) {
     return crypto.createHash('md5').update(`${file}-${width}-${mtime}`).digest('hex');
 }
 async function getThumbnailData(manager, filePath, width, quality) {
-    if (!fs.existsSync(filePath)) return null;
+    if (!fs.existsSync(filePath)) return undefined;
     const key = getThumbnailKey(filePath, width);
     let thumbnail = manager.retrieve(key);
     if (!thumbnail) {

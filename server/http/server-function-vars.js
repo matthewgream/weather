@@ -3,7 +3,7 @@
 
 const { formatInTimeZone } = require('date-fns-tz');
 
-function initialise(app, prefix, vars, tz, debug = null) {
+function initialise(app, prefix, vars, tz, debug) {
     const variablesSet = {};
     function render() {
         return Object.fromEntries(vars.map((topic) => [topic, variablesSet[topic]]));

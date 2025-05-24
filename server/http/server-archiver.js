@@ -68,7 +68,7 @@ console.log(`Loaded '/' using '${server_snapshots.getUrlList()}'`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const mqtt_client = require('mqtt').connect(configData.MQTT, {
-    clientId: 'server-archiver-http-' + Math.random().toString(16).substring(2, 8),
+    clientId: 'server-archiver-http-' + Math.random().toString(16).slice(2, 8),
 });
 mqtt_client.on('connect', () => console.log(`mqtt connected`));
 setInterval(() => {

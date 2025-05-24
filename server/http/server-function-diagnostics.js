@@ -33,11 +33,8 @@ class MemoryLogsManager {
         this.size = 0;
     }
     createLogStream() {
-        const self = this;
         return {
-            write: function (string) {
-                return self.write(string);
-            },
+            write: (string) => this.write(string),
         };
     }
 }
@@ -47,14 +44,7 @@ class MemoryLogsManager {
 
 class RequestStatsManager {
     constructor() {
-        this.stats = {
-            total: 0,
-            byRoute: {},
-            byMethod: {},
-            byStatus: {},
-            byIP: {},
-            startTime: new Date(),
-        };
+        this.clear();
     }
     updateEnter(req) {
         this.stats.total++;
@@ -76,16 +66,15 @@ class RequestStatsManager {
             byMethod: {},
             byStatus: {},
             byIP: {},
-            startTime: new Date(),
+            startTime: Date.now(),
         };
     }
     createMiddleware() {
-        const self = this;
-        return function (req, res, next) {
+        return (req, res, next) => {
             const res_end = res.end;
-            self.updateEnter(req);
-            res.end = function (...args) {
-                self.updateLeave(res);
+            this.updateEnter(req);
+            res.end = (...args) => {
+                this.updateLeave(res);
                 res_end.apply(res, args);
             };
             next();
@@ -102,13 +91,12 @@ class DiagnosticsManager {
         this.memoryLogs = new MemoryLogsManager({ maxSize: options.logLimitStorage || LOGS_INMEMORY_MAXSIZE });
         this.requestStats = new RequestStatsManager();
         this.additionalDiagnostics = [];
-        const self = this;
         app.use(expressStatus({ port: options.port || 80, path: (options.path || '') + '/internal' }));
-        app.use(morgan(options.morganFormat || 'combined', { stream: self.memoryLogs.createLogStream() }));
+        app.use(morgan(options.morganFormat || 'combined', { stream: this.memoryLogs.createLogStream() }));
         app.use(this.requestStats.createMiddleware());
         app.get((options.path || '') + '/diagnostics', (req, res) => {
             const stats = this.requestStats.getStats();
-            const uptime = this._formatUptime(new Date() - stats.startTime);
+            const uptime = this._formatUptime(Date.now() - stats.startTime);
             const logs = this.memoryLogs.getLogs().slice(-this.logLimitDisplay);
             const additionalDiagnostics = this.additionalDiagnostics;
             const formatTitle = this._formatTitle;
@@ -142,7 +130,7 @@ class DiagnosticsManager {
         const stats = this.requestStats.getStats();
         const baseStats = {
             totalRequests: stats.total,
-            uptime: new Date() - stats.startTime,
+            uptime: Date.now() - stats.startTime,
             byRoute: stats.byRoute,
             byMethod: stats.byMethod,
             byStatus: stats.byStatus,
@@ -160,20 +148,20 @@ class DiagnosticsManager {
             try {
                 const sourceData = source.sourceFunction();
                 if (sourceData && typeof sourceData === 'object') baseStats[source.name] = sourceData;
-            } catch (error) {
-                baseStats[source.name] = { error: `Failed to retrieve diagnostics: ${error.message}` };
+            } catch (e) {
+                baseStats[source.name] = { error: `Failed to retrieve diagnostics: ${e.message}` };
             }
         });
 
         return baseStats;
     }
     _formatTitle(str) {
-        return str.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase());
+        return str.replaceAll(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase());
     }
     _formatValue(value) {
-        if (value === null || value === undefined) return '<em>None</em>';
+        if (value === undefined) return '<em>None</em>';
         if (typeof value === 'boolean') return value ? '<span class="good">Enabled</span>' : '<span class="warning">Disabled</span>';
-        if (typeof value === 'object') return '<pre>' + JSON.stringify(value, null, 2) + '</pre>';
+        if (typeof value === 'object') return '<pre>' + JSON.stringify(value, undefined, 2) + '</pre>';
         if (typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://')))
             return `<a href="${value}" target="_blank">${value}</a>`;
         return value.toString();

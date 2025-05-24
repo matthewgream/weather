@@ -12,8 +12,8 @@ function initialise(filename) {
                 const [key, value] = line.split('=').map((s) => s.trim());
                 if (key && value) items[key] = value;
             });
-    } catch (err) {
-        console.warn(`config: cannot load '${filename}' (using defaults, which may not work correctly), error:`, err);
+    } catch (e) {
+        console.warn(`config: cannot load '${filename}' (using defaults, which may not work correctly), error:`, e);
     }
     return items;
 }

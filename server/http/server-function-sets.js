@@ -11,15 +11,15 @@ function initialise(app, prefix, filename) {
             return res.status(400).json({ error: 'MAC address required' });
         }
         try {
-            const sets = JSON.parse(fs.readFileSync(filename, 'utf8'));
+            const sets = JSON.parse(fs.readFileSync(filename, 'buffer'));
             if (!sets[mac]) {
                 console.log(`sets request failed: no client for ${mac}`);
                 return res.status(404).json({ error: 'MAC address unknown' });
             }
             res.json(sets[mac]);
             console.log(`sets request succeeded: ${mac}`);
-        } catch (error) {
-            console.error(`sets request failed: error reading client file, error <<${error}>>`);
+        } catch (e) {
+            console.error(`sets request failed: error reading client file, error:`, e);
             res.status(500).json({ error: 'Internal server error' });
         }
     });

@@ -6,20 +6,21 @@ const path = require('path');
 const zlib = require('zlib');
 const multer = require('multer');
 
+const image_dataType = (filename) => filename.match(/^([^_]+)/)?.[1] || '';
+const image_dataVersion = (filename) => filename.match(/_v(\d+\.\d+\.\d+)/)?.[1] || '';
+const image_dataCompress = (data) => zlib.deflateSync(data);
+const image_dataManifest = (directory) =>
+    Object.values(
+        fs.readdirSync(directory).reduce((images, filename) => {
+            const type = image_dataType(filename),
+                version = image_dataVersion(filename);
+            if (!images[type] || images[type].version < version) images[type] = { type, version, filename };
+            return images;
+        }, {})
+    );
+
 function initialise(app, prefix, directory, location) {
     const image_upload = multer({ dest: '/tmp' });
-    const image_dataType = (filename) => filename.match(/^([^_]+)/)?.[1] || '';
-    const image_dataVersion = (filename) => filename.match(/_v(\d+\.\d+\.\d+)/)?.[1] || '';
-    const image_dataCompress = (data) => zlib.deflateSync(data);
-    const image_dataManifest = (directory) =>
-        Object.values(
-            fs.readdirSync(directory).reduce((images, filename) => {
-                const type = image_dataType(filename),
-                    version = image_dataVersion(filename);
-                if (!images[type] || images[type].version < version) images[type] = { type, version, filename };
-                return images;
-            }, {})
-        );
 
     //
 
@@ -56,8 +57,8 @@ function initialise(app, prefix, directory, location) {
                 `images upload succeeded: '${uploadedName}' (${uploadedData.length} bytes) --> '${compressedName}' (${compressedData.length} bytes) [${remote}]`
             );
             res.send('File uploaded, compressed, and saved successfully.');
-        } catch (error) {
-            console.error(`images upload failed: error <<<${error}>>> [${remote}]`);
+        } catch (e) {
+            console.error(`images upload failed [${remote}], error:`, e);
             res.status(500).send('File upload error');
         }
     });
@@ -68,8 +69,8 @@ function initialise(app, prefix, directory, location) {
             res.set('Content-Type', 'application/octet-stream');
             res.send(fs.readFileSync(downloadPath));
             console.log(`images download succeeded: ${downloadName} (${downloadPath})`);
-        } catch (error) {
-            console.error(`images download failed: ${downloadName} (${downloadPath}), error <<<${error}>>>`);
+        } catch (e) {
+            console.error(`images download failed: ${downloadName} (${downloadPath}), error:`, e);
             res.status(404).send('File not found');
         }
     });

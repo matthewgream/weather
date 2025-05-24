@@ -12,15 +12,15 @@ function initialise(config) {
         last_log_time = 0;
 
     const mqtt_client = require('mqtt').connect(config.mqtt?.server || 'mqtt://localhost', {
-        clientId: config.mqtt?.client || 'client-adsb-' + Math.random().toString(16).substring(2, 8),
+        clientId: config.mqtt?.client || 'client-adsb-' + Math.random().toString(16).slice(2, 8),
         reconnectPeriod: ADSB_MQTT_RECONNECT_PERIOD,
         connectTimeout: ADSB_MQTT_CONNECT_TIMEOUT,
     });
     mqtt_client.on('connect', () => {
         reconnect_attempts = 0;
         mqtt_client.subscribe(ADSB_MQTT_TOPIC, (error) => {
-            if (!error) console.log(`aircraft-adsb: mqtt connected & subscribed for '${ADSB_MQTT_TOPIC}'`);
-            else console.error(`aircraft-adsb: mqtt connected & subscribe failed for '${ADSB_MQTT_TOPIC}', error:`, error);
+            if (error) console.error(`aircraft-adsb: mqtt connected & subscribe failed for '${ADSB_MQTT_TOPIC}', error:`, error);
+            else console.log(`aircraft-adsb: mqtt connected & subscribed for '${ADSB_MQTT_TOPIC}'`);
         });
     });
     mqtt_client.on('message', (topic, message) => {
@@ -34,8 +34,8 @@ function initialise(config) {
                 const id = message.toString();
                 if (config.onAlertRemoved && id) config.onAlertRemoved(id);
             }
-        } catch (error) {
-            console.error(`aircraft-adsb: onAlertInserted/onAlertRemoved error: `, error);
+        } catch (e) {
+            console.error(`aircraft-adsb: onAlertInserted/onAlertRemoved error:`, e);
         }
     });
 

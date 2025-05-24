@@ -40,10 +40,10 @@ export default [
             'prefer-object-spread': preferObjectSpreadPlugin,
             '@getify/proper-ternary': properTernaryPlugin,
             '@getify/proper-arrows': properArrowsPlugin,
-            'ternary': ternaryPlugin,
+            ternary: ternaryPlugin,
             '@brettz9': brettz9Plugin,
-            'googleappsscript': googleappsscriptPlugin,
-            'security': securityPlugin,
+            googleappsscript: googleappsscriptPlugin,
+            security: securityPlugin,
             'security-node': securityNodePlugin,
         },
         rules: {
@@ -68,18 +68,16 @@ export default [
             'unicorn/prefer-at': 'off',
             'unicorn/no-useless-undefined': 'off',
             'unicorn/no-lonely-if': 'off',
-            'unicorn/no-await-expression-member': 'off',
-            'unicorn/prefer-global-this': 'off',
 
             'sonarjs/no-clear-text-protocols': 'off',
             'sonarjs/prefer-single-boolean-return': 'off',
             'sonarjs/publicly-writable-directories': 'off',
             'sonarjs/pseudo-random': 'off',
             'sonarjs/hashing': 'off',
-            'sonarjs/content-length': 'off',
+            'sonarjs/os-command': 'off',
 
             'n/hashbang': 'off',
-            'n/no-unsupported-features/node-builtins': 'off',
+            'n/no-process-exit': 'off',
 
             /*
             // ESLint core rules
@@ -109,14 +107,14 @@ export default [
             'no-template-curly-in-string': 'error',
             'no-unmodified-loop-condition': 'warn',
             'prefer-exponentiation-operator': 'error',
-            
+
             // Plugin rules
             'regexp/use-ignore-case': 'off',
             'regexp/no-unused-capturing-group': 'off',
             'regexp/no-useless-non-capturing-group': 'off',
-            
+
             '@brettz9/prefer-for-of': 'off',
-            
+
             'unicorn/consistent-function-scoping': 'off',
             'unicorn/no-static-only-class': 'off',
             'unicorn/prefer-set-has': 'off',
@@ -134,7 +132,7 @@ export default [
             'unicorn/prefer-string-slice': 'off',
             'unicorn/no-array-callback-reference': 'off',
             'unicorn/no-useless-fallback-in-spread': 'off',
-            
+
             'security-node/non-literal-reg-expr': 'off',
             'security-node/detect-eval-with-expr': 'off',
             'security-node/detect-crlf': 'off',

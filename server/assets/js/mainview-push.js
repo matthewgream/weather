@@ -1,13 +1,13 @@
 function __urlBase64ToUint8Array(base64String) {
-    const rawData = window.atob((base64String + '='.repeat((4 - (base64String.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/'));
+    const rawData = window.atob((base64String + '='.repeat((4 - (base64String.length % 4)) % 4)).replaceAll('-', '+').replaceAll('_', '/'));
     const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+    for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.codePointAt(i);
     return outputArray;
 }
 
 const weatherPushNotifications = (function () {
-    let vapidPublicKey = null;
-    let serviceWorker = null;
+    let vapidPublicKey;
+    let serviceWorker;
     let isSubscribed = false;
     let isObserved = false;
 
@@ -17,14 +17,14 @@ const weatherPushNotifications = (function () {
             return false;
         }
         try {
-            vapidPublicKey = (await (await fetch('/push/vapidPublicKey')).json()).publicKey;
+            vapidPublicKey = (await (await fetch('/push/vapidPublicKey'))?.json())?.publicKey;
             serviceWorker = await navigator.serviceWorker.register('/static/js/mainview-worker.js');
-            isSubscribed = (await serviceWorker.pushManager.getSubscription()) !== null;
+            isSubscribed = (await serviceWorker.pushManager.getSubscription()) !== undefined;
             pushToggleListen();
             console.log('push: initialised with service-worker:', serviceWorker);
             return true;
-        } catch (error) {
-            console.error('push: error initialising:', error);
+        } catch (e) {
+            console.error('push: error initialising:', e);
             return false;
         }
     }
@@ -34,7 +34,7 @@ const weatherPushNotifications = (function () {
         const observer = new MutationObserver((mutations) => {
             if (mutations.some((mutation) => mutation.type === 'childList')) pushToggleSetup();
         });
-        const element = document.getElementById('weather-dashboard');
+        const element = document.querySelector('#weather-dashboard');
         if (element) {
             observer.observe(element, { childList: true, subtree: true });
             isObserved = true;
@@ -54,17 +54,16 @@ const weatherPushNotifications = (function () {
         document.querySelectorAll('.alerts-switch').forEach((element) => {
             if (!element.querySelector('.alerts-toggle')) {
                 const toggle = document.createElement('a');
-                toggle.className = 'alerts-toggle';
+                toggle.setAttribute('class', 'alerts-toggle');
                 __pushToggleSet(toggle);
                 toggle.addEventListener('click', async function (e) {
                     e.preventDefault();
                     e.stopPropagation();
-                    if (isSubscribed) await unsubscribe();
-                    else await subscribe();
+                    await (isSubscribed ? unsubscribe() : subscribe());
                     pushToggleUpdate();
                 });
                 element.innerHTML = '';
-                element.appendChild(toggle);
+                element.append(toggle);
             }
         });
     }
@@ -89,8 +88,8 @@ const weatherPushNotifications = (function () {
             pushToggleUpdate();
             console.log('push: user subscription enabled:', subscription);
             return true;
-        } catch (error) {
-            console.error('push: user subscription enable failed:', error);
+        } catch (e) {
+            console.error('push: user subscription enable failed:', e);
             return false;
         }
     }
@@ -112,8 +111,8 @@ const weatherPushNotifications = (function () {
             pushToggleUpdate();
             console.log('push: user subscription disabled' + (subscription ? '' : ' (was not active)'));
             return true;
-        } catch (error) {
-            console.error('push: user subscription disable failed:', error);
+        } catch (e) {
+            console.error('push: user subscription disable failed:', e);
             return false;
         }
     }

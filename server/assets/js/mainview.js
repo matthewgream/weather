@@ -1,13 +1,13 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const format = (e, v) => (v != null ? (Number.isFinite(v) ? v : Number(v)).toFixed(e.decimals ?? 0) : 'n/a');
-const formatWindSpeed = (e, v) => (v != null ? (v / 3.6).toFixed(e.decimals ?? 0) : 'n/a');
+const format = (e, v) => (v === undefined ? 'n/a' : (Number.isFinite(v) ? v : Number(v)).toFixed(e.decimals ?? 0));
+const formatWindSpeed = (e, v) => (v === undefined ? 'n/a' : (v / 3.6).toFixed(e.decimals ?? 0));
 const formatWindDirection = (e, v) =>
-    v == null
+    v === undefined
         ? 'n/a'
         : `${v.toFixed(e.decimals ?? 0)}° ${['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][Math.floor(((v + 11.25) % 360) / 22.5)]}`;
-const formatDepthFromMMtoCM = (e, v) => (v != null ? (v / 10).toFixed(e.decimals ?? 0) : 'n/a');
+const formatDepthFromMMtoCM = (e, v) => (v === undefined ? 'n/a' : (v / 10).toFixed(e.decimals ?? 0));
 
 const model = [
     {
@@ -174,7 +174,7 @@ const formatBanner = (timestamp, timediff) =>
 function updateBanner(vars) {
     const timestamp = locate(vars, CONFIG.var_timestamp);
     const timediff = Math.floor((new Date() - new Date(timestamp.replace(/([+-]\d{2})Z$/, '$1:00'))) / (60 * 1000));
-    const element = document.getElementById('banner');
+    const element = document.querySelector('#banner');
     if (element) element.innerHTML = timediff > 60 ? formatBanner(timestamp, timediff) : '';
 }
 
@@ -209,13 +209,13 @@ function createSectionDataSummary(vars) {
     const rainDaily = locate(vars, outside[7].path);
     const solarRad = locate(vars, outside[8].path);
     const solarUvi = locate(vars, outside[9].path);
-    const snowDepth = locate(vars, outside[10].path) || null;
-    const radiationCpm = locate(vars, outside[11].path) || null;
-    const radiationAcpm = locate(vars, outside[12].path) || null;
-    const radiationUsvh = locate(vars, outside[13].path) || null;
+    const snowDepth = locate(vars, outside[10].path);
+    const radiationCpm = locate(vars, outside[11].path);
+    const radiationAcpm = locate(vars, outside[12].path);
+    const radiationUsvh = locate(vars, outside[13].path);
     const lakeSurface = locate(vars, lake[0].path);
     const lakeSubmerged = locate(vars, lake[1].path);
-    const lakeIceDepth = null;
+    const lakeIceDepth = undefined;
     const internalBatteryWH65 = locate(vars, internal[0].path);
     const aircraft = vars.aircraft;
 
@@ -223,20 +223,18 @@ function createSectionDataSummary(vars) {
 
     ////
     let details_list = [];
-    if (temp !== null && humidity !== null && pressure !== null) {
+    if (temp !== undefined && humidity !== undefined && pressure !== undefined) {
         //
-        if (temp === null || humidity === null || pressure === null) details_list.push('No temp.');
-        else {
+        if (temp !== undefined && humidity !== undefined && pressure === undefined) {
             const fTemp = outside[0].format(outside[0], temp);
             const fHumidity = outside[1].format(outside[1], humidity);
             const fPressure = outside[2].format(outside[2], pressure);
             let details_temp = `Temp <span class="value">${fTemp}°C</span> at <span class="value">${fHumidity}%</span> and <span class="value">${fPressure}</span> hPa.`;
             details_list.push(details_temp);
-        }
+        } else details_list.push('No temp.');
 
         //
-        if (!windSpeed) details_list.push('No wind.');
-        else {
+        if (windSpeed) {
             const fWindSpeed = outside[3].format(outside[3], windSpeed);
             const fWindDir = outside[5].format(outside[5], windDir).replace('n/a', '');
             let details_wind = `Wind <span class="value">${fWindSpeed}</span> m/s <span class="value">${fWindDir}</span>`;
@@ -245,11 +243,10 @@ function createSectionDataSummary(vars) {
                 details_wind += `, gusting <span class="value">${fWindGust}</span> m/s`;
             }
             details_list.push(details_wind + '.');
-        }
+        } else details_list.push('No wind.');
 
         //
-        if (!rainRate && !rainDaily) details_list.push('No rain.');
-        else {
+        if (rainRate || rainDaily) {
             const fRainRate = outside[8].format(outside[6], rainRate);
             let details_rain = `Rain <span class="value">${fRainRate}</span> mm/hr`;
             if (rainDaily) {
@@ -257,11 +254,10 @@ function createSectionDataSummary(vars) {
                 details_rain += ` (<span class="value">${fRainDaily}</span> mm today)`;
             }
             details_list.push(details_rain + '.');
-        }
+        } else details_list.push('No rain.');
 
         //
-        if (!solarRad) details_list.push('No solar.');
-        else {
+        if (solarRad) {
             const fSolarRad = outside[6].format(outside[8], solarRad);
             let details_solar = `Solar <span class="value">${fSolarRad}</span> W/m²`;
             if (solarUvi) {
@@ -269,19 +265,17 @@ function createSectionDataSummary(vars) {
                 details_solar += `, UVI <span class="value">${fSolarUvi}</span>`;
             }
             details_list.push(details_solar + '.');
-        }
+        } else details_list.push('No solar.');
 
         //
-        if (!snowDepth);
-        else {
+        if (snowDepth) {
             const fSnowDepth = outside[10].format(outside[10], snowDepth);
             let details_snow = `Snow <span class="value">${fSnowDepth / 10}</span> cm.`;
             details_list.push(details_snow);
         }
 
         //
-        if (!radiationCpm);
-        else {
+        if (radiationCpm) {
             const fRadiationCpm = outside[11].format(outside[11], radiationCpm);
             let details_rads = `Radiation <span class="value">${fRadiationCpm}</span> cpm`;
             if (radiationAcpm) {
@@ -296,8 +290,7 @@ function createSectionDataSummary(vars) {
         }
 
         //
-        if (lakeSurface === null && lakeSubmerged === null && lakeIceDepth == null) details_list.push('No lake.');
-        else {
+        if (lakeSurface !== undefined || lakeSubmerged !== undefined || lakeIceDepth) {
             const fLakeSurface = lake[0].format(lake[0], lakeSurface);
             const fLakeSubmerged = lake[1].format(lake[1], lakeSubmerged);
             let details_lake = `Lake <span class="value">${fLakeSurface}°C</span> above, <span class="value">${fLakeSubmerged}°C</span> below`;
@@ -306,7 +299,7 @@ function createSectionDataSummary(vars) {
                 details_lake += `, <span class="value">${fLakeIceDepth / 10}</span> cm ice`;
             }
             details_list.push(details_lake + '.');
-        }
+        } else details_list.push('No lake.');
     }
     let details = details_list.join('<br>');
     summary.push(details);
@@ -331,8 +324,8 @@ function createSectionDataSummary(vars) {
 
     ////
     let analysis = '';
-    let weather = null;
-    if (temp !== null && humidity !== null && pressure !== null)
+    let weather;
+    if (temp !== undefined && humidity !== undefined && pressure !== undefined)
         weather = getWeatherInterpretation(CONFIG.location_data, {
             temp,
             humidity,
@@ -373,7 +366,7 @@ function createSectionDataSummary(vars) {
 }
 
 function updateSectionData(vars) {
-    const element = document.getElementById('text-summary-details');
+    const element = document.querySelector('#text-summary-details');
     if (element) element.innerHTML = createSectionDataSummary(vars);
 }
 function createSectionData(vars) {
@@ -453,12 +446,12 @@ const MAIN_CAMERA_WIDTH = 600;
 
 function updateSectionCamera() {
     setTimeout(() => updateSectionCamera(), UPDATE_CAMERA_PERIOD);
-    const element = document.getElementById('main-camera');
+    const element = document.querySelector('#main-camera');
     if (element) element.src = `/snapshot/thumb/snapshot.jpg?w=${MAIN_CAMERA_WIDTH}&t=${Date.now()}`;
 }
 function createSectionCamera(data) {
     setTimeout(() => updateSectionCamera(), UPDATE_CAMERA_PERIOD);
-    const img = data?.thumbnails?.['current'] ? data.thumbnails['current'] : `/snapshot/thumb/snapshot.jpg?w=${MAIN_CAMERA_WIDTH}&t=${Date.now()}`;
+    const img = data?.thumbnails?.['current'] || `/snapshot/thumb/snapshot.jpg?w=${MAIN_CAMERA_WIDTH}&t=${Date.now()}`;
     return `
         <section class="section">
         	<div class="camera-container">
@@ -484,11 +477,11 @@ let timecountInterval;
 const calculateTimeSince = (time) => `${Math.max(Math.floor((new Date() - new Date(time.replace(/([+-]\d{2})Z$/, '$1:00'))) / 1000), 0)} secs ago`;
 
 function updateSectionTimeElementTimestamp(time) {
-    const element = document.getElementById('time-update');
+    const element = document.querySelector('#time-update');
     if (element) element.textContent = time;
 }
 function updateSectionTimeElementTimecount(time) {
-    const element = document.getElementById('time-since');
+    const element = document.querySelector('#time-since');
     if (element) element.textContent = calculateTimeSince(time);
 }
 function scheduleSectionTimeElementTimecount(time) {
@@ -562,8 +555,8 @@ function request() {
             else update(vars);
             schedule(vars);
         })
-        .catch((error) => {
-            console.error('vars: fetch error:', error);
+        .catch((e) => {
+            console.error('vars: fetch error:', e);
             if (varsTimer) clearTimeout(varsTimer);
             varsTimer = setTimeout(request, varsInterval);
         });
@@ -585,7 +578,7 @@ function schedule(vars) {
 
 function create(vars, data) {
     varsLast = vars;
-    document.getElementById('weather-dashboard').innerHTML = [
+    document.querySelector('#weather-dashboard').innerHTML = [
         createHeader(),
         createBanner(vars),
         createSectionData(vars),

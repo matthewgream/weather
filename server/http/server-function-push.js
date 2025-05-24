@@ -28,16 +28,16 @@ class PushNotificationManager {
     loadOrGenerateVapidKeys() {
         const keyPath = path.join(this.options.dataDir, this.options.vapidKeyFile);
         try {
-            if (fs.existsSync(keyPath)) return JSON.parse(fs.readFileSync(keyPath, 'utf8'));
-        } catch (error) {
-            console.warn(`push: VAPID keys load error: ${error.message}, generating new keys`);
+            if (fs.existsSync(keyPath)) return JSON.parse(fs.readFileSync(keyPath, 'buffer'));
+        } catch (e) {
+            console.warn(`push: VAPID keys load error, generating new keys, error:`, e);
         }
         const keys = webpush.generateVAPIDKeys();
         try {
-            fs.writeFileSync(keyPath, JSON.stringify(keys, null, 2));
+            fs.writeFileSync(keyPath, JSON.stringify(keys, undefined, 2));
             console.log(`push: VAPID keys generated and saved (${keyPath})`);
-        } catch (error) {
-            console.error(`push: VAPID keys save error: ${error.message}`);
+        } catch (e) {
+            console.error(`push: VAPID keys save error:`, e);
         }
         return keys;
     }
@@ -45,9 +45,9 @@ class PushNotificationManager {
     loadSubscriptions() {
         const subscriptionsPath = path.join(this.options.dataDir, this.options.subscriptionsFile);
         try {
-            if (fs.existsSync(subscriptionsPath)) return JSON.parse(fs.readFileSync(subscriptionsPath, 'utf8'));
-        } catch (error) {
-            console.warn(`push: subscription load error: ${error.message}, starting with empty list`);
+            if (fs.existsSync(subscriptionsPath)) return JSON.parse(fs.readFileSync(subscriptionsPath, 'buffer'));
+        } catch (e) {
+            console.warn(`push: subscription load error, starting with empty list, error:`, e);
         }
         return [];
     }
@@ -55,9 +55,9 @@ class PushNotificationManager {
     saveSubscriptions() {
         const subscriptionsPath = path.join(this.options.dataDir, this.options.subscriptionsFile);
         try {
-            fs.writeFileSync(subscriptionsPath, JSON.stringify(this.subscriptions, null, 2));
-        } catch (error) {
-            console.error(`push: subscription save error: ${error.message}`);
+            fs.writeFileSync(subscriptionsPath, JSON.stringify(this.subscriptions, undefined, 2));
+        } catch (e) {
+            console.error(`push: subscription save error:`, e);
         }
     }
 
@@ -98,14 +98,13 @@ class PushNotificationManager {
         const promises = this.subscriptions.map(async (subscription, index) => {
             try {
                 await webpush.sendNotification(subscription, typeof payload === 'string' ? payload : JSON.stringify(payload), options);
-                return null; // Success
-            } catch (error) {
-                if (error.statusCode === 404 || error.statusCode === 410) return index;
-                return null;
+                return undefined; // Success
+            } catch (e) {
+                return e.statusCode === 404 || e.statusCode === 410 ? index : undefined;
             }
         });
         const results = await Promise.all(promises);
-        const invalidIndices = results.filter((index) => index !== null).sort((a, b) => b - a);
+        const invalidIndices = results.filter((index) => index !== undefined).sort((a, b) => b - a);
         const initialCount = this.subscriptions.length;
         invalidIndices.forEach((index) => this.subscriptions.splice(index, 1));
         if (invalidIndices.length > 0) this.saveSubscriptions();
@@ -143,13 +142,13 @@ class PushNotificationManager {
                 count: this.subscriptions.length,
                 lastUpdated: fs.existsSync(path.join(this.options.dataDir, this.options.subscriptionsFile))
                     ? fs.statSync(path.join(this.options.dataDir, this.options.subscriptionsFile)).mtime.toISOString()
-                    : null,
+                    : undefined,
             },
             vapidKeys: {
                 exists: !!this.vapidKeys,
                 lastUpdated: fs.existsSync(path.join(this.options.dataDir, this.options.vapidKeyFile))
                     ? fs.statSync(path.join(this.options.dataDir, this.options.vapidKeyFile)).mtime.toISOString()
-                    : null,
+                    : undefined,
             },
             status: {
                 enabled: true,

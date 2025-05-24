@@ -62,8 +62,7 @@ class ReportCounter {
                     const times = this.lastUpdateTimes[key].times;
                     if (times.length > 1) str += ` (avg ${(times.reduce((sum, time) => sum + time, 0) / times.length / 1000).toFixed(2)}s)`;
                     this.counts[key] = 0;
-                    if (key) return `'${key}': ${str}`;
-                    else return str;
+                    return key ? `'${key}': ${str}` : str;
                 })
                 .join(', ');
             console.log(`${this.label}: [${timestamp}] received (${elapsed} mins) ${countStr}`);
@@ -73,7 +72,7 @@ class ReportCounter {
     end() {
         if (this.intervalId) {
             clearInterval(this.intervalId);
-            this.intervalId = null;
+            this.intervalId = undefined;
         }
     }
 }

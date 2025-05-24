@@ -34,10 +34,12 @@ function configLoad(configPath) {
 const conf = configLoad(configPath);
 const config = {
     mqtt: {
+        servers: [
+            { server: conf.MQTT, topics: ['weather/#', 'sensors/#', 'snapshots/#', 'server/#'] },
+            { server: conf.SOURCE_AIRCRAFT_ADSB_MQTT_SERVER, topics: ['adsb/#'] },
+        ],
         broker: conf.MQTT,
-        username: '',
-        password: '',
-        clientId: 'archiver-collector-' + Math.random().toString(16).substring(2, 8),
+        clientId: 'archiver-collector-' + Math.random().toString(16).slice(2, 8),
         topics: ['weather/#', 'sensors/#', 'snapshots/#', 'server/#'],
     },
     storage: {
@@ -64,7 +66,7 @@ const archiverConf = {
     messages: {
         enabled: true,
         functions: require('./collector-messages.js'),
-        topicPattern: (topic) => topic.startsWith('weather/') || topic.startsWith('sensors/') || topic.startsWith('server/'),
+        topicPattern: (topic) => topic.startsWith('weather/') || topic.startsWith('sensors/') || topic.startsWith('server/') || topic.startsWith('adsb/'),
     },
     snapshots: {
         enabled: true,
@@ -77,12 +79,12 @@ const archiverExec = {};
 
 function __archiverExecute(name, func) {
     Object.entries(archiverConf)
-        .filter(([type, conf]) => conf.enabled && conf.functions?.[name])
+        .filter(([_, conf]) => conf.enabled && conf.functions?.[name])
         .forEach(([type, conf]) => {
             try {
                 if (!func || func(type, conf)) conf.functions[name]();
-            } catch (error) {
-                console.error(`archiver: ${name}: error executing for ${type}:`, error);
+            } catch (e) {
+                console.error(`archiver: ${name}: error executing for ${type}:`, e);
             }
         });
 }
@@ -107,7 +109,7 @@ function __archiverPeriodic() {
         const prefix = `archiver: ${name}: ${timestamp} `;
         if (task.shouldRun(now, timestamp, task.lastRun)) {
             console.log(prefix + `running`);
-            __archiverExecute(name, (type, conf) => {
+            __archiverExecute(name, (type, _) => {
                 console.log(prefix + `running for ${type}`);
                 return true;
             });
@@ -116,7 +118,7 @@ function __archiverPeriodic() {
     });
 }
 
-let __archiverPeriodicInterval = null;
+let __archiverPeriodicInterval;
 function __archiverPeriodicBegin() {
     __archiverPeriodic();
     __archiverPeriodicInterval = setInterval(__archiverPeriodic, SCHEDULER_CHECK_INTERVAL);
@@ -124,7 +126,7 @@ function __archiverPeriodicBegin() {
 function __archiverPeriodicEnd() {
     if (__archiverPeriodicInterval) {
         clearInterval(__archiverPeriodicInterval);
-        __archiverPeriodicInterval = null;
+        __archiverPeriodicInterval = undefined;
     }
 }
 
@@ -143,7 +145,7 @@ function archiverBegin() {
 function archiverEnd() {
     if (archiverLoaded) {
         __archiverPeriodicEnd();
-        __archiverExecute('end', (type, conf) => {
+        __archiverExecute('end', (type, _) => {
             archiverExec[type].report.end();
             delete archiverExec[type].report;
             return true;

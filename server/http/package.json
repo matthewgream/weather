@@ -14,7 +14,7 @@
     "web-push": "^3.6.7"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "devDependencies": {
     "@brettz9/eslint-plugin": "^1.0.4",
