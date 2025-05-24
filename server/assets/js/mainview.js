@@ -225,7 +225,7 @@ function createSectionDataSummary(vars) {
     let details_list = [];
     if (temp !== undefined && humidity !== undefined && pressure !== undefined) {
         //
-        if (temp !== undefined && humidity !== undefined && pressure === undefined) {
+        if (temp !== undefined && humidity !== undefined && pressure !== undefined) {
             const fTemp = outside[0].format(outside[0], temp);
             const fHumidity = outside[1].format(outside[1], humidity);
             const fPressure = outside[2].format(outside[2], pressure);
@@ -337,8 +337,8 @@ function createSectionDataSummary(vars) {
             radiationCpm,
             radiationAcpm,
             radiationUsvh,
-            snowDepth,
-            iceDepth: lakeIceDepth,
+            snowDepth: snowDepth || null,
+            iceDepth: lakeIceDepth || null,
         }); // XXX
     if (weather?.details) analysis += `${weather.details}`;
     if (analysis) summary.push(analysis);
