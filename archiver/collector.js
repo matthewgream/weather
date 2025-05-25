@@ -37,10 +37,9 @@ const config = {
         servers: [
             { server: conf.MQTT, topics: ['weather/#', 'sensors/#', 'snapshots/#', 'server/#'] },
             { server: conf.SOURCE_AIRCRAFT_ADSB_MQTT_SERVER, topics: ['adsb/#'] },
+            { server: 'mqtt://localhost:1883', topics: ['devices/#'] },
         ],
-        broker: conf.MQTT,
         clientId: 'archiver-collector-' + Math.random().toString(16).slice(2, 8),
-        topics: ['weather/#', 'sensors/#', 'snapshots/#', 'server/#'],
     },
     storage: {
         messages: conf.STORAGE + '/messages',
@@ -66,7 +65,12 @@ const archiverConf = {
     messages: {
         enabled: true,
         functions: require('./collector-messages.js'),
-        topicPattern: (topic) => topic.startsWith('weather/') || topic.startsWith('sensors/') || topic.startsWith('server/') || topic.startsWith('adsb/'),
+        topicPattern: (topic) =>
+            topic.startsWith('weather/') ||
+            topic.startsWith('sensors/') ||
+            topic.startsWith('server/') ||
+            topic.startsWith('adsb/') ||
+            topic.startsWith('devices/'),
     },
     snapshots: {
         enabled: true,
