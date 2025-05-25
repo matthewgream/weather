@@ -358,7 +358,7 @@ function createSectionDataSummary(vars) {
             .map(([flight, alerts]) => `${flight} ${alerts.join(', ')}`)
             .join('; ');
         summary.push('');
-        summary.push(`Aircraft ${text}.`);
+        summary.push(`<span class="value">Aircraft alert:</span> ${text}.`);
     }
 
     ////
