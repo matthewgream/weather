@@ -230,10 +230,15 @@ function messageBegin(config) {
 
 function messageEnd() {
     if (__messageCurrentStream) {
-        __messageCurrentStream.end();
+        try {
+            __messageCurrentStream.end();
+        } catch {}
         __messageCurrentStream = undefined;
     }
-    if (__messageInterval) clearInterval(__messageInterval);
+    if (__messageInterval) {
+        clearInterval(__messageInterval);
+        __messageInterval = undefined;
+    }
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

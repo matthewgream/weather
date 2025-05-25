@@ -11,48 +11,7 @@ const SCHEDULER_CHECK_INTERVAL = 60 * 60 * 1000; // Check every 60 minutes if ta
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const fs = require('fs');
-
-const configPath = process.argv[2] || 'secrets.txt';
-
-function configLoad(configPath) {
-    try {
-        const items = {};
-        fs.readFileSync(configPath, 'utf8')
-            .split('\n')
-            .forEach((line) => {
-                const [key, value] = line.split('=').map((s) => s.trim());
-                if (key && value) items[key] = value;
-            });
-        return items;
-    } catch {
-        console.warn(`config: could not load '${configPath}', using defaults (which may not work correctly)`);
-        return {};
-    }
-}
-
-const conf = configLoad(configPath);
-const config = {
-    mqtt: {
-        servers: [
-            { server: conf.MQTT, topics: ['weather/#', 'sensors/#', 'snapshots/#', 'server/#'] },
-            { server: conf.SOURCE_AIRCRAFT_ADSB_MQTT_SERVER, topics: ['adsb/#'] },
-            { server: 'mqtt://localhost:1883', topics: ['devices/#'] },
-        ],
-        clientId: 'archiver-collector-' + Math.random().toString(16).slice(2, 8),
-    },
-    storage: {
-        messages: conf.STORAGE + '/messages',
-        snapshots: conf.STORAGE + '/snapshots',
-        timelapse: conf.STORAGE + '/timelapse',
-    },
-};
-
-const configList = Object.entries(conf)
-    .map(([k, v]) => k.toLowerCase() + '=' + v)
-    .join(', ');
-
-console.log(`config: loaded using '${configPath}': ${configList}`);
+const config = require('./collector-config.js')({ file: process.argv[2] || 'secrets.txt' });
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -65,17 +24,12 @@ const archiverConf = {
     messages: {
         enabled: true,
         functions: require('./collector-messages.js'),
-        topicPattern: (topic) =>
-            topic.startsWith('weather/') ||
-            topic.startsWith('sensors/') ||
-            topic.startsWith('server/') ||
-            topic.startsWith('adsb/') ||
-            topic.startsWith('devices/'),
+        matches: (topic) => config.topics.messages.some((t) => topic.startsWith(t)),
     },
     snapshots: {
         enabled: true,
         functions: require('./collector-snapshots.js'),
-        topicPattern: (topic) => topic.startsWith('snapshots/'),
+        matches: (topic) => config.topics.snapshots.some((t) => topic.startsWith(t)),
     },
 };
 
@@ -161,7 +115,7 @@ function archiverEnd() {
 function archiverProcess(topic, message) {
     if (archiverLoaded) {
         __archiverExecute('process', (type, conf) => {
-            if (conf.topicPattern(topic)) {
+            if (conf.matches(topic)) {
                 conf.functions.process(topic, message);
                 archiverExec[type].report.update(topic);
             }
