@@ -34,25 +34,11 @@ console.log(`Loaded 'redirect' using 'http -> https'`);
 const credentials = require('./server-function-credentials.js')(configData.FQDN);
 console.log(`Loaded 'credentials' using '${configData.FQDN}'`);
 
-const diagnostics = require('./server-function-diagnostics')(app, { port: 80, path: '/status' }); // XXX PORT_EXTERNAL
+const diagnostics = require('./server-function-diagnostics.js')(app, { port: 80, path: '/status' }); // XXX PORT_EXTERNAL
 console.log(`Loaded 'diagnostics' on '/status'`);
 
-app.use((req, res, next) => {
-    if (!req.headers.authorization) {
-        res.setHeader('WWW-Authenticate', 'Basic');
-        return res.status(401).send('Authentication required');
-    }
-    try {
-        const pass = Buffer.from(req.headers.authorization.split(' ')[1], 'base64').toString().split(':')?.[1];
-        if (pass == configData.PASS) return next();
-    } catch {
-        res.setHeader('WWW-Authenticate', 'Basic');
-        return res.status(400).send('Authentication malformedc');
-    }
-    res.setHeader('WWW-Authenticate', 'Basic');
-    return res.status(401).send('Authentication failed');
-});
-console.log(`Loaded 'authentication' using 'pass=${configData.PASS}'`);
+require('./server-function-authentication.js')(app, { type: 'basic', basic: { user: '', pass: configData.PASS } });
+console.log(`Loaded 'authentication' using 'type=basic, pass=${configData.PASS}'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
