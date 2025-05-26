@@ -137,10 +137,13 @@ console.log(`Loaded 'vars' on '/vars' using 'vars=[${configData.CONTENT_VIEW_VAR
 
 const mainviewTemplate = require('./server-function-cache-ejs.js')(path.join(configData.DATA_VIEWS, 'server-mainview.ejs'));
 diagnostics.registerDiagnosticsSource('Cache::mainview', () => mainviewTemplate.getInfo());
-app.get('/', mainviewTemplate.routeHandler(async (req) => ({
-    vars: server_vars.render(),
-    data: await server_data.render(),
-})));
+app.get(
+    '/',
+    mainviewTemplate.routeHandler(async () => ({
+        vars: server_vars.render(),
+        data: await server_data.render(),
+    }))
+);
 console.log(`Loaded '/' using 'server-mainview' && data/vars`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

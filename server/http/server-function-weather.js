@@ -453,23 +453,20 @@ function lunarEclipseVisibilityLocation(eclipseType, eclipseTimes, latitude, lon
     const hourAngleOffset = longitude / 15; // 15 degrees = 1 hour
     const phases = ['start', 'peak', 'end'];
     for (const phase of phases) {
-        const time = eclipseTimes[phase];
-        const altitude = getMoonAltitude(time, latitude, longitude);
-        const visible = altitude > 0; // Above horizon
-        const localTime = new Date(time + hourAngleOffset * 60 * 60 * 1000);
-        result.phaseVisibility[phase] = { time, localTime, visible, altitude };
-        if (visible) result.visible = true;
+        const time = eclipseTimes[phase],
+            altitude = getMoonAltitude(time, latitude, longitude);
+        result.phaseVisibility[phase] = { time, localTime: new Date(time + hourAngleOffset * 60 * 60 * 1000), visible: altitude > 0, altitude };
+        if (altitude > 0) result.visible = true;
     }
     if (result.visible) {
         if (result.phaseVisibility.peak.visible) result.bestViewingTime = result.phaseVisibility.peak.time;
-        else {
-            let highestAltitude = -1;
-            for (const phase of phases)
+        else
+            phases.reduce((highestAltitude, phase) => {
                 if (result.phaseVisibility[phase].visible && result.phaseVisibility[phase].altitude > highestAltitude) {
-                    highestAltitude = result.phaseVisibility[phase].altitude;
                     result.bestViewingTime = result.phaseVisibility[phase].time;
-                }
-        }
+                    return result.phaseVisibility[phase].altitude;
+                } else return highestAltitude;
+            }, -1);
     }
     if (result.visible) {
         const moonRiseset = getMoonRiseset(eclipseTimes.peak, latitude, longitude);
@@ -484,32 +481,26 @@ function lunarEclipseVisibilityLocation(eclipseType, eclipseTimes, latitude, lon
     return result;
 }
 
-function lunarEclipseVisiblityRegions(date) {
-    const jd = __jdFromDate(date);
-    const sunPos = getSunPosition(jd);
+const inRange = (lon, west, east) => (west > east ? lon >= west || lon <= east : lon >= west && lon <= east);
+function lunarEclipseVisibilityRegions(date) {
+    const sunPos = getSunPosition(__jdFromDate(date));
     const antiSolarLon = (sunPos.longitude + 180) % 360;
-    const regionRanges = [
-        { name: 'North America', west: -140, east: -60 },
-        { name: 'South America', west: -80, east: -35 },
-        { name: 'Europe', west: -10, east: 40 },
-        { name: 'Africa', west: -20, east: 50 },
-        { name: 'Western Asia', west: 40, east: 75 },
-        { name: 'Central Asia', west: 75, east: 95 },
-        { name: 'Eastern Asia', west: 95, east: 145 },
-        { name: 'Australia', west: 115, east: 155 },
-        { name: 'Pacific Ocean', west: 155, east: -140 },
-    ];
-    let regions = [];
-    for (const region of regionRanges) {
-        if (region.west > region.east) {
-            if ((antiSolarLon >= region.west && antiSolarLon <= 180) || (antiSolarLon >= -180 && antiSolarLon <= region.east)) regions.push(region.name);
-        } else {
-            if (antiSolarLon >= region.west && antiSolarLon <= region.east) regions.push(region.name);
-        }
-    }
-    if (regions.length === 0) regions.push('Half of Earth (night side during eclipse)');
-    else regions.push(date.getMonth() >= 3 && date.getMonth() <= 8 ? 'Antarctic regions' : 'Arctic regions');
-    return regions;
+    const regions = [
+        { name: 'North America', range: [220, 300] },
+        { name: 'South America', range: [280, 325] },
+        { name: 'Europe', range: [350, 40] },
+        { name: 'Africa', range: [340, 50] },
+        { name: 'Western Asia', range: [40, 75] },
+        { name: 'Central Asia', range: [75, 95] },
+        { name: 'Eastern Asia', range: [95, 145] },
+        { name: 'Australia', range: [115, 155] },
+        { name: 'Pacific Ocean', range: [155, 220] },
+    ]
+        .filter((r) => inRange(antiSolarLon, ...r.range))
+        .map((r) => r.name);
+    return regions.length > 0
+        ? [...regions, date.getMonth() >= 3 && date.getMonth() <= 8 ? 'Antarctic regions' : 'Arctic regions']
+        : ['Half of Earth (night side during eclipse)'];
 }
 
 function __getLunarEclipse(date, latitude, longitude) {
@@ -537,7 +528,7 @@ function __getLunarEclipse(date, latitude, longitude) {
         times = lunarEclipseTimes(type, peak, duration);
     const visibilityLocation =
             latitude !== undefined && longitude !== undefined ? lunarEclipseVisibilityLocation(type, times, latitude, longitude) : { visible: 'unknown' },
-        visibilityRegions = lunarEclipseVisiblityRegions(times.peak);
+        visibilityRegions = lunarEclipseVisibilityRegions(times.peak);
 
     return {
         isEclipse: true,
@@ -623,34 +614,30 @@ function solarEclipseVisibilityLocation(eclipseType, pathData, latitude, longitu
         const pathLatitude = pathData.simplifiedPath[1].latitude,
             pathLongitude = pathData.simplifiedPath[1].longitude;
         const distanceToPath = Math.sqrt(Math.pow(latitude - pathLatitude, 2) + Math.pow(((longitude - pathLongitude + 180) % 360) - 180, 2));
-        if (distanceToPath < 0.5) return `in path of ${pathData.pathType}`;
-        else if (distanceToPath < 70) return 'partial visibility';
-        else return 'not visible';
+        return distanceToPath < 0.5 ? `in path of ${pathData.pathType}` : distanceToPath < 70 ? 'partial visibility' : 'not visible';
     }
 }
-function solarEclipseVisibiltyRegions(pathData) {
-    const centralLatitude = pathData.simplifiedPath[1].latitude,
-        centralLongitude = pathData.simplifiedPath[1].longitude;
-    let regions = [];
-    if (centralLatitude > 30) regions.push('Northern regions');
-    else if (centralLatitude < -30) regions.push('Southern regions');
-    else regions.push('Equatorial regions');
-    if ((centralLongitude >= -20 && centralLongitude <= 60) || centralLongitude >= 330) {
-        if (centralLatitude > 0) regions.push('Europe', 'Western/Central Asia');
-        else regions.push('Africa');
-    } else if (centralLongitude >= 60 && centralLongitude <= 150) {
-        if (centralLatitude > 0) regions.push('Eastern Asia');
-        else regions.push('Australia', 'Oceania');
-    } else if (centralLongitude >= 150 && centralLongitude <= 240) {
-        if (centralLatitude > 0) regions.push('North America');
-        else regions.push('Pacific Ocean');
-    } else if (centralLongitude >= 240 && centralLongitude <= 330) {
-        if (centralLatitude > 0) regions.push('Central America');
-        else regions.push('South America');
-    }
-    if (centralLatitude > 60) regions.push('Arctic regions');
-    else if (centralLatitude < -60) regions.push('Antarctic regions');
-    return regions;
+function solarEclipseVisibilityRegions(pathData) {
+    let { latitude, longitude } = pathData.simplifiedPath[1];
+    longitude = ((longitude % 360) + 360) % 360;
+    const regions = {
+        'Northern regions': () => latitude > 30 && latitude <= 60,
+        'Southern regions': () => latitude < -30 && latitude >= -60,
+        'Equatorial regions': () => latitude >= -30 && latitude <= 30,
+        'Arctic regions': () => latitude > 60,
+        'Antarctic regions': () => latitude < -60,
+        'Europe': () => latitude > 0 && (longitude >= 330 || longitude <= 60),
+        'Western/Central Asia': () => latitude > 0 && (longitude >= 330 || longitude <= 60),
+        'Africa': () => latitude <= 0 && (longitude >= 330 || longitude <= 60),
+        'Eastern Asia': () => latitude > 0 && longitude >= 60 && longitude <= 150,
+        'Australia': () => latitude <= 0 && longitude >= 60 && longitude <= 150,
+        'Oceania': () => latitude <= 0 && longitude >= 60 && longitude <= 150,
+        'North America': () => latitude > 0 && longitude >= 150 && longitude <= 240,
+        'Pacific Ocean': () => latitude <= 0 && longitude >= 150 && longitude <= 240,
+        'Central America': () => latitude > 0 && longitude >= 240 && longitude <= 330,
+        'South America': () => latitude <= 0 && longitude >= 240 && longitude <= 330,
+    };
+    return Object.keys(regions).filter((region) => regions[region]());
 }
 
 function __getSolarEclipse(date, latitude, longitude) {
@@ -683,7 +670,7 @@ function __getSolarEclipse(date, latitude, longitude) {
         times = { peak },
         path = solarEclipsePath(type, jd, moonPos, sunPos);
     const visibilityLocation = latitude !== undefined && longitude !== undefined ? solarEclipseVisibilityLocation(type, path, latitude, longitude) : 'unknown',
-        visibilityRegions = solarEclipseVisibiltyRegions(path);
+        visibilityRegions = solarEclipseVisibilityRegions(path);
 
     return {
         isEclipse: true,
@@ -715,7 +702,7 @@ function getSolarEclipse(date = new Date(), latitude = undefined, longitude = un
 function isNearSolstice(date = new Date(), hemisphere = 'northern', daysWindow = 7) {
     const year = date.getFullYear(),
         msPerDay = 1000 * 60 * 60 * 24,
-        isNorthern = hemisphere.toLowerCase() === 'northern';
+        isNorthern = hemisphere === 'northern';
     const currentYearSummerSolstice = new Date(year, 5, 21),
         currentYearWinterSolstice = new Date(year, 11, 21); // June 21 / December 21
     const prevYearWinterSolstice = new Date(year - 1, 11, 21),
@@ -762,7 +749,7 @@ function isNearSolstice(date = new Date(), hemisphere = 'northern', daysWindow =
 function isNearEquinox(date = new Date(), hemisphere = 'northern', daysWindow = 7) {
     const year = date.getFullYear(),
         msPerDay = 1000 * 60 * 60 * 24,
-        isNorthern = hemisphere.toLowerCase() === 'northern';
+        isNorthern = hemisphere === 'northern';
     const springEquinox = new Date(year, 2, 20),
         autumnEquinox = new Date(year, 8, 22); // March 20 / September 22
     const firstEquinox = isNorthern ? springEquinox : autumnEquinox,
@@ -810,7 +797,7 @@ function isNearEquinox(date = new Date(), hemisphere = 'northern', daysWindow = 
 function getCrossQuarterDay(date = new Date(), hemisphere = 'northern', daysWindow = 3) {
     const year = date.getFullYear(),
         msPerDay = 1000 * 60 * 60 * 24,
-        isNorthern = hemisphere.toLowerCase() === 'northern';
+        isNorthern = hemisphere === 'northern';
     const imbolc = new Date(year, 1, 1),
         beltane = new Date(year, 4, 1),
         lughnasadh = new Date(year, 7, 1),
@@ -1219,7 +1206,7 @@ function getWeatherInterpretation(location_data, data) {
 
     // Season-specific interpretations for Nordic region
     if (season && temp !== undefined) {
-        switch (season.toLowerCase()) {
+        switch (season) {
             case 'winter': {
                 if (temp > 5) results.phenomena.push('unusually mild winter day');
                 if (temp < -20) results.phenomena.push('severe Nordic winter conditions');
@@ -1469,19 +1456,11 @@ const calculateComfortLevel = (temp, humidity, windSpeed, solarRad) => {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function getSeason(hemisphere = 'northern') {
-    // Nordic season adjustment - spring comes later, winter comes earlier
-    const month = new Date().getMonth();
-    if (hemisphere.toLowerCase() === 'northern') {
-        if (month >= 3 && month <= 5) return 'spring';
-        if (month >= 6 && month <= 8) return 'summer';
-        if (month >= 9 && month <= 10) return 'autumn';
-        return 'winter'; // Months 11, 0, 1, 2 (Nov-Feb)
-    } else {
-        if (month >= 3 && month <= 5) return 'autumn';
-        if (month >= 6 && month <= 8) return 'winter';
-        if (month >= 9 && month <= 10) return 'spring';
-        return 'summer';
-    }
+    const seasons = {
+        northern: ['winter', 'winter', 'winter', 'spring', 'spring', 'spring', 'summer', 'summer', 'summer', 'autumn', 'autumn', 'winter'],
+        southern: ['summer', 'summer', 'summer', 'autumn', 'autumn', 'autumn', 'winter', 'winter', 'winter', 'spring', 'spring', 'summer'],
+    };
+    return seasons[hemisphere][new Date().getMonth()];
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

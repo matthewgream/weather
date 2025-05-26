@@ -45,10 +45,11 @@ function __jdToYMD(jd) {
         C = Math.floor((B - 122.1) / 365.25),
         D = Math.floor(365.25 * C),
         E = Math.floor((B - D) / 30.6001);
+    const month = E < 14 ? E - 1 : E - 13;
     return {
         day: B - D - Math.floor(30.6001 * E) + f,
-        month: E < 14 ? E - 1 : E - 13,
-        year: (E < 14 ? E - 1 : E - 13) > 2 ? C - 4716 : C - 4715,
+        month,
+        year: month > 2 ? C - 4716 : C - 4715,
     };
 }
 function __jdFromDate(date) {
