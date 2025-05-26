@@ -9,6 +9,7 @@ ExecStart=/bin/bash -c '. /opt/weather/server/scripts/secrets.txt && /opt/weathe
 ExecStart=/bin/bash -c '. /opt/weather/server/scripts/secrets.txt && /opt/weather/server/scripts/cloudflare_dns_update'
 ExecStart=/bin/bash -c '. /opt/weather/server/scripts/secrets2.txt && /opt/weather/server/scripts/upnp_sshd_forwarding'
 SuccessExitStatus=0
+SyslogIdentifier=weather-start
 
 [Install]
 WantedBy=multi-user.target

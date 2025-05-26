@@ -335,17 +335,13 @@ function createSectionDataSummary(vars) {
     summary.push('');
 
     ////
+    let alerts = [];
     let analysis = '';
     if (interpretation?.details) analysis += `${interpretation.details}`;
+    if (interpretation?.alerts?.length > 0) alerts.push(...interpretation.alerts);
     if (analysis) summary.push(analysis);
-
-    ////
-    let warnings_list = [];
-    if (interpretation?.alerts?.length > 0) warnings_list.push(...interpretation.alerts);
-    if (internalBatteryWH65 !== 'OFF') warnings_list.push('faulty battery for WH66');
-    let warnings = '';
-    if (warnings_list.length > 0) warnings = `WARNING: ${joinand(warnings_list)}.`;
-    if (warnings) summary.push(warnings);
+    if (internalBatteryWH65 !== 'OFF') alerts.push('faulty battery for WH66');
+    if (alerts.length > 0) summary.push(`WARNING: ${joinand(alerts)}.`);
 
     ////
     if (aircraft?.alerts?.length > 0) {

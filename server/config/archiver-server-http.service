@@ -12,6 +12,7 @@ TimeoutStopSec=10s
 KillMode=mixed
 Restart=on-failure
 RestartSec=5s
+SyslogIdentifier=server-archiver
 
 [Install]
 WantedBy=multi-user.target

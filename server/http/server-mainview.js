@@ -178,6 +178,20 @@ const mqtt_client = require('mqtt').connect(configData.MQTT, {
 mqtt_client.on('connect', () =>
     mqtt_client.subscribe(configData.CONTENT_DATA_SUBS, () => console.log(`mqtt connected & subscribed for '${configData.CONTENT_DATA_SUBS}'`))
 );
+const weather_alerts = {};
+const weather_expiry = 60 * 60 * 1000; // 60 minutes
+function weather_alerts_update(alerts) {
+    const now = Date.now();
+    alerts
+        .filter((alert) => !weather_alerts[alert])
+        .forEach((alert) => {
+            weather_alerts[alert] = now;
+            notifications.notify(alert);
+        });
+    Object.entries(weather_alerts)
+        .filter(([alert, timestamp]) => !alerts.includes(alert) && timestamp < now - weather_expiry)
+        .forEach(([alert, timestamp]) => delete weather_alerts[alert]);
+}
 mqtt_client.on('message', (topic, message) => {
     if (topic === 'snapshots/imagedata') receive_snapshotImagedata(message);
     else if (topic === 'snapshots/metadata') receive_snapshotMetadata(message);
@@ -186,9 +200,9 @@ mqtt_client.on('message', (topic, message) => {
         try {
             server_vars.update(topic, JSON.parse(message.toString()));
             if (topic == 'weather/branna' || topic == 'sensors/radiation') {
-                const results = getWeatherInterpretation(server_vars.variables());
-                //console.log(`INTERPRETATION -- alerts='${results.alerts.length > 0 ? results.alerts.join('|') : ''}', details='${results.details || 'none'}'`);
-                server_vars.update('interpretation', results);
+                const interpretation = getWeatherInterpretation(server_vars.variables());
+                server_vars.update('interpretation', interpretation);
+                weather_alerts_update(interpretation.alerts);
             }
         } catch (e) {
             console.error(`Error processing mqtt message (topic='${topic}':`, e);
