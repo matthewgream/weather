@@ -135,14 +135,12 @@ const server_vars = require('./server-function-vars.js')(app, '/vars', {
 });
 console.log(`Loaded 'vars' on '/vars' using 'vars=[${configData.CONTENT_VIEW_VARS.join(', ')}]'`);
 
-// const mainviewTemplate = require('./server-function-cache-ejs.js')(path.join(configData.DATA_VIEWS, 'server-mainview.ejs'));
-// app.use(mainviewTemplate.middleware);
-app.get('/', async (req, res) =>
-    res.render('server-mainview', {
-        vars: server_vars.render(),
-        data: await server_data.render(),
-    })
-);
+const mainviewTemplate = require('./server-function-cache-ejs.js')(path.join(configData.DATA_VIEWS, 'server-mainview.ejs'));
+diagnostics.registerDiagnosticsSource('Cache::mainview', () => mainviewTemplate.getInfo());
+app.get('/', mainviewTemplate.routeHandler(async (req) => ({
+    vars: server_vars.render(),
+    data: await server_data.render(),
+})));
 console.log(`Loaded '/' using 'server-mainview' && data/vars`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
