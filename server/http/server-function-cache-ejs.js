@@ -32,22 +32,25 @@ class SingleEJSTemplateCache {
             cache: false,
             compileDebug: false,
             filename: this.templatePath,
-            ...(options.ejsOptions || {}),
+            ...options.ejsOptions,
         };
         this.cached = undefined;
         this.watcher = undefined;
         this.isLoading = true;
-        this.loadTemplate().then(() => {
-            this.isLoading = false;
-        }).catch(e => {
-            console.error(`cache-ejs: failed to load template:`, e);
-            this.isLoading = false;
-        });
+        this.loadTemplate()
+            .then(() => {
+                this.isLoading = false;
+            })
+            .catch((e) => {
+                console.error(`cache-ejs: failed to load template:`, e);
+                this.isLoading = false;
+            });
     }
 
     async loadTemplate() {
         try {
-            const originalSource = fs.readFileSync(this.templatePath, 'utf8'), originalSize = Buffer.byteLength(originalSource, 'utf8');
+            const originalSource = fs.readFileSync(this.templatePath, 'utf8'),
+                originalSize = Buffer.byteLength(originalSource, 'utf8');
             let templateSource = originalSource;
             if (this.minify) {
                 templateSource = await this.minifyTemplateSource(originalSource);
@@ -56,18 +59,20 @@ class SingleEJSTemplateCache {
             const template = ejs.compile(templateSource, this.ejsOptions);
             const etag = crypto.createHash('md5').update(originalSource).digest('hex');
             const lastModified = fs.statSync(this.templatePath).mtime?.toUTCString();
-            this.cached = { 
-                template, 
-                originalSource, 
+            this.cached = {
+                template,
+                originalSource,
                 minifiedSource: templateSource,
-                etag, 
-                lastModified, 
-                originalSize, 
+                etag,
+                lastModified,
+                originalSize,
                 minifiedSize: Buffer.byteLength(templateSource, 'utf8'),
-                loadedAt: new Date() 
+                loadedAt: new Date(),
             };
             if (this.watch) this.setupWatcher();
-            console.log(`cache-ejs: template load '${this.templateName}' from '${this.templatePath}' (${originalSize} bytes${this.minify ? ` to ${this.cached.minifiedSize} bytes` : ''})`);
+            console.log(
+                `cache-ejs: template load '${this.templateName}' from '${this.templatePath}' (${originalSize} bytes${this.minify ? ' to ' + this.cached.minifiedSize + ' bytes' : ''})`
+            );
         } catch (e) {
             console.error(`cache-ejs: template load '${this.templateName}' from '${this.templatePath}' error:`, e);
             throw e;
@@ -79,14 +84,14 @@ class SingleEJSTemplateCache {
             this.watcher = fs.watchFile(this.templatePath, { interval: 1000 }, (curr, prev) => {
                 if (curr.mtime !== prev.mtime) {
                     console.log(`cache-ejs: template reload '${this.templateName}' (file changed)`);
-                    this.loadTemplate().catch(e => console.error(`cache-ejs: template reload failed:`, e));
+                    this.loadTemplate().catch((e) => console.error(`cache-ejs: template reload failed:`, e));
                 }
             });
         } catch (e) {
             console.warn(`cache-ejs: template watch '${this.templatePath}' error:`, e);
         }
     }
-    render(data = {}, options = {}) {
+    render(data = {}) {
         if (!this.cached) throw new Error(`Template '${this.templateName}' not loaded`);
         try {
             console.log(`cache-ejs: rendering '${this.templateName}' with data keys: [${Object.keys(data).join(', ')}]`);
@@ -119,17 +124,17 @@ class SingleEJSTemplateCache {
                 removeStyleLinkTypeAttributes: true,
                 useShortDoctype: true,
                 minifyCSS: false, // Don't minify CSS in EJS templates (might break EJS tags)
-                minifyJS: false,  // Don't minify JS in EJS templates (might break EJS tags)
+                minifyJS: false, // Don't minify JS in EJS templates (might break EJS tags)
                 preserveLineBreaks: false,
                 removeEmptyAttributes: true,
                 removeOptionalTags: false,
                 removeAttributeQuotes: false,
                 ignoreCustomFragments: [
-                    /<%[\s\S]*?%>/,     // EJS tags
-                    /<%-[\s\S]*?%>/,    // EJS unescaped output
-                    /<%=[\s\S]*?%>/,    // EJS escaped output
-                    /<%#[\s\S]*?%>/     // EJS comments
-                ]
+                    /<%[\S\s]*?%>/, // eslint-disable-line regexp/match-any
+                    /<%-[\S\s]*?%>/, // eslint-disable-line regexp/match-any
+                    /<%=[\S\s]*?%>/, // eslint-disable-line regexp/match-any
+                    /<%#[\S\s]*?%>/, // eslint-disable-line regexp/match-any
+                ],
             });
             if (!minified) {
                 console.warn('cache-ejs: html-minifier-terser returned undefined for template, using fallback');
@@ -144,9 +149,9 @@ class SingleEJSTemplateCache {
 
     fallbackMinifyTemplate(templateSource) {
         return templateSource
-            .replace(/<!--[\S\s]*?-->/g, '') // Remove HTML comments but preserve EJS
-            .replace(/>\s+</g, '><') // Remove whitespace between tags
-            .replace(/\s+/g, ' ') // Collapse multiple spaces
+            .replaceAll(/<!--[\S\s]*?-->/, '') // eslint-disable-line regexp/match-any
+            .replaceAll(/>\s+</, '><')
+            .replaceAll(/\s+/, ' ')
             .trim();
     }
     createMiddleware() {
@@ -175,8 +180,7 @@ class SingleEJSTemplateCache {
                         console.error(`cache-ejs: error rendering '${templateName}':`, e);
                         console.warn(`cache-ejs: falling back to original render for '${templateName}':`, e.message);
                     }
-                } else 
-                    console.log(`cache-ejs: passing through to original render for '${templateName}'`);
+                } else console.log(`cache-ejs: passing through to original render for '${templateName}'`);
                 originalRender.call(res, templateName, data, callback);
             };
             next();
@@ -199,7 +203,7 @@ class SingleEJSTemplateCache {
     formatSize(bytes) {
         if (bytes === 0) return '0B';
         const i = Math.floor(Math.log(bytes) / Math.log(1024));
-        return parseFloat((bytes / Math.pow(1024, i)).toFixed(1)) + ['B', 'KB', 'MB', 'GB'][i];
+        return Number.parseFloat((bytes / Math.pow(1024, i)).toFixed(1)) + ['B', 'KB', 'MB', 'GB'][i];
     }
     dispose() {
         if (this.watcher) {
@@ -217,7 +221,7 @@ module.exports = function (templatePath, options = {}) {
     const cache = new SingleEJSTemplateCache(templatePath, options);
     return {
         middleware: cache.createMiddleware(),
-        render: (data, options) => cache.render(data, options),
+        render: (data) => cache.render(data),
         getInfo: () => cache.getInfo(),
         dispose: () => cache.dispose(),
     };
@@ -225,4 +229,3 @@ module.exports = function (templatePath, options = {}) {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
-

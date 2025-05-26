@@ -78,7 +78,10 @@ class StaticFileCache {
     initializeMinifiers() {
         this.minifiers_options = {
             cleanCSS: {
-                level: 1, returnPromise: false, rebase: false, compatibility: 'ie9'
+                level: 1,
+                returnPromise: false,
+                rebase: false,
+                compatibility: 'ie9',
             },
             terser: {
                 compress: {
