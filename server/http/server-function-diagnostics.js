@@ -91,10 +91,13 @@ class DiagnosticsManager {
         this.memoryLogs = new MemoryLogsManager({ maxSize: options.logLimitStorage || LOGS_INMEMORY_MAXSIZE });
         this.requestStats = new RequestStatsManager();
         this.additionalDiagnostics = [];
-        app.use(expressStatus({ port: options.port || 80, path: (options.path || '') + '/internal' }));
+        const basePath = options.path || '',
+            basePort = options.port || 80;
+        app.use(expressStatus({ port: basePort, path: basePath + '/internal' }));
         app.use(morgan(options.morganFormat || 'combined', { stream: this.memoryLogs.createLogStream() }));
         app.use(this.requestStats.createMiddleware());
-        app.get((options.path || '') + '/diagnostics', (req, res) => {
+        app.get(basePath, (req, res) => res.send(this.getPage(basePath)));
+        app.get(basePath + '/diagnostics', (req, res) => {
             const stats = this.requestStats.getStats();
             const uptime = this._formatUptime(Date.now() - stats.startTime);
             const logs = this.memoryLogs.getLogs().slice(-this.logLimitDisplay);
@@ -111,6 +114,31 @@ class DiagnosticsManager {
                 formatValue,
             });
         });
+    }
+    getPage(basePath) {
+        return `<!DOCTYPE html>
+<html>
+<head>
+    <title>Server Status</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0 auto; max-width: 600px; padding: 40px 20px; line-height: 1.6; color: #333; }
+        .status-link { display: block; color: #3182ce; text-decoration: none; padding: 12px 16px; margin: 8px 0; background: white; border-radius: 6px; border: 1px solid #e2e8f0; transition: all 0.2s; }
+        .status-link:hover { background: #ebf8ff; border-color: #3182ce; text-decoration: none; }
+        .status-link-title { font-weight: 600; font-size: 1.1em; }
+        .status-link-desc { color: #718096; font-size: 0.9em; margin-top: 4px; }
+    </style>
+</head>
+<body>
+    <a href="${basePath}/diagnostics" class="status-link">
+        <div class="status-link-title">Diagnostics</div>
+        <div class="status-link-desc">Server information, request statistics, and application insights</div>
+    </a>
+    <a href="${basePath}/internal" class="status-link">
+        <div class="status-link-title">Monitor</div>
+        <div class="status-link-desc">Server performance metrics and resource usage (in real-time)</div>
+    </a>
+</body>
+</html>`;
     }
     registerDiagnosticsSource(name, sourceFunction) {
         if (typeof sourceFunction !== 'function') {
