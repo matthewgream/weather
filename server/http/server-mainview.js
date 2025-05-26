@@ -38,6 +38,27 @@ configData.LOCATION = {
     hemisphere: 'northern',
     timezone: 'Europe/Stockholm',
 };
+configData.CACHE = {
+	static: {
+		js: {
+			mangle: {
+/*
+				toplevel: true,
+				reserved: [
+                        'CONFIG',
+                        'SolarCalc',
+                        'getDST',
+                        'create',
+                        'update',
+                        'request',
+                        'schedule',
+                        'weatherPushNotifications',
+				]
+*/
+			}
+		}
+	}
+};
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -71,8 +92,10 @@ console.log(`Loaded 'diagnostics' on '/status'`);
 
 app.use(exp.static(configData.DATA_CACHE));
 console.log(`Loaded 'static' using '${configData.DATA_CACHE}'`);
-app.use('/static', exp.static(configData.DATA_ASSETS));
-console.log(`Loaded 'static' using '/static -> ${configData.DATA_ASSETS}'`);
+const cache_static = require ('./server-function-cache.js')({ directory: configData.DATA_ASSETS, path: '/static', minify: true, options: configData?.CACHE?.static });
+app.use(cache_static.middleware);
+diagnostics.registerDiagnosticsSource('Cache::/static', () => cache_static.getDiagnostics());
+console.log(`Loaded 'cache' using 'directory=${configData.DATA_ASSETS}, path=/static, minify=true': ${cache_static.stats ()}`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -191,7 +214,7 @@ function weather_alerts_update(alerts) {
         });
     Object.entries(weather_alerts)
         .filter(([alert, timestamp]) => !alerts.includes(alert) && timestamp < now - weather_expiry)
-        .forEach(([alert, timestamp]) => delete weather_alerts[alert]);
+        .forEach(([alert, _]) => delete weather_alerts[alert]);
 }
 mqtt_client.on('message', (topic, message) => {
     if (topic === 'snapshots/imagedata') receive_snapshotImagedata(message);
