@@ -5,28 +5,27 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-// npm install terser clean-css html-minifier-terser svgo
 let terser, CleanCSS, htmlMinifier, svgo;
 try {
     terser = require('terser');
 } catch (e) {
-    console.warn('cache: terser not available for JS minification');
+    console.warn('cache: terser not available for JS minification:', e);
 }
 try {
     CleanCSS = require('clean-css');
 } catch (e) {
-    console.warn('cache: clean-css not available for CSS minification');
+    console.warn('cache: clean-css not available for CSS minification:', e);
 }
 try {
     htmlMinifier = require('html-minifier-terser');
 } catch (e) {
-    console.warn('cache: html-minifier-terser not available for HTML minification');
+    console.warn('cache: html-minifier-terser not available for HTML minification:', e);
 }
 try {
     const { optimize } = require('svgo');
     svgo = { optimize };
 } catch (e) {
-    console.warn('cache: svgo not available for SVG minification');
+    console.warn('cache: svgo not available for SVG minification:', e);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -37,7 +36,7 @@ class StaticFileCache {
         this.directory = options.directory || __dirname;
         this.pathPrefix = options.path || '/static';
         this.minify = options.minify || false;
-		this.options = options.options || {};
+        this.options = options.options || {};
         this.ignoreDotFiles = options.ignoreDotFiles !== false; // Default true
         this.cache = new Map();
         this.isLoading = true;
@@ -47,7 +46,7 @@ class StaticFileCache {
             totalOriginalSize: 0,
             totalCompressedSize: 0,
             byExtension: {},
-            loadTime: 0
+            loadTime: 0,
         };
         this.mimeTypes = {
             '.html': 'text/html',
@@ -68,7 +67,15 @@ class StaticFileCache {
             '.pdf': 'application/pdf',
             '.txt': 'text/plain',
             '.xml': 'application/xml',
-            '.webp': 'image/webp'
+            '.webp': 'image/webp',
+        };
+        this.handlers = {
+            '.css': { method: 'minifyCSS', async: false },
+            '.js': { method: 'minifyJS', async: true },
+            '.html': { method: 'minifyHTML', async: false },
+            '.htm': { method: 'minifyHTML', async: false },
+            '.svg': { method: 'minifySVG', async: true },
+            '.json': { method: 'minifyJSON', async: false },
         };
         this.initializeMinifiers();
         this.quickScan();
@@ -78,22 +85,24 @@ class StaticFileCache {
     initializeMinifiers() {
         try {
             this.minifiers = {
-                css: CleanCSS ? new CleanCSS({
-                    level: 1,
-                    returnPromise: false,
-                    rebase: false,
-                    compatibility: 'ie9'
-                }) : null
+                css: CleanCSS
+                    ? new CleanCSS({
+                          level: 1,
+                          returnPromise: false,
+                          rebase: false,
+                          compatibility: 'ie9',
+                      })
+                    : undefined,
             };
             console.log('cache: minifiers:', {
                 css: !!CleanCSS,
                 js: !!terser,
                 html: !!htmlMinifier,
-                svg: !!svgo
+                svg: !!svgo,
             });
         } catch (e) {
             console.error('cache: minifiers initialization failed:', e);
-            this.minifiers = { css: null };
+            this.minifiers = { css: undefined };
         }
     }
 
@@ -108,12 +117,10 @@ class StaticFileCache {
                 if (this.ignoreDotFiles && item.startsWith('.')) continue;
                 const fullPath = path.join(dirPath, item);
                 const stat = fs.statSync(fullPath);
-                if (stat.isDirectory()) 
-                    this.scanDirectory(fullPath);
-                 else if (stat.isFile()) 
-                    this.scanStats.files++;
+                if (stat.isDirectory()) this.scanDirectory(fullPath);
+                else if (stat.isFile()) this.scanStats.files++;
             }
-        } catch (e) {
+        } catch {
             // Ignore scan errors
         }
     }
@@ -138,13 +145,11 @@ class StaticFileCache {
         for (const item of fs.readdirSync(dirPath)) {
             if (this.ignoreDotFiles && item.startsWith('.')) continue;
             const fullPath = path.join(dirPath, item);
-            const relativeItemPath = path.join(relativePath, item).replace(/\\/g, '/');
+            const relativeItemPath = path.join(relativePath, item).replaceAll('\\', '/');
             try {
                 const stat = fs.statSync(fullPath);
-                if (stat.isDirectory()) 
-                    await this.loadDirectory(fullPath, relativeItemPath);
-                 else if (stat.isFile()) 
-                    await this.loadFile(fullPath, relativeItemPath);
+                if (stat.isDirectory()) await this.loadDirectory(fullPath, relativeItemPath);
+                else if (stat.isFile()) await this.loadFile(fullPath, relativeItemPath);
             } catch (e) {
                 console.error(`cache: load error processing '${fullPath}':`, e);
             }
@@ -174,7 +179,7 @@ class StaticFileCache {
                 lastModified: fs.statSync(filePath).mtime.toUTCString(),
                 originalSize: originalContent.length,
                 compressedSize: processedContent.length,
-                isMinified
+                isMinified,
             });
             this.updateStats(ext, originalContent.length, processedContent.length);
         } catch (e) {
@@ -183,43 +188,29 @@ class StaticFileCache {
     }
 
     canMinify(ext) {
-        return ['.css', '.js', '.html', '.htm', '.svg', '.json'].includes(ext);
+        return ext in this.handlers;
     }
 
     async minifyContentAsync(content, ext) {
-        const contentStr = content.toString('utf8');
+        const handler = this.handlers[ext];
+        if (!handler) return content;
         try {
-            switch (ext) {
-                case '.css':
-                    return Buffer.from(this.minifyCSS(contentStr), 'utf8');
-                case '.js':
-                    return Buffer.from(await this.minifyJS(contentStr), 'utf8');
-                case '.html':
-                case '.htm':
-                    return Buffer.from(this.minifyHTML(contentStr), 'utf8');
-                case '.svg':
-                    return Buffer.from(await this.minifySVG(contentStr), 'utf8');
-                case '.json':
-                    return Buffer.from(this.minifyJSON(contentStr), 'utf8');
-                default:
-                    return content;
-            }
+            const contentStr = content.toString('utf8');
+            return Buffer.from(handler.async ? await this[handler.method](contentStr) : this[handler.method](contentStr), 'utf8');
         } catch (e) {
             console.warn(`cache: minification failed for ${ext}:`, e.message);
             return content;
         }
     }
     minifyCSS(css) {
-        if (!this.minifiers.css) 
-            return this.fallbackMinifyCSS(css);
+        if (!this.minifiers.css) return this.fallbackMinifyCSS(css);
         try {
             const result = this.minifiers.css.minify(css);
             if (result.errors && result.errors.length > 0) {
                 console.warn('cache: CSS minification errors:', result.errors);
                 return this.fallbackMinifyCSS(css);
             }
-            if (result.warnings && result.warnings.length > 0) 
-                console.log('cache: CSS minification warnings:', result.warnings);
+            if (result.warnings && result.warnings.length > 0) console.log('cache: CSS minification warnings:', result.warnings);
             return result.styles || css;
         } catch (e) {
             console.warn('cache: CSS minification failed, using fallback:', e.message);
@@ -227,8 +218,7 @@ class StaticFileCache {
         }
     }
     async minifyJS(js) {
-        if (!terser) 
-            return this.fallbackMinifyJS(js);
+        if (!terser) return this.fallbackMinifyJS(js);
         try {
             const options = {
                 compress: {
@@ -247,19 +237,19 @@ class StaticFileCache {
                     sequences: true,
                     side_effects: true,
                     switches: true,
-                    unused: true
+                    unused: true,
                 },
                 mangle: {
                     toplevel: false,
                     properties: false,
                     reserved: [],
-					...(this.options?.js?.mangle || {})
+                    ...this.options?.js?.mangle,
                 },
                 format: {
                     comments: false,
                     beautify: false,
-                    semicolons: true
-                }
+                    semicolons: true,
+                },
             };
             const result = await terser.minify(js, options);
             if (result.error) {
@@ -273,8 +263,7 @@ class StaticFileCache {
         }
     }
     minifyHTML(html) {
-        if (!htmlMinifier) 
-            return this.fallbackMinifyHTML(html);
+        if (!htmlMinifier) return this.fallbackMinifyHTML(html);
         try {
             return htmlMinifier.minify(html, {
                 collapseWhitespace: true,
@@ -284,7 +273,7 @@ class StaticFileCache {
                 removeStyleLinkTypeAttributes: true,
                 useShortDoctype: true,
                 minifyCSS: true,
-                minifyJS: true
+                minifyJS: true,
             });
         } catch (e) {
             console.warn('cache: HTML minification failed, using fallback:', e.message);
@@ -292,16 +281,10 @@ class StaticFileCache {
         }
     }
     async minifySVG(svg) {
-        if (!svgo) 
-            return this.fallbackMinifySVG(svg);
+        if (!svgo) return this.fallbackMinifySVG(svg);
         try {
             const result = await svgo.optimize(svg, {
-                plugins: [
-                    'preset-default',
-                    'removeDoctype',
-                    'removeComments',
-                    'cleanupIds'
-                ]
+                plugins: ['preset-default', 'removeDoctype', 'removeComments', 'cleanupIds'],
             });
             return result.data || svg;
         } catch (e) {
@@ -312,42 +295,43 @@ class StaticFileCache {
     minifyJSON(json) {
         try {
             return JSON.stringify(JSON.parse(json));
-        } catch (e) {
+        } catch {
             return json;
         }
     }
 
     fallbackMinifyCSS(css) {
         return css
-            .replace(/\/\*[\s\S]*?\*\//g, '')
-            .replace(/\s+/g, ' ')
-            .replace(/\s*([{}:;,>+~])\s*/g, '$1')
-            .replace(/;}/g, '}')
+            .replaceAll(/\/\*[\S\s]*?\*\//, '') // eslint-disable-line regexp/match-any
+            .replaceAll(/\s+/, ' ')
+            .replaceAll(/\s*([+,:;>{}~])\s*/, '$1')
+            .replaceAll(';}', '}')
             .trim();
     }
     fallbackMinifyJS(js) {
         return js
-            .replace(/(?:^|\s)\/\/(?![^\r\n]*['"`]).*$/gm, '')
-            .replace(/\/\*[\s\S]*?\*\//g, '')
-            .replace(/\s+/g, ' ')
-            .replace(/\s*([=+\-*/%<>!&|^~?:;,(){}[\]])\s*/g, '$1')
-            .replace(/;}/g, '}')
+            .replaceAll(/(?:^|\s)\/\/(?![^\n\r]*["'`]).*$/m, '')
+            .replaceAll(/\/\*[\S\s]*?\*\//, '') // eslint-disable-line regexp/match-any
+            .replaceAll(/\s+/, ' ')
+            .replaceAll(/\s*([!%&()*+,/:;<=>?[\]^{|}~\-])\s*/, '$1') // eslint-disable-line no-useless-escape
+            .replaceAll(';}', '}')
             .trim();
     }
     fallbackMinifyHTML(html) {
         return html
-            .replace(/<!--[\s\S]*?-->/g, '')
-            .replace(/>\s+</g, '><')
-            .replace(/^\s+|\s+$/gm, '')
-            .replace(/\s+/g, ' ')
+            .replaceAll(/<!--[\S\s]*?-->/, '') // eslint-disable-line regexp/match-any
+            .replaceAll(/>\s+</, '><')
+            .replaceAll(/^\s+/m, '')
+            .replaceAll(/\s+$/m, '')
+            .replaceAll(/\s+/, ' ')
             .trim();
     }
     fallbackMinifySVG(svg) {
         return svg
-            .replace(/<!--[\s\S]*?-->/g, '')
-            .replace(/\s+/g, ' ')
-            .replace(/\s*=\s*/g, '=')
-            .replace(/(<\s+|\s+>)/g, (match) => match.trim())
+            .replaceAll(/<!--[\S\s]*?-->/, '') // eslint-disable-line regexp/match-any
+            .replaceAll(/\s+/, ' ')
+            .replaceAll(/\s*=\s*/, '=')
+            .replaceAll(/(<\s+|\s+>)/, (match) => match.trim())
             .trim();
     }
 
@@ -355,8 +339,7 @@ class StaticFileCache {
         this.stats.files++;
         this.stats.totalOriginalSize += originalSize;
         this.stats.totalCompressedSize += compressedSize;
-        if (!this.stats.byExtension[ext]) 
-            this.stats.byExtension[ext] = { files: 0, originalSize: 0, compressedSize: 0 };
+        if (!this.stats.byExtension[ext]) this.stats.byExtension[ext] = { files: 0, originalSize: 0, compressedSize: 0 };
         this.stats.byExtension[ext].files++;
         this.stats.byExtension[ext].originalSize += originalSize;
         this.stats.byExtension[ext].compressedSize += compressedSize;
@@ -364,14 +347,12 @@ class StaticFileCache {
     formatSize(bytes) {
         if (bytes === 0) return '0B';
         const i = Math.floor(Math.log(bytes) / Math.log(1024));
-        return parseFloat((bytes / Math.pow(1024, i)).toFixed(1)) +  ['B', 'KB', 'MB', 'GB'][i];
+        return Number.parseFloat((bytes / Math.pow(1024, i)).toFixed(1)) + ['B', 'KB', 'MB', 'GB'][i];
     }
 
     getStatsString() {
-        if (this.isLoading) 
-            return `${this.scanStats.files} files, ${this.scanStats.directories} directories`;
-        if (this.stats.files === 0) 
-            return 'no files found';
+        if (this.isLoading) return `${this.scanStats.files} files, ${this.scanStats.directories} directories`;
+        if (this.stats.files === 0) return 'no files found';
         return this.getFinalStatsString();
     }
     getFinalStatsString() {
@@ -379,44 +360,37 @@ class StaticFileCache {
         for (const [ext, stats] of Object.entries(this.stats.byExtension)) {
             const originalSize = this.formatSize(stats.originalSize);
             const compressedSize = this.formatSize(stats.compressedSize);
-            parts.push(`${ext.substring(1) || 'no-ext'} (${stats.files} file${stats.files !== 1 ? 's' : ''}, ${originalSize}` + (stats.originalSize === stats.compressedSize ? '' : ` to ${compressedSize}`) + `)`);
+            parts.push(
+                `${ext.slice(1) || 'no-ext'} (${stats.files} file${stats.files === 1 ? '' : 's'}, ${originalSize}` +
+                    (stats.originalSize === stats.compressedSize ? '' : ` to ${compressedSize}`) +
+                    `)`
+            );
         }
         return parts.join(', ');
     }
 
     createMiddleware() {
         return (req, res, next) => {
-            if (!req.path.startsWith(this.pathPrefix))
-                return next();
-            const requestPath = req.path.substring(this.pathPrefix.length);
-            const cleanPath = requestPath.startsWith('/') ? requestPath.substring(1) : requestPath;
+            if (!req.path.startsWith(this.pathPrefix)) return next();
+            const requestPath = req.path.slice(this.pathPrefix.length);
+            const cleanPath = requestPath.startsWith('/') ? requestPath.slice(1) : requestPath;
             if (this.cache.has(cleanPath)) {
                 const cached = this.cache.get(cleanPath);
-                const ifNoneMatch = req.headers['if-none-match'];
-                if (ifNoneMatch && ifNoneMatch === `"${cached.etag}"`) 
-                    return res.status(304).end();
-                const ifModifiedSince = req.headers['if-modified-since'];
-                if (ifModifiedSince && ifModifiedSince === cached.lastModified)
-                    return res.status(304).end();
+                if (req.headers?.['if-none-match'] === `"${cached.etag}"`) return res.status(304).end();
+                if (req.headers?.['if-modified-since'] === cached.lastModified) return res.status(304).end();
                 res.set('Content-Type', cached.mimeType);
                 res.set('ETag', `"${cached.etag}"`);
                 res.set('Last-Modified', cached.lastModified);
                 res.set('Cache-Control', 'public, max-age=31536000'); // 1 year
-                if (cached.isMinified) 
-                    res.set('X-Minified', 'true');
+                if (cached.isMinified) res.set('X-Minified', 'true');
                 return res.send(cached.content);
             }
             if (this.isLoading) {
                 const filePath = path.join(this.directory, cleanPath);
-                if (fs.existsSync(filePath)) {
-                    const stat = fs.statSync(filePath);
-                    if (stat.isFile()) {
-                        const ext = path.extname(cleanPath).toLowerCase();
-                        const mimeType = this.mimeTypes[ext] || 'application/octet-stream';
-                        res.set('Content-Type', mimeType);
-                        res.set('X-Cache-Status', 'loading');
-                        return res.sendFile(filePath);
-                    }
+                if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+                    res.set('Content-Type', this.mimeTypes[path.extname(cleanPath).toLowerCase()] || 'application/octet-stream');
+                    res.set('X-Cache-Status', 'loading');
+                    return res.sendFile(filePath);
                 }
             }
             return next();
@@ -424,7 +398,10 @@ class StaticFileCache {
     }
 
     getDiagnostics() {
-        const compressionRatio = this.stats.totalOriginalSize > 0 ? ((this.stats.totalOriginalSize - this.stats.totalCompressedSize) / this.stats.totalOriginalSize * 100).toFixed(1) : 0;
+        const compressionRatio =
+            this.stats.totalOriginalSize > 0
+                ? (((this.stats.totalOriginalSize - this.stats.totalCompressedSize) / this.stats.totalOriginalSize) * 100).toFixed(1)
+                : 0;
         const availableMinifiers = [];
         if (terser) availableMinifiers.push('terser');
         if (CleanCSS) availableMinifiers.push('clean-css');
@@ -450,10 +427,8 @@ class StaticFileCache {
                 files: stats.files,
                 originalSize: this.formatSize(stats.originalSize),
                 compressedSize: this.formatSize(stats.compressedSize),
-                saved: stats.originalSize !== stats.compressedSize 
-                    ? this.formatSize(stats.originalSize - stats.compressedSize)
-                    : '0B'
-            }))
+                saved: stats.originalSize === stats.compressedSize ? '0B' : this.formatSize(stats.originalSize - stats.compressedSize),
+            })),
         };
     }
     getFile(relativePath) {
@@ -463,14 +438,14 @@ class StaticFileCache {
         return this.cache.has(relativePath);
     }
     listFiles() {
-        return Array.from(this.cache.keys()).sort();
+        return [...this.cache.keys()].sort();
     }
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-module.exports = function(options = {}) {
+module.exports = function (options = {}) {
     const cache = new StaticFileCache(options);
     return {
         middleware: cache.createMiddleware(),
@@ -478,7 +453,7 @@ module.exports = function(options = {}) {
         stats: () => cache.getStatsString(),
         getFile: (path) => cache.getFile(path),
         hasFile: (path) => cache.hasFile(path),
-        listFiles: () => cache.listFiles()
+        listFiles: () => cache.listFiles(),
     };
 };
 

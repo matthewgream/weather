@@ -39,10 +39,10 @@ configData.LOCATION = {
     timezone: 'Europe/Stockholm',
 };
 configData.CACHE = {
-	static: {
-		js: {
-			mangle: {
-/*
+    static: {
+        js: {
+            mangle: {
+                /*
 				toplevel: true,
 				reserved: [
                         'CONFIG',
@@ -55,9 +55,9 @@ configData.CACHE = {
                         'weatherPushNotifications',
 				]
 */
-			}
-		}
-	}
+            },
+        },
+    },
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -92,10 +92,15 @@ console.log(`Loaded 'diagnostics' on '/status'`);
 
 app.use(exp.static(configData.DATA_CACHE));
 console.log(`Loaded 'static' using '${configData.DATA_CACHE}'`);
-const cache_static = require ('./server-function-cache.js')({ directory: configData.DATA_ASSETS, path: '/static', minify: true, options: configData?.CACHE?.static });
+const cache_static = require('./server-function-cache.js')({
+    directory: configData.DATA_ASSETS,
+    path: '/static',
+    minify: true,
+    options: configData?.CACHE?.static,
+});
 app.use(cache_static.middleware);
 diagnostics.registerDiagnosticsSource('Cache::/static', () => cache_static.getDiagnostics());
-console.log(`Loaded 'cache' using 'directory=${configData.DATA_ASSETS}, path=/static, minify=true': ${cache_static.stats ()}`);
+console.log(`Loaded 'cache' using 'directory=${configData.DATA_ASSETS}, path=/static, minify=true': ${cache_static.stats()}`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
