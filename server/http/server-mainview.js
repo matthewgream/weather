@@ -36,6 +36,7 @@ configData.LOCATION = {
     climateType: 'humid continental',
     location: 'Central Sweden',
     hemisphere: 'northern',
+    timezone: 'Europe/Stockholm',
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

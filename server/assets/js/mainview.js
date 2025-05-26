@@ -182,15 +182,13 @@ const formatBanner = (timestamp, timediff) =>
     `Weather data was last received at ${timestamp} (more than ${Math.floor(timediff)} minutes ago), thus the local weather station connection is offline.
      Please use <a href="https://www.wunderground.com/dashboard/pws/IBRUNS40">Weather Underground</a>. The Camera image is up to date.`;
 
-function updateBanner(vars) {
-    const timestamp = locate(vars, CONFIG.var_timestamp);
+function updateBanner(timestamp) {
     const timediff = Math.floor((Date.now() - new Date(timestamp.replace(/([+-]\d{2})Z$/, '$1:00')).getTime()) / (60 * 1000));
     const element = document.querySelector('#banner');
     if (element) element.innerHTML = timediff > 60 ? formatBanner(timestamp, timediff) : '';
 }
 
-function createBanner(vars) {
-    const timestamp = locate(vars, CONFIG.var_timestamp);
+function createBanner(timestamp) {
     const timediff = Math.floor((Date.now() - new Date(timestamp.replace(/([+-]\d{2})Z$/, '$1:00')).getTime()) / (60 * 1000));
     return timediff > 60
         ? `<section class="section>
@@ -205,7 +203,7 @@ function createBanner(vars) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function createSectionDataSummary(vars) {
+function createSectionDataSummary(data_location, vars) {
     const outside = formatList[0].elems;
     const lake = formatList[1].elems;
     const internal = formatList[2].elems;
@@ -321,12 +319,12 @@ function createSectionDataSummary(vars) {
         date.toLocaleTimeString(undefined, {
             hour: '2-digit',
             minute: '2-digit',
-            timeZone: CONFIG.timezone,
+            timeZone: data_location.timezone,
         });
     let timeinfo = '';
     const date = new Date();
     timeinfo += `Time <span class="value">${formatTime(date)}</span><sup>+${getDST(date) ? '2' : '1'}</sup>`;
-    const solar = new SolarCalc(new Date(), CONFIG.location_data.latitude, CONFIG.location_data.longitude);
+    const solar = new SolarCalc(new Date(), data_location.latitude, data_location.longitude);
     timeinfo += `, daylight <span class="value">${formatTime(solar.sunrise)}</span><sup>-${Math.round((solar.sunrise - solar.civilDawn) / 60 / 1000)}</sup> to <span class="value">${formatTime(solar.sunset)}</span><sup>+${Math.round((solar.civilDusk - solar.sunset) / 60 / 1000)}</sup>`;
     timeinfo += `.`;
 
@@ -357,15 +355,15 @@ function createSectionDataSummary(vars) {
     return summary.join('<br>');
 }
 
-function updateSectionData(vars) {
+function updateSectionData(data_location, vars) {
     const element = document.querySelector('#text-summary-details');
-    if (element) element.innerHTML = createSectionDataSummary(vars);
+    if (element) element.innerHTML = createSectionDataSummary(data_location, vars);
 }
-function createSectionData(vars) {
+function createSectionData(data_location, vars) {
     return `
     	<section class="section">
         	<div class="text-summary" id="text-summary-details">
-				${createSectionDataSummary(vars)}
+				${createSectionDataSummary(data_location, vars)}
 			</div>
     	</section>
 	`;
@@ -482,16 +480,14 @@ function scheduleSectionTimeElementTimecount(time) {
         updateSectionTimeElementTimecount(time);
     }, UPDATE_TIMECOUNT_PERIOD);
 }
-function updateSectionTime(vars) {
-    const time = locate(vars, CONFIG.var_timestamp);
+function updateSectionTime(time) {
     if (time) {
         updateSectionTimeElementTimestamp(time);
         updateSectionTimeElementTimecount(time);
         scheduleSectionTimeElementTimecount(time);
     }
 }
-function createSectionTime(vars) {
-    const time = locate(vars, CONFIG.var_timestamp);
+function createSectionTime(time) {
     if (time) scheduleSectionTimeElementTimecount(time);
     return `
         <div class="time-updated">
@@ -504,11 +500,11 @@ function createSectionTime(vars) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function createSectionLinks() {
-    const links = CONFIG.external_links?.map(({ title, link }) => `<a href="${link}" target="_blank"><strong>${title}</strong></a>`).join(' | ');
+function createSectionLinks(links) {
+    const html = links?.map(({ title, link }) => `<a href="${link}" target="_blank"><strong>${title}</strong></a>`).join(' | ');
     return `
         <div class="external-links">
-            ${links}
+            ${html}
         </div>
     `;
 }
@@ -523,6 +519,7 @@ function createHeader() {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+const conf = CONFIG;
 const varsInterval = 30 * 1000;
 let varsOffset = 1 * 1000;
 let varsLast;
@@ -530,10 +527,10 @@ let varsTimer;
 
 function update(vars) {
     varsLast = vars;
-
-    updateBanner(vars);
-    updateSectionData(vars);
-    updateSectionTime(vars);
+    const time = locate(vars, conf.var_timestamp);
+    updateBanner(time);
+    updateSectionData(conf.location_data, vars);
+    updateSectionTime(time);
 }
 
 function request() {
@@ -543,7 +540,7 @@ function request() {
             return response.json();
         })
         .then((vars) => {
-            if (locate(vars, CONFIG.var_timestamp) == locate(varsLast, CONFIG.var_timestamp)) varsOffset += 1000;
+            if (locate(vars, conf.var_timestamp) == locate(varsLast, conf.var_timestamp)) varsOffset += 1000;
             else update(vars);
             schedule(vars);
         })
@@ -556,7 +553,7 @@ function request() {
 
 function schedule(vars) {
     if (varsTimer) clearTimeout(varsTimer);
-    const time = locate(vars, CONFIG.var_timestamp);
+    const time = locate(vars, conf.var_timestamp);
     if (time) {
         const timeSinceUpdate = Date.now() - new Date(time.replace(/([+-]\d{2})Z$/, '$1:00')).getTime();
         const timeUntilUpdate = varsInterval - (timeSinceUpdate % varsInterval) + varsOffset;
@@ -570,13 +567,15 @@ function schedule(vars) {
 
 function create(vars, data) {
     varsLast = vars;
+    const time = locate(vars, conf.var_timestamp);
+    const links = conf.external_links;
     document.querySelector('#weather-dashboard').innerHTML = [
         createHeader(),
-        createBanner(vars),
-        createSectionData(vars),
+        createBanner(time),
+        createSectionData(conf.location_data, vars),
         createSectionCamera(data),
-        createSectionTime(vars),
-        createSectionLinks(),
+        createSectionTime(time),
+        createSectionLinks(links),
     ].join('');
     schedule(vars);
 }
