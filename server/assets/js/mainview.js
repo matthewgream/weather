@@ -1,6 +1,8 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+/* global getDST, SolarCalc */
+
 function joinand(items) {
     if (!items || items.length === 0) return '';
     else if (items.length === 1) return items[0];
@@ -12,7 +14,7 @@ function joinand(items) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const format = (e, v) => (v === undefined ? 'n/a' : (Number.isFinite(v) ? v : Number(v)).toFixed(e.decimals ?? 0));
+const format = (e, v) => (v === undefined ? 'n/a' : Number(v).toFixed(e.decimals ?? 0));
 const formatWindSpeed = (e, v) => (v === undefined ? 'n/a' : (v / 3.6).toFixed(e.decimals ?? 0));
 const formatWindDirection = (e, v) =>
     v === undefined

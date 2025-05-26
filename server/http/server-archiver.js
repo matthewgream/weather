@@ -3,6 +3,8 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+const path = require('path');
+
 const configPath = process.argv[2] || 'secrets.txt';
 const configData = require('./server-function-config.js')(configPath);
 const configList = Object.entries(configData)
@@ -10,8 +12,8 @@ const configList = Object.entries(configData)
     .join(', ');
 configData.DIAGNOSTICS_PUBLISH_TOPIC = 'server/archiver';
 configData.DIAGNOSTICS_PUBLISH_PERIOD = 60;
-configData.DATA_VIEWS = configData.DATA + '/http';
-configData.DATA_ASSETS = configData.DATA + '/assets';
+configData.DATA_VIEWS = path.join(configData.DATA, 'http');
+configData.DATA_ASSETS = path.join(configData.DATA, 'assets');
 console.log(`Loaded 'config' using '${configPath}': ${configList}`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -55,10 +57,17 @@ console.log(`Loaded 'authentication' using 'pass=${configData.PASS}'`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-app.use('/static', exp.static(configData.DATA_ASSETS));
-console.log(`Loaded 'static' using '/static -> ${configData.DATA_ASSETS}'`);
+const cache_static = require('./server-function-cache.js')({
+    directory: configData.DATA_ASSETS,
+    path: '/static',
+    minify: true,
+    options: configData?.CACHE?.static,
+});
+app.use(cache_static.middleware);
+diagnostics.registerDiagnosticsSource('Cache::/static', () => cache_static.getDiagnostics());
+console.log(`Loaded 'cache' using 'directory=${configData.DATA_ASSETS}, path=/static, minify=true': ${cache_static.stats()}`);
 
-const server_snapshots = require('./server-function-snapshot-archiver.js')(app, '/snapshot', { directory: configData.STORAGE });
+const server_snapshots = require('./server-function-snapshot-archiver.js')(app, '/snapshot', { directory: configData.STORAGE, templates: configData.VIEWS });
 console.log(`Loaded 'snapshots' on '/snapshot', using '${configData.STORAGE}'`);
 
 app.get('/', (req, res) => res.redirect(server_snapshots.getUrlList()));

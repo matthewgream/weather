@@ -24,9 +24,11 @@ function getFormattedTime(time) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function initialise(app, prefix, directory) {
-    const directorySnapshot = directory + '/snapshots';
-    const directoryTimelapse = directory + '/timelapse';
+function initialise(app, prefix, options) {
+    const directory = options.directory || __dirname;
+    const templates = options.templates || __dirname;
+    const directorySnapshot = path.join(directory, 'snapshots');
+    const directoryTimelapse = path.join(directory, 'timelapse');
 
     const {
         SnapshotThumbnailsManager,
@@ -81,12 +83,19 @@ function initialise(app, prefix, directory) {
 
     //
 
-    app.get(prefix + '/list', (req, res) => {
-        return res.render('server-snapshot-list', { snapshotList: getSnapshotListOfDates(), timelapseList: getTimelapseListOfFiles() });
-    });
-    app.get(prefix + '/list/:date', (req, res) => {
-        return res.render('server-snapshot-date', getSnapshotListForDate(req.params.date));
-    });
+    app.get(
+        prefix + '/list',
+        require('./server-function-cache-ejs.js')(path.join(templates, 'server-snapshot-list.ejs'), { minifyOutput: true }).routeHandler(async () => ({
+            snapshotList: getSnapshotListOfDates(),
+            timelapseList: getTimelapseListOfFiles(),
+        }))
+    );
+    app.get(
+        prefix + '/list/:date',
+        require('./server-function-cache-ejs.js')(path.join(templates, 'server-snapshot-date.ejs'), { minifyOutput: true }).routeHandler(async (req) =>
+            getSnapshotListForDate(req.params.date)
+        )
+    );
     app.get(prefix + '/file/:file', (req, res) => {
         const file = req.params.file;
         let filename = getSnapshotFilename(file);
@@ -120,7 +129,7 @@ function initialise(app, prefix, directory) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 module.exports = function (app, prefix, options) {
-    return initialise(app, prefix, options.directory || __dirname);
+    return initialise(app, prefix, options);
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

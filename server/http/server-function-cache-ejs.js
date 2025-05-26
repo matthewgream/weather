@@ -27,6 +27,7 @@ class SingleEJSTemplateCache {
         this.templatePath = path.resolve(templatePath);
         this.templateName = path.basename(templatePath, '.ejs');
         this.minify = options.minify !== false; // Default true
+        this.minifyOutput = options.minifyOutput === true; // Default false
         this.watch = options.watch !== false; // Default true
         this.ejsOptions = {
             cache: false,
@@ -68,7 +69,7 @@ class SingleEJSTemplateCache {
             };
             if (this.watch) this.setupWatcher();
             console.log(
-                `cache-ejs: template load '${this.templateName}' from '${this.templatePath}' (${originalSize} bytes${this.minify ? ' to ' + this.cached.minifiedSize + ' bytes' : ''})`
+                `cache-ejs: template load '${this.templateName}' from '${this.templatePath}' (${originalSize} ${this.minify ? ' to ' + this.cached.minifiedSize + ' bytes' : ''})`
             );
         } catch (e) {
             console.error(`cache-ejs: template load '${this.templateName}' from '${this.templatePath}' error:`, e);
@@ -91,10 +92,7 @@ class SingleEJSTemplateCache {
     }
 
     async minifyTemplateSource(templateSource) {
-        if (!htmlMinifier) {
-            console.log('cache-ejs: html-minifier-terser unavailable, using fallback');
-            return this.fallbackMinifyTemplate(templateSource);
-        }
+        if (!htmlMinifier) return this.fallbackMinifyTemplate(templateSource);
         try {
             const minified = await htmlMinifier.minify(templateSource, {
                 collapseWhitespace: true,
@@ -117,17 +115,15 @@ class SingleEJSTemplateCache {
                 ],
             });
             if (!minified) {
-                console.warn('cache-ejs: html-minifier-terser failed (undefined result), using fallback');
+                console.warn('cache-ejs: html-minifier-terser failed for template (undefined result), using fallback');
                 return this.fallbackMinifyTemplate(templateSource);
             }
-            console.log('cache-ejs: html-minifier-terser succeeded');
             return minified;
         } catch (e) {
-            console.warn('cache-ejs: html-minifier-terser failed, using fallback:', e.message);
+            console.warn('cache-ejs: html-minifier-terser failed for template, using fallback:', e.message);
             return this.fallbackMinifyTemplate(templateSource);
         }
     }
-
     fallbackMinifyTemplate(templateSource) {
         return templateSource
             .replaceAll(/<!--[\S\s]*?-->/, '') // eslint-disable-line regexp/match-any
@@ -135,15 +131,72 @@ class SingleEJSTemplateCache {
             .replaceAll(/\s+/, ' ')
             .trim();
     }
-    renderDirect(data) {
+
+    async minifyOutputHTML(html) {
+        if (!htmlMinifier) return this.fallbackMinifyOutput(html);
+        try {
+            const minified = await htmlMinifier.minify(html, {
+                collapseWhitespace: true,
+                removeComments: true,
+                removeRedundantAttributes: true,
+                removeScriptTypeAttributes: true,
+                removeStyleLinkTypeAttributes: true,
+                removeEmptyAttributes: true,
+                removeOptionalTags: true, // More aggressive than template minification
+                useShortDoctype: true,
+                minifyCSS: true, // Can minify CSS in final output
+                minifyJS: true, // Can minify JS in final output
+                minifyURLs: true,
+                removeAttributeQuotes: true, // More aggressive
+                sortAttributes: true,
+                sortClassName: true,
+                decodeEntities: true,
+                processConditionalComments: true,
+                processScripts: ['text/javascript', 'application/javascript'],
+                collapseInlineTagWhitespace: true,
+                conservativeCollapse: false, // More aggressive
+                continueOnParseError: true,
+            });
+            if (!minified) {
+                console.warn('cache-ejs: html-minifier-terser failed for output (undefined result), using fallback');
+                return this.fallbackMinifyOutput(html);
+            }
+            return minified;
+        } catch (e) {
+            console.warn('cache-ejs: html-minifier-terser failed for output, using fallback:', e.message);
+            return this.fallbackMinifyOutput(html);
+        }
+    }
+    fallbackMinifyOutput(html) {
+        return html
+            .replaceAll(/<!--[\S\s]*?-->/, '') // eslint-disable-line regexp/match-any
+            .replaceAll(/>\s+</, '><')
+            .replaceAll(/\s+/, ' ')
+            .replaceAll(/\s*([,:;{}])\s*/, '$1')
+            .replaceAll(/;\s*}/, '}') // eslint-disable-line regexp/strict
+            .replaceAll(/\s+(?=<\/)/, '')
+            .replaceAll(/(?<=>)\s+/, '')
+            .replaceAll(/"\s+>/, '">')
+            .replaceAll(/\s+\/>/, '/>')
+            .trim();
+    }
+
+    async renderDirect(data) {
         if (!this.cached) throw new Error(`Template '${this.templateName}' not loaded`);
         try {
-            const html = this.cached.template(data);
+            let html = this.cached.template(data);
+            if (this.minifyOutput) {
+                //const originalSize = Buffer.byteLength(html, 'utf8');
+                html = await this.minifyOutputHTML(html);
+                //const minifiedSize = Buffer.byteLength(html, 'utf8');
+                //console.log(`cache-ejs: output minified (${originalSize} to ${minifiedSize} bytes)`);
+            }
             return {
                 html,
                 etag: this.cached.etag,
                 lastModified: this.cached.lastModified,
-                isMinified: this.minify,
+                isMinifiedTemplate: this.minify,
+                isMinifiedOutput: this.minifyOutput,
             };
         } catch (e) {
             console.error(`cache-ejs: direct render error for '${this.templateName}':`, e);
@@ -160,7 +213,8 @@ class SingleEJSTemplateCache {
             loadedAt: this.cached?.loadedAt,
             originalSize: this.formatSize(this.cached?.originalSize || 0),
             minifiedSize: this.formatSize(this.cached?.minifiedSize || 0),
-            minificationEnabled: this.minify,
+            templateMinificationEnabled: this.minify,
+            outputMinificationEnabled: this.minifyOutput,
             watchingFile: this.watch,
             isLoaded: !!this.cached,
         };
@@ -193,11 +247,15 @@ module.exports = function (templatePath, options = {}) {
             return async (req, res) => {
                 try {
                     const data = typeof dataProvider === 'function' ? await dataProvider(req) : dataProvider;
-                    const result = cache.renderDirect(data);
+                    const result = await cache.renderDirect(data);
                     res.set('Content-Type', 'text/html; charset=utf-8');
                     res.set('ETag', `"${result.etag}"`);
                     res.set('Last-Modified', result.lastModified);
-                    if (result.isMinified) res.set('X-Minified', 'true');
+                    if (result.isMinifiedTemplate || result.isMinifiedOutput)
+                        res.set(
+                            'X-Minified',
+                            [result.isMinifiedTemplate ? 'template' : undefined, result.isMinifiedOutput ? 'output' : undefined].filter(Boolean).join(',')
+                        );
                     if (req.headers?.['if-none-match'] === `"${result.etag}"` || req.headers?.['if-modified-since'] === result.lastModified)
                         return res.status(304).end();
                     res.send(result.html);
