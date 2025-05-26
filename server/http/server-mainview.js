@@ -135,7 +135,11 @@ mqtt_client.on('message', (topic, message) => {
     else if (topic === 'snapshots/metadata') receive_snapshotMetadata(message);
     else {
         if (topic.startsWith('alert/')) notifications.notify(message.toString());
-        server_vars.update(topic, JSON.parse(message.toString()));
+        try {
+            server_vars.update(topic, JSON.parse(message.toString()));
+        } catch (e) {
+            console.error(`Error processing mqtt message (topic='${topic}':`, e);
+        }
     }
 });
 console.log(`Loaded 'mqtt:subscriber' using 'server=${configData.MQTT}, topics=[${configData.CONTENT_DATA_SUBS.join(', ')}]'`);

@@ -19,9 +19,9 @@ const weatherPushNotifications = (function () {
         try {
             vapidPublicKey = (await (await fetch('/push/vapidPublicKey'))?.json())?.publicKey;
             serviceWorker = await navigator.serviceWorker.register('/static/js/mainview-worker.js');
-            isSubscribed = (await serviceWorker.pushManager.getSubscription()) !== undefined;
+            isSubscribed = !!(await serviceWorker.pushManager.getSubscription());
             pushToggleListen();
-            console.log('push: initialised with service-worker:', serviceWorker);
+            console.log(`push: initialised with service-worker (isSubscribed=${isSubscribed}):`, serviceWorker);
             return true;
         } catch (e) {
             console.error('push: error initialising:', e);
@@ -86,10 +86,10 @@ const weatherPushNotifications = (function () {
             });
             isSubscribed = true;
             pushToggleUpdate();
-            console.log('push: user subscription enabled:', subscription);
+            console.log('push: user subscription enable success:', subscription);
             return true;
         } catch (e) {
-            console.error('push: user subscription enable failed:', e);
+            console.error('push: user subscription enable error:', e);
             return false;
         }
     }
@@ -109,10 +109,10 @@ const weatherPushNotifications = (function () {
             }
             isSubscribed = false;
             pushToggleUpdate();
-            console.log('push: user subscription disabled' + (subscription ? '' : ' (was not active)'));
+            console.log('push: user subscription disable success' + (subscription ? '' : ' (was not active)'));
             return true;
         } catch (e) {
-            console.error('push: user subscription disable failed:', e);
+            console.error('push: user subscription disable error:', e);
             return false;
         }
     }
