@@ -5,28 +5,21 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-let terser, CleanCSS, htmlMinifier, svgo;
-try {
-    terser = require('terser');
-} catch (e) {
-    console.warn('cache: terser not available for JS minification:', e);
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+function install_if_available(name, what) {
+    try {
+        return require(name);
+    } catch (e) {
+        console.warn(`cache: '${name}' not available for '${what}' minification:`, e);
+    }
 }
-try {
-    CleanCSS = require('clean-css');
-} catch (e) {
-    console.warn('cache: clean-css not available for CSS minification:', e);
-}
-try {
-    htmlMinifier = require('html-minifier-terser');
-} catch (e) {
-    console.warn('cache: html-minifier-terser not available for HTML minification:', e);
-}
-try {
-    const { optimize } = require('svgo');
-    svgo = { optimize };
-} catch (e) {
-    console.warn('cache: svgo not available for SVG minification:', e);
-}
+
+const terser = install_if_available('terser', 'JS');
+const cleanCSS = install_if_available('clean-css', 'CSS');
+const htmlMinifier = install_if_available('html-minifier-terser', 'HTML');
+const svgo = install_if_available('svgo', 'SVG');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -83,19 +76,62 @@ class StaticFileCache {
     }
 
     initializeMinifiers() {
+        this.minifiers_options = {
+            cleanCSS: {
+                level: 1, returnPromise: false, rebase: false, compatibility: 'ie9'
+            },
+            terser: {
+                compress: {
+                    drop_console: false,
+                    drop_debugger: true,
+                    pure_funcs: ['console.debug'],
+                    passes: 2,
+                    unsafe_math: true,
+                    conditionals: true,
+                    dead_code: true,
+                    evaluate: true,
+                    if_return: true,
+                    join_vars: true,
+                    loops: true,
+                    reduce_vars: true,
+                    sequences: true,
+                    side_effects: true,
+                    switches: true,
+                    unused: true,
+                },
+                mangle: {
+                    toplevel: false,
+                    properties: false,
+                    reserved: [],
+                    ...this.options?.js?.mangle,
+                },
+                format: {
+                    comments: false,
+                    beautify: false,
+                    semicolons: true,
+                },
+            },
+            htmlMinifier: {
+                collapseWhitespace: true,
+                removeComments: true,
+                removeRedundantAttributes: true,
+                removeScriptTypeAttributes: true,
+                removeStyleLinkTypeAttributes: true,
+                useShortDoctype: true,
+                minifyCSS: true,
+                minifyJS: true,
+            },
+            svgo: {
+                plugins: ['preset-default', 'removeDoctype', 'removeComments', 'cleanupIds'],
+            },
+        };
+
         try {
             this.minifiers = {
-                css: CleanCSS
-                    ? new CleanCSS({
-                          level: 1,
-                          returnPromise: false,
-                          rebase: false,
-                          compatibility: 'ie9',
-                      })
-                    : undefined,
+                css: cleanCSS ? new cleanCSS(this.minifiers_options.cleanCSS) : undefined,
             };
             console.log('cache: minifiers:', {
-                css: !!CleanCSS,
+                css: !!cleanCSS,
                 js: !!terser,
                 html: !!htmlMinifier,
                 svg: !!svgo,
@@ -166,7 +202,6 @@ class StaticFileCache {
                 try {
                     processedContent = await this.minifyContentAsync(originalContent, ext);
                     isMinified = true;
-                    await new Promise((resolve) => setImmediate(resolve));
                 } catch (e) {
                     console.warn(`cache: minification failed for '${relativePath}':`, e.message);
                     processedContent = originalContent;
@@ -186,6 +221,7 @@ class StaticFileCache {
         } catch (e) {
             console.error(`cache: failed to load '${relativePath}':`, e);
         }
+        await new Promise((resolve) => setImmediate(resolve)); // yield after each file
     }
 
     canMinify(ext) {
@@ -207,11 +243,11 @@ class StaticFileCache {
         if (!this.minifiers.css) return this.fallbackMinifyCSS(css);
         try {
             const result = this.minifiers.css.minify(css);
-            if (result.errors && result.errors.length > 0) {
+            if (result.errors?.length > 0) {
                 console.warn('cache: CSS minification errors:', result.errors);
                 return this.fallbackMinifyCSS(css);
             }
-            if (result.warnings && result.warnings.length > 0) console.log('cache: CSS minification warnings:', result.warnings);
+            if (result.warnings?.length > 0) console.log('cache: CSS minification warnings:', result.warnings);
             return result.styles || css;
         } catch (e) {
             console.warn('cache: CSS minification failed, using fallback:', e.message);
@@ -221,38 +257,7 @@ class StaticFileCache {
     async minifyJS(js) {
         if (!terser) return this.fallbackMinifyJS(js);
         try {
-            const options = {
-                compress: {
-                    drop_console: false,
-                    drop_debugger: true,
-                    pure_funcs: ['console.debug'],
-                    passes: 2,
-                    unsafe_math: true,
-                    conditionals: true,
-                    dead_code: true,
-                    evaluate: true,
-                    if_return: true,
-                    join_vars: true,
-                    loops: true,
-                    reduce_vars: true,
-                    sequences: true,
-                    side_effects: true,
-                    switches: true,
-                    unused: true,
-                },
-                mangle: {
-                    toplevel: false,
-                    properties: false,
-                    reserved: [],
-                    ...this.options?.js?.mangle,
-                },
-                format: {
-                    comments: false,
-                    beautify: false,
-                    semicolons: true,
-                },
-            };
-            const result = await terser.minify(js, options);
+            const result = await terser.minify(js, this.minifiers_options.terser);
             if (result.error) {
                 console.warn('cache: JS minification failed, using fallback:', result.error);
                 return this.fallbackMinifyJS(js);
@@ -266,16 +271,7 @@ class StaticFileCache {
     minifyHTML(html) {
         if (!htmlMinifier) return this.fallbackMinifyHTML(html);
         try {
-            return htmlMinifier.minify(html, {
-                collapseWhitespace: true,
-                removeComments: true,
-                removeRedundantAttributes: true,
-                removeScriptTypeAttributes: true,
-                removeStyleLinkTypeAttributes: true,
-                useShortDoctype: true,
-                minifyCSS: true,
-                minifyJS: true,
-            });
+            return htmlMinifier.minify(html, this.minifiers_options.htmlMinifier);
         } catch (e) {
             console.warn('cache: HTML minification failed, using fallback:', e.message);
             return this.fallbackMinifyHTML(html);
@@ -284,9 +280,7 @@ class StaticFileCache {
     async minifySVG(svg) {
         if (!svgo) return this.fallbackMinifySVG(svg);
         try {
-            const result = await svgo.optimize(svg, {
-                plugins: ['preset-default', 'removeDoctype', 'removeComments', 'cleanupIds'],
-            });
+            const result = await svgo.optimize(svg, this.minifiers_options.svgo);
             return result.data || svg;
         } catch (e) {
             console.warn('cache: SVG minification failed, using fallback:', e.message);
@@ -405,7 +399,7 @@ class StaticFileCache {
                 : 0;
         const availableMinifiers = [];
         if (terser) availableMinifiers.push('terser');
-        if (CleanCSS) availableMinifiers.push('clean-css');
+        if (cleanCSS) availableMinifiers.push('clean-css');
         if (htmlMinifier) availableMinifiers.push('html-minifier-terser');
         if (svgo) availableMinifiers.push('svgo');
         return {

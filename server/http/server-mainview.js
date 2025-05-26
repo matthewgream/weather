@@ -4,6 +4,7 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const fs = require('fs');
+const path = require('path');
 
 const configPath = process.argv[2] || 'secrets.txt';
 const configData = require('./server-function-config.js')(configPath);
@@ -14,13 +15,13 @@ configData.CONTENT_DATA_SUBS = ['weather/#', 'sensors/#', 'snapshots/#', 'alert/
 configData.CONTENT_VIEW_VARS = ['weather/branna', 'sensors/radiation', 'aircraft', 'interpretation'];
 configData.DIAGNOSTICS_PUBLISH_TOPIC = 'server/mainview';
 configData.DIAGNOSTICS_PUBLISH_PERIOD = 60;
-configData.DATA_VIEWS = configData.DATA + '/http';
-configData.DATA_ASSETS = configData.DATA + '/assets';
-configData.DATA_IMAGES = configData.DATA + '/images';
-configData.DATA_STORE = configData.DATA + '/store';
+configData.DATA_VIEWS = path.join(configData.DATA, 'http');
+configData.DATA_ASSETS = path.join(configData.DATA, 'assets');
+configData.DATA_IMAGES = path.join(configData.DATA, 'images');
+configData.DATA_STORE = path.join(configData.DATA, 'store');
 configData.DATA_CACHE = '/dev/shm/weather';
 configData.MQTT_CLIENT = 'server-mainview-http-' + Math.random().toString(16).slice(2, 8);
-configData.FILE_SETS = require('path').join(__dirname, 'client.json');
+configData.FILE_SETS = path.join(__dirname, 'client.json');
 console.log(`Loaded 'config' using '${configPath}': ${configList}`);
 
 configData.LOCATION = {
@@ -134,6 +135,8 @@ const server_vars = require('./server-function-vars.js')(app, '/vars', {
 });
 console.log(`Loaded 'vars' on '/vars' using 'vars=[${configData.CONTENT_VIEW_VARS.join(', ')}]'`);
 
+// const mainviewTemplate = require('./server-function-cache-ejs.js')(path.join(configData.DATA_VIEWS, 'server-mainview.ejs'));
+// app.use(mainviewTemplate.middleware);
 app.get('/', async (req, res) =>
     res.render('server-mainview', {
         vars: server_vars.render(),
