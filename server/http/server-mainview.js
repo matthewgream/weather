@@ -135,11 +135,9 @@ const server_vars = require('./server-function-vars.js')(app, '/vars', {
 });
 console.log(`Loaded 'vars' on '/vars' using 'vars=[${configData.CONTENT_VIEW_VARS.join(', ')}]'`);
 
-const mainviewTemplate = require('./server-function-cache-ejs.js')(path.join(configData.DATA_VIEWS, 'server-mainview.ejs'));
-diagnostics.registerDiagnosticsSource('Cache::mainview', () => mainviewTemplate.getInfo());
 app.get(
     '/',
-    mainviewTemplate.routeHandler(async () => ({
+    require('./server-function-cache-ejs.js')(path.join(configData.DATA_VIEWS, 'server-mainview.ejs')).routeHandler(async () => ({
         vars: server_vars.render(),
         data: await server_data.render(),
     }))
