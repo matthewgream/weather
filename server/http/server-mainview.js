@@ -11,7 +11,7 @@ const configList = Object.entries(configData)
     .map(([k, v]) => k.toLowerCase() + '=' + v)
     .join(', ');
 configData.CONTENT_DATA_SUBS = ['weather/#', 'sensors/#', 'snapshots/#', 'alert/#'];
-configData.CONTENT_VIEW_VARS = ['weather/branna', 'sensors/radiation', 'aircraft'];
+configData.CONTENT_VIEW_VARS = ['weather/branna', 'sensors/radiation', 'aircraft', 'interpretation'];
 configData.DIAGNOSTICS_PUBLISH_TOPIC = 'server/mainview';
 configData.DIAGNOSTICS_PUBLISH_PERIOD = 60;
 configData.DATA_VIEWS = configData.DATA + '/http';
@@ -22,6 +22,21 @@ configData.DATA_CACHE = '/dev/shm/weather';
 configData.MQTT_CLIENT = 'server-mainview-http-' + Math.random().toString(16).slice(2, 8);
 configData.FILE_SETS = require('path').join(__dirname, 'client.json');
 console.log(`Loaded 'config' using '${configPath}': ${configList}`);
+
+configData.LOCATION = {
+    elevation: 135,
+    latitude: 59.662095,
+    longitude: 12.995505,
+    summerAvgHigh: 21,
+    winterAvgLow: -7,
+    annualRainfall: 750, // mm
+    annualSnowfall: 150, // cm
+    forestCoverage: 'high',
+    nearbyLakes: true,
+    climateType: 'humid continental',
+    location: 'Central Sweden',
+    hemisphere: 'northern',
+};
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -83,7 +98,11 @@ const server_data = {
     },
 };
 console.log(`Loaded 'data' using 'data=thumbnails'`);
-const server_vars = require('./server-function-vars.js')(app, '/vars', { vars: configData.CONTENT_VIEW_VARS, tz: configData.TZ });
+const server_vars = require('./server-function-vars.js')(app, '/vars', {
+    vars: configData.CONTENT_VIEW_VARS,
+    location: configData.LOCATION,
+    tz: configData.TZ,
+});
 console.log(`Loaded 'vars' on '/vars' using 'vars=[${configData.CONTENT_VIEW_VARS.join(', ')}]'`);
 
 app.get('/', async (req, res) =>
@@ -93,6 +112,35 @@ app.get('/', async (req, res) =>
     })
 );
 console.log(`Loaded '/' using 'server-mainview' && data/vars`);
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+const weather_module = require('./server-function-weather.js');
+function getWeatherInterpretation(vars) {
+    try {
+        const varsWeather = vars['weather/branna'] || {},
+            varsRadiation = vars['sensors/radiation'] || {};
+        const results = weather_module.getWeatherInterpretation(configData.LOCATION, {
+            temp: varsWeather.temp,
+            humidity: varsWeather.humidity,
+            pressure: varsWeather.baromrel,
+            windSpeed: varsWeather.windspeed ? varsWeather.windspeed / 3.6 : null,
+            solarRad: varsWeather.solarradiation,
+            solarUvi: varsWeather.uv,
+            rainRate: varsWeather.rainrate,
+            radiationCpm: varsRadiation.cpm,
+            radiationAcpm: varsRadiation.acpm,
+            radiationUsvh: varsRadiation.usvh,
+            snowDepth: null,
+            iceDepth: null,
+        });
+        return results;
+    } catch (e) {
+        console.error(`getWeatherInterpretation, error: `, e);
+    }
+}
+console.log(`Loaded 'weather' using 'location=${JSON.stringify(configData.LOCATION)}'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -137,6 +185,11 @@ mqtt_client.on('message', (topic, message) => {
         if (topic.startsWith('alert/')) notifications.notify(message.toString());
         try {
             server_vars.update(topic, JSON.parse(message.toString()));
+            if (topic == 'weather/branna' || topic == 'sensors/radiation') {
+                const results = getWeatherInterpretation(server_vars.variables());
+                //console.log(`INTERPRETATION -- alerts='${results.alerts.length > 0 ? results.alerts.join('|') : ''}', details='${results.details || 'none'}'`);
+                server_vars.update('interpretation', results);
+            }
         } catch (e) {
             console.error(`Error processing mqtt message (topic='${topic}':`, e);
         }

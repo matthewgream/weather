@@ -217,6 +217,7 @@ function createSectionDataSummary(vars) {
     const lakeSubmerged = locate(vars, lake[1].path);
     const lakeIceDepth = undefined;
     const internalBatteryWH65 = locate(vars, internal[0].path);
+    const interpretation = vars.interpretation;
     const aircraft = vars.aircraft;
 
     let summary = [];
@@ -324,22 +325,7 @@ function createSectionDataSummary(vars) {
 
     ////
     let analysis = '';
-    let weather;
-    if (temp !== undefined && humidity !== undefined && pressure !== undefined)
-        weather = getWeatherInterpretation(CONFIG.location_data, {
-            temp,
-            humidity,
-            pressure,
-            windSpeed: windSpeed / 3.6,
-            solarRad,
-            solarUvi,
-            rainRate,
-            radiationCpm,
-            radiationAcpm,
-            radiationUsvh,
-            snowDepth,
-            iceDepth: lakeIceDepth,
-        }); // XXX
+    let weather = vars?.interpretation;
     if (weather?.details) analysis += `${weather.details}`;
     if (analysis) summary.push(analysis);
 

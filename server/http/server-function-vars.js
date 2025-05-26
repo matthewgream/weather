@@ -16,6 +16,9 @@ function initialise(app, prefix, vars, tz, debug) {
         }
         return false;
     }
+    function variables() {
+        return variablesSet;
+    }
 
     //
 
@@ -26,7 +29,7 @@ function initialise(app, prefix, vars, tz, debug) {
 
     //
 
-    return { update, render };
+    return { update, render, variables };
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
