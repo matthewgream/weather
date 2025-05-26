@@ -1,16 +1,5 @@
 #!/usr/bin/node
 
-/*
-const config = {
-    directory: '/opt/storage/weather/wunderground',
-    start_year: 2021,
-    start_month: 8, // August
-    api_key: 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
-    station_id: 'XXXXXXXX',
-};
-module.exports = config;
-*/
-
 const config = require('./config.js');
 console.log(
     `config: ` +

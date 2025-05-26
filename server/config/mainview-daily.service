@@ -1,0 +1,14 @@
+[Unit]
+Description=Weather Mainview Daily Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c '. /opt/weather/server/scripts/secrets.txt && /opt/weather/server/scripts/upnp_sshd_forwarding'
+ExecStart=/bin/bash -c '. /opt/weather/server/scripts/secrets.txt && /opt/weather/server/scripts/cloudflare_dns_update'
+ExecStart=/bin/bash -c '. /opt/weather/server/scripts/secrets2.txt && /opt/weather/server/scripts/upnp_sshd_forwarding'
+SuccessExitStatus=0
+
+[Install]
+WantedBy=multi-user.target

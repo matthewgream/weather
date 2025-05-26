@@ -1,5 +1,5 @@
 [Unit]
-Description=ECOWITT2MQTT Daemon Service
+Description=Weather ECOWITT2MQTT Service
 Wants=network-online.target
 After=network-online.target
 

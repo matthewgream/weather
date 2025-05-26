@@ -1,22 +1,11 @@
 
 SYSTEM=weather
-SUBSYS=archiver-
-TARGET=../server/http/server-archiver.js
-
-##
-
-prettier:
-	prettier --write *.js
-lint:
-	eslint *.js
-test:
-	node $(TARGET)
-.PHONY: prettier lint test
 
 ##
 
 SYSTEMD_DIR = /etc/systemd/system
 define install_systemd_depend
+	-systemctl stop $(1) 2>/dev/null || true
 	-systemctl disable $(1) 2>/dev/null || true
 	cp $(2).service $(SYSTEMD_DIR)/$(1).service
 	systemctl daemon-reload
@@ -33,12 +22,12 @@ endef
 
 ##
 
-install_storage: storage.service
-	$(call install_systemd_depend,$(SYSTEM)-$(SUBSYS)storage,storage)
-install_server: server-http.service
-	$(call install_systemd_service,$(SYSTEM)-$(SUBSYS)server-http,server-http)
+install_storage: archiver-storage.service
+	$(call install_systemd_depend,$(SYSTEM)-archiver-storage,archiver-storage)
+install_server: archiver-server-http.service
+	$(call install_systemd_service,$(SYSTEM)-archiver-server-http,archiver-server-http)
 restart_server:
-	-systemctl restart $(SYSTEM)-$(SUBSYS)server-http 2>/dev/null || true
+	-systemctl restart $(SYSTEM)-archiver-server-http 2>/dev/null || true
 
 ##
 
@@ -49,11 +38,12 @@ restart_service: restart_server
 
 install: install_service
 restart: restart_service
-deploy: restart
-	@echo "Deployment completed"
 
 ##
 
-.PHONY: install_service install_storage install_server \
-	restart_service \
-	install restart deploy
+.PHONY: install_storage install_server restart_server \
+	install_service restart_service \
+	install restart
+
+##
+

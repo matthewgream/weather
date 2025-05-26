@@ -1,0 +1,8 @@
+const config = {
+    directory: '/opt/storage/weather/wunderground',
+    start_year: 2021,
+    start_month: 8, // August
+    api_key: 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+    station_id: 'YYYYYYYY',
+};
+module.exports = config;
