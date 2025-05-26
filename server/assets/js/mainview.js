@@ -1,6 +1,17 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+function joinand(items) {
+    if (!items || items.length === 0) return '';
+    else if (items.length === 1) return items[0];
+    else if (items.length === 2) return `${items[0]} and ${items[1]}`;
+    const lastItem = items.pop();
+    return `${items.join(', ')}, and ${lastItem}`;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 const format = (e, v) => (v === undefined ? 'n/a' : (Number.isFinite(v) ? v : Number(v)).toFixed(e.decimals ?? 0));
 const formatWindSpeed = (e, v) => (v === undefined ? 'n/a' : (v / 3.6).toFixed(e.decimals ?? 0));
 const formatWindDirection = (e, v) =>
@@ -325,13 +336,12 @@ function createSectionDataSummary(vars) {
 
     ////
     let analysis = '';
-    let weather = vars?.interpretation;
-    if (weather?.details) analysis += `${weather.details}`;
+    if (interpretation?.details) analysis += `${interpretation.details}`;
     if (analysis) summary.push(analysis);
 
     ////
     let warnings_list = [];
-    if (weather?.alerts?.length > 0) warnings_list.push(...weather.alerts);
+    if (interpretation?.alerts?.length > 0) warnings_list.push(...interpretation.alerts);
     if (internalBatteryWH65 !== 'OFF') warnings_list.push('faulty battery for WH66');
     let warnings = '';
     if (warnings_list.length > 0) warnings = `WARNING: ${joinand(warnings_list)}.`;

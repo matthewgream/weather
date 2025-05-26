@@ -18,8 +18,8 @@ self.addEventListener('push', (event) => {
             console.log('push: service-worker notification data:', data);
             notification = data;
         }
-    } catch (error) {
-        console.error('push: service-worker notification data parse error:', error);
+    } catch (e) {
+        console.error('push: service-worker notification data parse error:', e);
         if (event.data) {
             notification.body = event.data.text();
             console.log('push: notification data fallback text:', notification.body);
@@ -45,8 +45,8 @@ self.addEventListener('push', (event) => {
             .then(() => {
                 console.log('push: service-worker notification display success');
             })
-            .catch((error) => {
-                console.error('push: service-worker notification display error:', error);
+            .catch((e) => {
+                console.error('push: service-worker notification display error:', e);
             })
     );
 });

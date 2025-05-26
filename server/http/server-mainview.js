@@ -125,19 +125,19 @@ function getWeatherInterpretation(vars) {
             temp: varsWeather.temp,
             humidity: varsWeather.humidity,
             pressure: varsWeather.baromrel,
-            windSpeed: varsWeather.windspeed ? varsWeather.windspeed / 3.6 : null,
+            windSpeed: varsWeather.windspeed ? varsWeather.windspeed / 3.6 : undefined,
             solarRad: varsWeather.solarradiation,
             solarUvi: varsWeather.uv,
             rainRate: varsWeather.rainrate,
             radiationCpm: varsRadiation.cpm,
             radiationAcpm: varsRadiation.acpm,
             radiationUsvh: varsRadiation.usvh,
-            snowDepth: null,
-            iceDepth: null,
+            snowDepth: undefined,
+            iceDepth: undefined,
         });
         return results;
     } catch (e) {
-        console.error(`getWeatherInterpretation, error: `, e);
+        console.error(`getWeatherInterpretation, error:`, e);
     }
 }
 console.log(`Loaded 'weather' using 'location=${JSON.stringify(configData.LOCATION)}'`);
