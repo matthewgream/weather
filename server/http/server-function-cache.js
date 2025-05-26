@@ -166,7 +166,7 @@ class StaticFileCache {
                 try {
                     processedContent = await this.minifyContentAsync(originalContent, ext);
                     isMinified = true;
-                    await new Promise(resolve => setImmediate(resolve));
+                    await new Promise((resolve) => setImmediate(resolve));
                 } catch (e) {
                     console.warn(`cache: minification failed for '${relativePath}':`, e.message);
                     processedContent = originalContent;
