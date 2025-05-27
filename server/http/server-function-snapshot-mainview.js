@@ -189,6 +189,10 @@ function initialise(app, prefix, directory, server) {
     return {
         getThumbnails: intervalsThumbnailsGet,
         insert: snapshotsInsert,
+        getDiagnosticsProxyConfig: () => ({
+            target: server,
+            description: 'Snapshot archiver server diagnostics and monitoring'
+        })
     };
 }
 

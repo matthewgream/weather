@@ -93,6 +93,7 @@ class DiagnosticsManager {
         this.additionalDiagnostics = [];
         const basePath = options.path || '',
             basePort = options.port || 80;
+	    this.app = app;
         app.use(expressStatus({ port: basePort, path: basePath + '/internal' }));
         app.use(morgan(options.morganFormat || 'combined', { stream: this.memoryLogs.createLogStream() }));
         app.use(this.requestStats.createMiddleware());
@@ -116,6 +117,12 @@ class DiagnosticsManager {
         });
     }
     getPage(basePath) {
+        const proxyLinks = (this.diagnosticsProxies || []).map(proxy => `
+    <a href="${proxy.path || `/status/${proxy.name.toLowerCase()}`}" class="status-link">
+        <div class="status-link-title">${proxy.name}</div>
+        <div class="status-link-desc">${proxy.description || `Remote diagnostics for ${proxy.name}`}</div>
+    </a>`).join('');
+        
         return `<!DOCTYPE html>
 <html>
 <head>
@@ -136,10 +143,11 @@ class DiagnosticsManager {
     <a href="${basePath}/internal" class="status-link">
         <div class="status-link-title">Monitor</div>
         <div class="status-link-desc">Server performance metrics and resource usage (in real-time)</div>
-    </a>
+    </a>${proxyLinks}
 </body>
 </html>`;
     }
+
     registerDiagnosticsSource(name, sourceFunction) {
         if (typeof sourceFunction !== 'function') {
             console.error(`Invalid diagnostics source function for ${name}`);
@@ -148,6 +156,62 @@ class DiagnosticsManager {
         this.additionalDiagnostics.push({ name, sourceFunction });
         return true;
     }
+    registerDiagnosticsProxy(name, proxyConfig) {
+        if (!proxyConfig || !proxyConfig.target) {
+            console.error(`Invalid diagnostics proxy configuration for ${name}`);
+            return false;
+        }
+        const proxyPath = proxyConfig.path || `/status/${name.toLowerCase()}`;
+        const targetPath = proxyConfig.targetPath || '/status';
+        if (!this.diagnosticsProxies) this.diagnosticsProxies = [];
+        this.diagnosticsProxies.push({ 
+            name, 
+            path: proxyPath,
+            description: proxyConfig.description || `Remote diagnostics for ${name}`,
+            target: proxyConfig.target
+        });
+        try {
+            const { createProxyMiddleware } = require('http-proxy-middleware');
+            const proxy = createProxyMiddleware({
+                target: proxyConfig.target,
+                changeOrigin: true,
+                secure: false,
+                ws: true,
+                pathRewrite: (path, req) => (req.originalUrl || path).replace(proxyPath, targetPath),
+                onProxyReq: (proxyReq, req, res) => {
+                    proxyReq.setHeader('host', new URL(proxyConfig.target).host);
+                    proxyReq.setHeader('x-forwarded-proto', 'https');
+                    proxyReq.setHeader('x-forwarded-host', req.headers.host);
+                    proxyReq.setHeader('x-forwarded-for', req.headers['x-forwarded-for'] || req.connection.remoteAddress);
+                },
+                onProxyRes: (proxyRes, req, res) => {
+                    if (proxyRes.statusCode >= 300 && proxyRes.statusCode < 400 && proxyRes.headers.location) {
+                        const originalLocation = proxyRes.headers.location;
+                        try {
+                            const locationUrl = new URL(originalLocation, proxyConfig.target);
+                            if (originalLocation.startsWith('/') || locationUrl.origin === new URL(proxyConfig.target).origin) {
+                                const newLocation = locationUrl.pathname + locationUrl.search + locationUrl.hash;
+                                proxyRes.headers.location = newLocation.startsWith(targetPath) ? newLocation.replace(targetPath, proxyPath) : proxyPath + newLocation;
+                            }
+                        } catch (e) {
+                            console.error(`[DiagnosticsProxy] Error parsing redirect location:`, e);
+                        }
+                    }
+                },
+                onError: (err, req, res) => {
+                    console.error(`[DiagnosticsProxy] Proxy error for ${name}:`, err.message);
+                    res.status(500).send(`Proxy error: ${err.message}`);
+                }
+            });
+            this.app.use(proxyPath, proxy);
+            console.log(`Registered diagnostics proxy: ${name} (${proxyPath} -> ${proxyConfig.target}${targetPath})`);
+            return true;
+        } catch (error) {
+            console.error(`Failed to create diagnostics proxy for ${name}:`, error);
+            return false;
+        }
+    }
+
     getStats() {
         return this.requestStats.getStats();
     }

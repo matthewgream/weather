@@ -106,6 +106,9 @@ const server_snapshots = require('./server-function-snapshot-mainview.js')(app, 
 });
 console.log(`Loaded 'snapshots' on '/snapshot' using 'directory=${configData.DATA_CACHE}, server=${configData.SERVER_ARCHIVER}'`);
 
+diagnostics.registerDiagnosticsProxy('Archiver', server_snapshots.getDiagnosticsProxyConfig());
+console.log(`Loaded 'diagnostics:proxy' for archiver using '${configData.SERVER_ARCHIVER}'`);
+
 const server_data = {
     render: async function () {
         return {
