@@ -39,27 +39,6 @@ configData.LOCATION = {
     hemisphere: 'northern',
     timezone: 'Europe/Stockholm',
 };
-configData.CACHE = {
-    static: {
-        js: {
-            mangle: {
-                /*
-				toplevel: true,
-				reserved: [
-                        'CONFIG',
-                        'SolarCalc',
-                        'getDST',
-                        'create',
-                        'update',
-                        'request',
-                        'schedule',
-                        'weatherPushNotifications',
-				]
-*/
-            },
-        },
-    },
-};
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -85,7 +64,7 @@ console.log(`Loaded 'redirect' using 'http -> https'`);
 const credentials = require('./server-function-credentials.js')(configData.FQDN);
 console.log(`Loaded 'credentials' using '${configData.FQDN}'`);
 
-const diagnostics = require('./server-function-diagnostics')(app, { port: 8080, path: '/status' }); // XXX PORT_EXTERNAL
+const diagnostics = require('./server-function-diagnostics.js')(app, { port: 8080, path: '/status' }); // XXX PORT_EXTERNAL
 console.log(`Loaded 'diagnostics' on '/status'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -93,6 +72,7 @@ console.log(`Loaded 'diagnostics' on '/status'`);
 
 app.use(exp.static(configData.DATA_CACHE));
 console.log(`Loaded 'static' using '${configData.DATA_CACHE}'`);
+
 const cache_static = require('./server-function-cache.js')({
     directory: configData.DATA_ASSETS,
     path: '/static',
@@ -108,6 +88,7 @@ console.log(`Loaded 'cache' using 'directory=${configData.DATA_ASSETS}, path=/st
 
 require('./server-function-images.js')(app, '/images', { directory: configData.DATA_IMAGES, location: `http://${configData.HOST}:${configData.PORT}` });
 console.log(`Loaded 'images' on '/images' using 'directory=${configData.DATA_IMAGES}'`);
+
 require('./server-function-sets.js')(app, '/sets', { filename: configData.FILE_SETS });
 console.log(`Loaded 'sets' on '/sets' using 'filename=${configData.FILE_SETS}`);
 
@@ -128,6 +109,7 @@ const server_data = {
     },
 };
 console.log(`Loaded 'data' using 'data=thumbnails'`);
+
 const server_vars = require('./server-function-vars.js')(app, '/vars', {
     vars: configData.CONTENT_VIEW_VARS,
     location: configData.LOCATION,
@@ -189,56 +171,66 @@ console.log(`Loaded 'push-notifications' on '/push'`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-let __snapshotImagedata;
-function receive_snapshotImagedata(message) {
-    __snapshotImagedata = message;
+let __snapshotImagedataHolder;
+function __snapshotImagedata(message) {
+    __snapshotImagedataHolder = message;
 }
-function receive_snapshotMetadata(message) {
-    if (__snapshotImagedata) {
+function __snapshotMetadata(message) {
+    if (__snapshotImagedataHolder) {
         try {
-            server_snapshots.insert(`snapshot_${JSON.parse(message.toString()).time}.jpg`, __snapshotImagedata);
+            server_snapshots.insert(`snapshot_${JSON.parse(message.toString()).time}.jpg`, __snapshotImagedataHolder);
         } catch (e) {
             console.error('Error processing snapshot metadata:', e);
         }
-        __snapshotImagedata = undefined;
+        __snapshotImagedataHolder = undefined;
     } else console.error('Received snapshot metadata but no image data is available');
 }
+function receive_snapshots(topic, message) {
+    if (topic === 'snapshots/imagedata') __snapshotImagedata(message);
+    else if (topic === 'snapshots/metadata') __snapshotMetadata(message);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+const __weatherAlerts = {},
+    __weatherExpiry = 60 * 60 * 1000; // 60 minutes
+function __weatherAlerts_update(alerts) {
+    const now = Date.now();
+    alerts
+        .filter((alert) => !__weatherAlerts[alert])
+        .forEach((alert) => {
+            __weatherAlerts[alert] = now;
+            notifications.notify(alert);
+        });
+    Object.entries(__weatherAlerts)
+        .filter(([alert, timestamp]) => !alerts.includes(alert) && timestamp < now - __weatherExpiry)
+        .forEach(([alert, _]) => delete __weatherAlerts[alert]);
+}
+function receive_variables(topic, message) {
+    if (topic.startsWith('alert/')) notifications.notify(message.toString());
+    try {
+        server_vars.update(topic, JSON.parse(message.toString()));
+        if (topic == 'weather/branna' || topic == 'sensors/radiation') {
+            const interpretation = getWeatherInterpretation(server_vars.variables());
+            server_vars.update('interpretation', interpretation);
+            __weatherAlerts_update(interpretation.alerts);
+        }
+    } catch (e) {
+        console.error(`Error processing mqtt message (topic='${topic}':`, e);
+    }
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 const mqtt_client = require('mqtt').connect(configData.MQTT, {
     clientId: configData.MQTT_CLIENT,
 });
 mqtt_client.on('connect', () =>
     mqtt_client.subscribe(configData.CONTENT_DATA_SUBS, () => console.log(`mqtt connected & subscribed for '${configData.CONTENT_DATA_SUBS}'`))
 );
-const weather_alerts = {};
-const weather_expiry = 60 * 60 * 1000; // 60 minutes
-function weather_alerts_update(alerts) {
-    const now = Date.now();
-    alerts
-        .filter((alert) => !weather_alerts[alert])
-        .forEach((alert) => {
-            weather_alerts[alert] = now;
-            notifications.notify(alert);
-        });
-    Object.entries(weather_alerts)
-        .filter(([alert, timestamp]) => !alerts.includes(alert) && timestamp < now - weather_expiry)
-        .forEach(([alert, _]) => delete weather_alerts[alert]);
-}
 mqtt_client.on('message', (topic, message) => {
-    if (topic === 'snapshots/imagedata') receive_snapshotImagedata(message);
-    else if (topic === 'snapshots/metadata') receive_snapshotMetadata(message);
-    else {
-        if (topic.startsWith('alert/')) notifications.notify(message.toString());
-        try {
-            server_vars.update(topic, JSON.parse(message.toString()));
-            if (topic == 'weather/branna' || topic == 'sensors/radiation') {
-                const interpretation = getWeatherInterpretation(server_vars.variables());
-                server_vars.update('interpretation', interpretation);
-                weather_alerts_update(interpretation.alerts);
-            }
-        } catch (e) {
-            console.error(`Error processing mqtt message (topic='${topic}':`, e);
-        }
-    }
+    if (topic.startsWith('snapshots')) receive_snapshots(topic, message);
+    else receive_variables(topic, message);
 });
 console.log(`Loaded 'mqtt:subscriber' using 'server=${configData.MQTT}, topics=[${configData.CONTENT_DATA_SUBS.join(', ')}]'`);
 
