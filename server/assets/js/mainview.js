@@ -3,6 +3,8 @@
 
 /* global getDST, SolarCalc */
 
+let timezone;
+
 function joinand(items) {
     if (!items || items.length === 0) return '';
     else if (items.length === 1) return items[0];
@@ -321,7 +323,7 @@ function createSectionDataSummary(data_location, vars) {
         date.toLocaleTimeString(undefined, {
             hour: '2-digit',
             minute: '2-digit',
-            timeZone: data_location.timezone,
+            timeZone: timezone,
         });
     let timeinfo = '';
     const date = new Date();
@@ -390,7 +392,10 @@ const getThumbnailUrl = (file, now, data) => {
     }
     return `/snapshot/thumb/${file}?w=200&t=${now}`;
 };
-const getThumbnailDay = (now) => `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+const getThumbnailDay = (now) => {
+    const dateInTimezone = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+    return `${dateInTimezone.getFullYear()}${String(dateInTimezone.getMonth() + 1).padStart(2, '0')}${String(dateInTimezone.getDate()).padStart(2, '0')}`;
+};
 
 function updateSectionThumbs() {
     setTimeout(() => updateSectionThumbs(), UPDATE_THUMBS_PERIOD);
@@ -569,6 +574,7 @@ function schedule(vars) {
 
 function create(vars, data) {
     varsLast = vars;
+    timezone = conf.location_data.timezone;
     const time = locate(vars, conf.var_timestamp);
     const links = conf.external_links;
     document.querySelector('#weather-dashboard').innerHTML = [
