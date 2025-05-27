@@ -26,8 +26,8 @@ console.log(`Loaded 'config' using '${configPath}': ${configList}`);
 
 configData.LOCATION = {
     elevation: 135,
-    latitude: 59.662095,
-    longitude: 12.995505,
+    latitude: 59.662111722943266,
+    longitude: 12.9955069496646,
     summerAvgHigh: 21,
     winterAvgLow: -7,
     annualRainfall: 750, // mm
