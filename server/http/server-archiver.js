@@ -27,7 +27,7 @@ console.log(`Loaded 'express' using 'ejs=${configData.DATA_VIEWS}'`);
 
 app.use((req, res, next) => {
     if (req.path === '/' && !req.secure) return res.redirect(`https://${req.headers.host.split(':')[0]}${req.url}`);
-    next();
+    return next();
 });
 console.log(`Loaded 'redirect' using 'http -> https'`);
 

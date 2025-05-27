@@ -85,7 +85,6 @@ export default [
             'n/hashbang': 'off',
             'n/no-unsupported-features/node-builtins': 'off',
 
-            /*
             // ESLint core rules
             'max-depth': 'warn',
             'no-div-regex': 'warn',
@@ -95,12 +94,9 @@ export default [
             'no-return-assign': 'warn',
             'consistent-return': 'warn',
             'arrow-body-style': 'warn',
-            'no-unused-vars': 'off',
-            'no-useless-escape': 'off',
             'no-new-object': 'warn',
             'block-scoped-var': 'warn',
             'no-case-declarations': 'off',
-            'no-console': 'warn',
             'use-isnan': 'error',
             'dot-notation': 'warn',
             'object-shorthand': 'warn',
@@ -113,14 +109,14 @@ export default [
             'no-template-curly-in-string': 'error',
             'no-unmodified-loop-condition': 'warn',
             'prefer-exponentiation-operator': 'error',
-            
+
             // Plugin rules
             'regexp/use-ignore-case': 'off',
             'regexp/no-unused-capturing-group': 'off',
             'regexp/no-useless-non-capturing-group': 'off',
-            
+
             '@brettz9/prefer-for-of': 'off',
-            
+
             'unicorn/consistent-function-scoping': 'off',
             'unicorn/no-static-only-class': 'off',
             'unicorn/prefer-set-has': 'off',
@@ -138,13 +134,12 @@ export default [
             'unicorn/prefer-string-slice': 'off',
             'unicorn/no-array-callback-reference': 'off',
             'unicorn/no-useless-fallback-in-spread': 'off',
-            
+
             'security-node/non-literal-reg-expr': 'off',
             'security-node/detect-eval-with-expr': 'off',
             'security-node/detect-crlf': 'off',
             'security-node/detect-insecure-randomness': 'off',
             'security-node/disable-ssl-across-node-server': 'off',
-*/
         },
     },
 

@@ -57,7 +57,7 @@ console.log(`Loaded 'express' using 'ejs=${configData.DATA_VIEWS}'`);
 
 app.use((req, res, next) => {
     if (req.path === '/' && !req.secure) return res.redirect(`https://${req.headers.host.split(':')[0]}${req.url}`);
-    next();
+    return next();
 });
 console.log(`Loaded 'redirect' using 'http -> https'`);
 
@@ -110,11 +110,9 @@ diagnostics.registerDiagnosticsProxy('Archiver', server_snapshots.getDiagnostics
 console.log(`Loaded 'diagnostics:proxy' for archiver using '${configData.SERVER_ARCHIVER}'`);
 
 const server_data = {
-    render: async function () {
-        return {
-            thumbnails: await server_snapshots.getThumbnails(),
-        };
-    },
+    render: async () => ({
+        thumbnails: await server_snapshots.getThumbnails(),
+    }),
 };
 console.log(`Loaded 'data' using 'data=thumbnails'`);
 
@@ -161,6 +159,7 @@ function getWeatherInterpretation(vars) {
         return results;
     } catch (e) {
         console.error(`getWeatherInterpretation, error:`, e);
+        return undefined;
     }
 }
 console.log(`Loaded 'weather' using 'location=${JSON.stringify(configData.LOCATION)}'`);

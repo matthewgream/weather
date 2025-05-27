@@ -32,7 +32,7 @@ function initialise(app, prefix, directory, location) {
         );
         res.json(manifest);
     });
-    app.put(prefix + '', image_upload.single('image'), (req, res) => {
+    app.put(String(prefix) + '', image_upload.single('image'), (req, res) => {
         if (!req.file) {
             console.error(`images upload failed: file not provided`);
             return res.status(400).send('File not provided');
@@ -56,10 +56,10 @@ function initialise(app, prefix, directory, location) {
             console.log(
                 `images upload succeeded: '${uploadedName}' (${uploadedData.length} bytes) --> '${compressedName}' (${compressedData.length} bytes) [${remote}]`
             );
-            res.send('File uploaded, compressed, and saved successfully.');
+            return res.send('File uploaded, compressed, and saved successfully.');
         } catch (e) {
             console.error(`images upload failed [${remote}], error:`, e);
-            res.status(500).send('File upload error');
+            return res.status(500).send('File upload error');
         }
     });
     app.get(prefix + '/:filename', (req, res) => {

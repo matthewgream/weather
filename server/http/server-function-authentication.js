@@ -45,14 +45,12 @@ function initialise(app, options) {
     //
 
     return {
-        getDiagnostics: () => {
-            return {
-                type: typeToWWW(type),
-                denied: authDenied,
-                allowed: authAllowed,
-                basic: authBasic,
-            };
-        },
+        getDiagnostics: () => ({
+            type: typeToWWW(type),
+            denied: authDenied,
+            allowed: authAllowed,
+            basic: authBasic,
+        }),
     };
 }
 

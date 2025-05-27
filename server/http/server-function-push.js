@@ -74,7 +74,7 @@ class PushNotificationManager {
                 this.saveSubscriptions();
                 console.log(`push: subscription inserted, size=${this.subscriptions.length}`);
             }
-            res.status(201).json({ success: true });
+            return res.status(201).json({ success: true });
         });
 
         this.app.post(`${this.route}/unsubscribe`, (req, res) => {
@@ -86,7 +86,7 @@ class PushNotificationManager {
                 this.saveSubscriptions();
                 console.log(`push: subscription removed, size=${this.subscriptions.length}`);
             }
-            res.json({ success: true });
+            return res.json({ success: true });
         });
     }
 
@@ -145,7 +145,7 @@ class PushNotificationManager {
                     : undefined,
             },
             vapidKeys: {
-                exists: !!this.vapidKeys,
+                exists: Boolean(this.vapidKeys),
                 lastUpdated: fs.existsSync(path.join(this.options.dataDir, this.options.vapidKeyFile))
                     ? fs.statSync(path.join(this.options.dataDir, this.options.vapidKeyFile)).mtime.toISOString()
                     : undefined,

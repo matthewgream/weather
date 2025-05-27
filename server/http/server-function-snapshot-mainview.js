@@ -47,6 +47,8 @@ function initialise(app, prefix, directory, server) {
         try {
             const imageBuffer = await getThumbnailImage(filename, width);
             if (imageBuffer) return `data:image/jpeg;base64,${imageBuffer.toString('base64')}`;
+            console.error(`Error generating thumbnail for ${filename}`);
+            return undefined;
         } catch (e) {
             console.error(`Error getting thumbnail for ${filename}:`, e);
             return undefined;
@@ -117,7 +119,7 @@ function initialise(app, prefix, directory, server) {
         snapshotsExpire();
         if (snapshotList__.length === 0) return;
         const closestSnapshots = {};
-        const earliest = snapshotList__[0];
+        const [earliest] = snapshotList__;
         for (const interval of SNAPSHOT_INTERVALS) {
             const targetTime = new Date(Date.now() - interval * 60 * 1000);
             const closest = snapshotList__.reduce(
@@ -158,7 +160,7 @@ function initialise(app, prefix, directory, server) {
     //
 
     app.get(prefix + '/thumb/:file', async (req, res) => {
-        const file = req.params.file;
+        const { file } = req.params;
         const width = Number.parseInt(req.query.w) || THUMBNAIL_WIDTH_SNAPSHOT;
         try {
             const imagedata = await getThumbnailImage(file, width);

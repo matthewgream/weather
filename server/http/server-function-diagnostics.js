@@ -114,7 +114,7 @@ class DiagnosticsManager {
     getPage(basePath) {
         const proxyLinks = (this.diagnosticsProxies || [])
             .map(
-                (proxy) => `<a href="${proxy.path || `/status/${proxy.name.toLowerCase()}`}" class="status-link">
+                (proxy) => `<a href="${proxy.path || '/status/' + proxy.name.toLowerCase()}" class="status-link">
         <div class="status-link-title">${proxy.name}</div>
         <div class="status-link-desc">${proxy.description || `Remote diagnostics for ${proxy.name}`}</div>
     </a>`
@@ -208,8 +208,8 @@ class DiagnosticsManager {
                                     const modifiedBuffer = Buffer.from(
                                         Buffer.concat(chunks)
                                             .toString('utf8')
-                                            .replace(new RegExp(`(href=["'])${targetPath}(/[^"']*)(["'])`, 'g'), `$1${proxyPath}$2$3`)
-                                            .replace(new RegExp(`(href=["'])${targetPath}(["'])`, 'g'), `$1${proxyPath}$2`),
+                                            .replaceAll(new RegExp(`(href=["'])${targetPath}(/[^"']*)(["'])`, 'g'), `$1${proxyPath}$2$3`)
+                                            .replaceAll(new RegExp(`(href=["'])${targetPath}(["'])`, 'g'), `$1${proxyPath}$2`),
                                         'utf8'
                                     );
                                     destination.setHeader('content-length', modifiedBuffer.length);

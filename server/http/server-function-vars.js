@@ -22,7 +22,7 @@ function initialise(app, prefix, vars, tz, debug) {
 
     //
 
-    app.get(prefix + '', (req, res) => {
+    app.get(String(prefix) + '', (req, res) => {
         debug && console.log(`vars requested from '${req.headers['x-forwarded-for'] || req.connection.remoteAddress}'`);
         res.json(variablesSet);
     });

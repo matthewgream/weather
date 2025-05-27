@@ -4,7 +4,7 @@
 const fs = require('fs');
 
 function initialise(app, prefix, filename) {
-    app.get(prefix + '', (req, res) => {
+    app.get(String(prefix) + '', (req, res) => {
         const { mac } = req.query;
         if (!mac) {
             console.error(`sets request failed: no mac address provided`);
@@ -16,11 +16,11 @@ function initialise(app, prefix, filename) {
                 console.log(`sets request failed: no client for ${mac}`);
                 return res.status(404).json({ error: 'MAC address unknown' });
             }
-            res.json(sets[mac]);
             console.log(`sets request succeeded: ${mac}`);
+            return res.json(sets[mac]);
         } catch (e) {
             console.error(`sets request failed: error reading client file, error:`, e);
-            res.status(500).json({ error: 'Internal server error' });
+            return res.status(500).json({ error: 'Internal server error' });
         }
     });
 

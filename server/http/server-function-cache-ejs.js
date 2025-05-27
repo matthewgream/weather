@@ -3,7 +3,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
+const { createHash } = require('crypto');
 const ejs = require('ejs');
 const zlib = require('zlib');
 
@@ -15,6 +15,7 @@ function install_if_available(name, what) {
         return require(name);
     } catch (e) {
         console.warn(`cache-ejs: '${name}' not available for '${what}' minification:`, e);
+        return undefined;
     }
 }
 
@@ -132,7 +133,7 @@ class SingleEJSTemplateCache {
         } else stats.total.uncompressed++;
     }
     updateCacheStats(hit) {
-        const cache = this.stats.cache;
+        const { cache } = this.stats;
         if (hit) cache.hits++;
         else cache.misses++;
         const total = cache.hits + cache.misses;
@@ -148,7 +149,7 @@ class SingleEJSTemplateCache {
                 template: ejs.compile(templateSource, this.ejsOptions),
                 originalSource,
                 minifiedSource: templateSource,
-                etag: crypto.createHash('md5').update(originalSource).digest('hex'),
+                etag: createHash('md5').update(originalSource).digest('hex'),
                 lastModified: fs.statSync(this.templatePath).mtime,
                 originalSize,
                 minifiedSize: Buffer.byteLength(templateSource, 'utf8'),
@@ -317,7 +318,7 @@ class SingleEJSTemplateCache {
         if (!this.cached) throw new Error(`Template '${this.templateName}' not loaded`);
         const renderStart = process.hrtime.bigint();
         try {
-            const hash = crypto.createHash('md5').update(JSON.stringify(data)).digest('hex');
+            const hash = createHash('md5').update(JSON.stringify(data)).digest('hex');
             if (this.lastHash === hash && this.lastHtml) {
                 this.updateCacheStats(true);
                 return this.lastHtml;
@@ -366,7 +367,7 @@ class SingleEJSTemplateCache {
             templateMinificationEnabled: this.minifyTemplate,
             outputMinificationEnabled: this.minifyOutput,
             watchingFile: this.watch,
-            isLoaded: !!this.cached,
+            isLoaded: Boolean(this.cached),
             stats: this.getStats(),
         };
     }
@@ -423,7 +424,7 @@ class SingleEJSTemplateCache {
     formatSize(bytes) {
         if (bytes === 0) return '0B';
         const i = Math.floor(Math.log(bytes) / Math.log(1024));
-        return Number.parseFloat((bytes / Math.pow(1024, i)).toFixed(1)) + ['B', 'KB', 'MB', 'GB'][i];
+        return Number.parseFloat((bytes / 1024 ** i).toFixed(1)) + ['B', 'KB', 'MB', 'GB'][i];
     }
 
     dispose() {
@@ -444,35 +445,33 @@ module.exports = function (templatePath, options = {}) {
         getDiagnostics: () => cache.getDiagnostics(),
         getStats: () => cache.getStats(),
         dispose: () => cache.dispose(),
-        routeHandler: (dataProvider) => {
-            return async (req, res) => {
-                try {
-                    const data = typeof dataProvider === 'function' ? await dataProvider(req) : dataProvider;
-                    const result = await cache.renderDirect(data);
-                    const etag = `"${result.etag}"`;
-                    res.set('ETag', etag);
-                    const lastModified = result.lastModified?.toUTCString();
-                    res.set('Last-Modified', lastModified);
-                    if (req.headers?.['if-none-match'] === etag || req.headers?.['if-modified-since'] === lastModified) return res.status(304).end();
-                    res.set('Content-Type', 'text/html; charset=utf-8');
-                    if (result.isMinifiedTemplate || result.isMinifiedOutput)
-                        res.set(
-                            'X-Minified',
-                            [result.isMinifiedTemplate ? 'template' : undefined, result.isMinifiedOutput ? 'output' : undefined].filter(Boolean).join(',')
-                        );
-                    for (const [type, html] of Object.entries(result.htmlCompressed)) {
-                        if (html && req.headers['accept-encoding']?.includes(type)) {
-                            res.set('Content-Encoding', type);
-                            res.set('Vary', 'Accept-Encoding');
-                            return res.send(html);
-                        }
+        routeHandler: (dataProvider) => async (req, res) => {
+            try {
+                const data = typeof dataProvider === 'function' ? await dataProvider(req) : dataProvider;
+                const result = await cache.renderDirect(data);
+                const etag = `"${result.etag}"`;
+                res.set('ETag', etag);
+                const lastModified = result.lastModified?.toUTCString();
+                res.set('Last-Modified', lastModified);
+                if (req.headers?.['if-none-match'] === etag || req.headers?.['if-modified-since'] === lastModified) return res.status(304).end();
+                res.set('Content-Type', 'text/html; charset=utf-8');
+                if (result.isMinifiedTemplate || result.isMinifiedOutput)
+                    res.set(
+                        'X-Minified',
+                        [result.isMinifiedTemplate ? 'template' : undefined, result.isMinifiedOutput ? 'output' : undefined].filter(Boolean).join(',')
+                    );
+                for (const [type, html] of Object.entries(result.htmlCompressed)) {
+                    if (html && req.headers['accept-encoding']?.includes(type)) {
+                        res.set('Content-Encoding', type);
+                        res.set('Vary', 'Accept-Encoding');
+                        return res.send(html);
                     }
-                    return res.send(result.html);
-                } catch (e) {
-                    console.error('cache-ejs: routeHandler error:', e);
-                    return res.status(500).send('Internal Server Error');
                 }
-            };
+                return res.send(result.html);
+            } catch (e) {
+                console.error('cache-ejs: routeHandler error:', e);
+                return res.status(500).send('Internal Server Error');
+            }
         },
     };
 };

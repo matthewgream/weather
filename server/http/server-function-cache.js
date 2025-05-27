@@ -3,7 +3,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
+const { createHash } = require('crypto');
 const zlib = require('zlib');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -14,6 +14,7 @@ function install_if_available(name, what) {
         return require(name);
     } catch (e) {
         console.warn(`cache: '${name}' not available for '${what}' minification:`, e);
+        return undefined;
     }
 }
 
@@ -144,10 +145,10 @@ class StaticFileCache {
                 css: cleanCSS ? new cleanCSS(this.minifiers_options.cleanCSS) : undefined,
             };
             console.log('cache: minifiers:', {
-                css: !!cleanCSS,
-                js: !!terser,
-                html: !!htmlMinifier,
-                svg: !!svgo,
+                css: Boolean(cleanCSS),
+                js: Boolean(terser),
+                html: Boolean(htmlMinifier),
+                svg: Boolean(svgo),
             });
         } catch (e) {
             console.error('cache: minifiers initialization failed:', e);
@@ -228,7 +229,7 @@ class StaticFileCache {
         } else stats.total.uncompressed++;
     }
     updateCacheStats(type) {
-        const cache = this.detailedStats.cache;
+        const { cache } = this.detailedStats;
         cache[type]++;
         const total = cache.hits + cache.misses;
         cache.hitRate = total > 0 ? ((cache.hits / total) * 100).toFixed(1) : 0;
@@ -305,7 +306,7 @@ class StaticFileCache {
                     processedContent = originalContent;
                 }
             }
-            const etag = crypto.createHash('md5').update(processedContent).digest('hex');
+            const etag = createHash('md5').update(processedContent).digest('hex');
             const contentCompressed = {
                 // order in priority of serving
                 br: this.compressionWrapper(
@@ -516,7 +517,7 @@ class StaticFileCache {
     formatSize(bytes) {
         if (bytes === 0) return '0B';
         const i = Math.floor(Math.log(bytes) / Math.log(1024));
-        return Number.parseFloat((bytes / Math.pow(1024, i)).toFixed(1)) + ['B', 'KB', 'MB', 'GB'][i];
+        return Number.parseFloat((bytes / 1024 ** i).toFixed(1)) + ['B', 'KB', 'MB', 'GB'][i];
     }
 
     getStatsString() {
@@ -538,31 +539,32 @@ class StaticFileCache {
         return parts.join(', ');
     }
 
+    serveCached(req, res, cached) {
+        this.updateCacheStats('hits');
+        const etag = `"${cached.etag}"`;
+        if (req.headers?.['if-none-match'] === etag) return res.status(304).end();
+        const lastModified = cached.lastModified?.toUTCString();
+        if (req.headers?.['if-modified-since'] === lastModified) return res.status(304).end();
+        res.set('Content-Type', cached.mimeType);
+        res.set('ETag', etag);
+        res.set('Last-Modified', lastModified);
+        res.set('Cache-Control', 'public, max-age=31536000'); // 1 year
+        if (cached.isMinified) res.set('X-Minified', 'output');
+        for (const [type, compressed] of Object.entries(cached.contentCompressed))
+            if (compressed && req.headers['accept-encoding']?.includes(type)) {
+                res.set('Content-Encoding', type);
+                res.set('Vary', 'Accept-Encoding');
+                return res.send(compressed);
+            }
+        return res.send(cached.content);
+    }
+
     createMiddleware() {
         return (req, res, next) => {
             if (!req.path.startsWith(this.pathPrefix)) return next();
             const requestPath = req.path.slice(this.pathPrefix.length);
             const cleanPath = requestPath.startsWith('/') ? requestPath.slice(1) : requestPath;
-            if (this.cache.has(cleanPath)) {
-                this.updateCacheStats('hits');
-                const cached = this.cache.get(cleanPath);
-                const etag = `"${cached.etag}"`;
-                if (req.headers?.['if-none-match'] === etag) return res.status(304).end();
-                const lastModified = cached.lastModified?.toUTCString();
-                if (req.headers?.['if-modified-since'] === lastModified) return res.status(304).end();
-                res.set('Content-Type', cached.mimeType);
-                res.set('ETag', etag);
-                res.set('Last-Modified', lastModified);
-                res.set('Cache-Control', 'public, max-age=31536000'); // 1 year
-                if (cached.isMinified) res.set('X-Minified', 'output');
-                for (const [type, compressed] of Object.entries(cached.contentCompressed))
-                    if (compressed && req.headers['accept-encoding']?.includes(type)) {
-                        res.set('Content-Encoding', type);
-                        res.set('Vary', 'Accept-Encoding');
-                        return res.send(compressed);
-                    }
-                return res.send(cached.content);
-            }
+            if (this.cache.has(cleanPath)) return this.serveCached(req, res, this.cache.get(cleanPath));
             if (this.isLoading) {
                 const filePath = path.join(this.directory, cleanPath);
                 if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
@@ -614,8 +616,7 @@ class StaticFileCache {
     }
 
     getStats() {
-        const files = this.detailedStats.files;
-        const compression = this.detailedStats.compression;
+        const { files, compression, cache, byExtension } = this.detailedStats;
 
         return {
             files: {
@@ -655,10 +656,10 @@ class StaticFileCache {
                 },
             },
             cache: {
-                ...this.detailedStats.cache,
-                hitRate: `${this.detailedStats.cache.hitRate}%`,
+                ...cache,
+                hitRate: `${cache.hitRate}%`,
             },
-            byExtension: this.detailedStats.byExtension,
+            byExtension,
         };
     }
 

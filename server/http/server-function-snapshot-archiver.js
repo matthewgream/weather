@@ -100,14 +100,14 @@ function initialise(app, prefix, options) {
         cacheSnapshotDate.routeHandler(async (req) => getSnapshotListForDate(req.params.date))
     );
     app.get(prefix + '/file/:file', (req, res) => {
-        const file = req.params.file;
+        const { file } = req.params;
         let filename = getSnapshotFilename(file);
         if (!filename) filename = getTimelapseFilename(file);
         if (!filename) return res.status(404).send('File not found');
         return res.sendFile(filename);
     });
     app.get(prefix + '/thumb/:file', async (req, res) => {
-        const file = req.params.file;
+        const { file } = req.params;
         const width = Number.parseInt(req.query.w) || THUMBNAIL_WIDTH_SNAPSHOT;
         try {
             const imagedata = await getThumbnailImage(file, width);

@@ -62,6 +62,7 @@ self.addEventListener('notificationclick', (event) => {
             .then((windowClients) => {
                 for (let i = 0; i < windowClients.length; i++) if ('focus' in windowClients[i]) return windowClients[i].focus();
                 if (self.clients.openWindow) return self.clients.openWindow('/');
+                return undefined;
             })
     );
 });

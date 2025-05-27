@@ -330,12 +330,12 @@ function getSunPosition(jd) {
 
 function calculateSolarNodeProximity(moonPos, sunPos) {
     const longitudeDiff = Math.abs(moonPos.longitude - sunPos.longitude);
-    return Math.sqrt(Math.pow(moonPos.latitude, 2) + Math.pow(longitudeDiff > 180 ? 360 - longitudeDiff : longitudeDiff, 2));
+    return Math.hypot(moonPos.latitude ** 2 + (longitudeDiff > 180 ? 360 - longitudeDiff : longitudeDiff) ** 2);
 }
 function calculateLunarNodeProximity(moonPos, sunPos) {
     const longitudeDiff = Math.abs(moonPos.longitude - sunPos.longitude);
     const oppositionError = Math.abs((longitudeDiff > 180 ? 360 - longitudeDiff : longitudeDiff) - 180);
-    return Math.sqrt(Math.pow(moonPos.latitude, 2) + Math.pow(oppositionError, 2));
+    return Math.hypot(moonPos.latitude ** 2 + oppositionError ** 2);
 }
 function calculateUmbralDistance(moonPos, sunPos) {
     const shadowRadius = 0.7;
@@ -606,14 +606,14 @@ function solarEclipsePath(eclipseType, jd, moonPos, sunPos) {
 }
 function solarEclipseVisibilityLocation(eclipseType, pathData, latitude, longitude) {
     if (eclipseType === 'partial') {
-        const distanceToCenter = Math.sqrt(
-            Math.pow(latitude - pathData.simplifiedPath[1].latitude, 2) + Math.pow(((longitude - pathData.simplifiedPath[1].longitude + 180) % 360) - 180, 2)
+        const distanceToCenter = Math.hypot(
+            (latitude - pathData.simplifiedPath[1].latitude) ** 2 + (((longitude - pathData.simplifiedPath[1].longitude + 180) % 360) - 180) ** 2
         );
         return distanceToCenter < 70 ? 'partial visibility' : 'not visible';
     } else {
         const pathLatitude = pathData.simplifiedPath[1].latitude,
             pathLongitude = pathData.simplifiedPath[1].longitude;
-        const distanceToPath = Math.sqrt(Math.pow(latitude - pathLatitude, 2) + Math.pow(((longitude - pathLongitude + 180) % 360) - 180, 2));
+        const distanceToPath = Math.hypot((latitude - pathLatitude) ** 2 + (((longitude - pathLongitude + 180) % 360) - 180) ** 2);
         return distanceToPath < 0.5 ? `in path of ${pathData.pathType}` : distanceToPath < 70 ? 'partial visibility' : 'not visible';
     }
 }
@@ -1413,7 +1413,7 @@ const calculateHeatIndex = (temp, rh) => {
             1.99e-6 * tempF * tempF * rh * rh;
         if (rh < 13 && tempF >= 80 && tempF <= 112)
             // Apply adjustment for low humidity or cool temps
-            heatIndexF -= ((13 - rh) / 4) * Math.sqrt((17 - Math.abs(tempF - 95)) / 17);
+            heatIndexF -= ((13 - rh) / 4) * Math.hypot((17 - Math.abs(tempF - 95)) / 17);
         else if (rh > 85 && tempF >= 80 && tempF <= 87) heatIndexF += ((rh - 85) / 10) * ((87 - tempF) / 5);
     }
     return ((heatIndexF - 32) * 5) / 9; // Convert back to Celsius
@@ -1424,7 +1424,7 @@ const calculateHeatIndex = (temp, rh) => {
 const calculateWindChill = (temp, windSpeed) => {
     if (temp > 10 || windSpeed <= 1.3) return temp; // Only applicable for temps <= 10°C and wind > 1.3 m/s
     const windSpeedKmh = windSpeed * 3.6; // Convert wind speed to km/h
-    return 13.12 + 0.6215 * temp - 11.37 * Math.pow(windSpeedKmh, 0.16) + 0.3965 * temp * Math.pow(windSpeedKmh, 0.16); // Calculate wind chill using Environment Canada formula
+    return 13.12 + 0.6215 * temp - 11.37 * windSpeedKmh ** 0.16 + 0.3965 * temp * windSpeedKmh ** 0.16; // Calculate wind chill using Environment Canada formula
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

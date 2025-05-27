@@ -207,6 +207,7 @@ function createBanner(timestamp) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+// eslint-disable-next-line sonarjs/cognitive-complexity
 function createSectionDataSummary(data_location, vars) {
     const outside = formatList[0].elems;
     const lake = formatList[1].elems;
@@ -230,8 +231,7 @@ function createSectionDataSummary(data_location, vars) {
     const lakeSubmerged = locate(vars, lake[1].path);
     const lakeIceDepth = undefined;
     const internalBatteryWH65 = locate(vars, internal[0].path);
-    const interpretation = vars.interpretation;
-    const aircraft = vars.aircraft;
+    const { interpretation, aircraft } = vars;
 
     let summary = [];
 
@@ -409,16 +409,16 @@ function createSectionThumbs(data) {
     setTimeout(() => updateSectionThumbs(), UPDATE_THUMBS_PERIOD);
     const now = Date.now();
     const thumbnailsBoxes = thumbnails
-        .map((thumbnail) => {
-            return `
+        .map(
+            (thumbnail) => `
             <div class="thumbnail-container">
                 <a href="/${thumbnail.file}" target="_blank">
                     <img src="${getThumbnailUrl(thumbnail.file, now, data)}" alt="${thumbnail.label}" class="thumbnail-image" data-thumbnail="${thumbnail.file}">
                     <div class="thumbnail-label">${thumbnail.label}</div>
                 </a>
             </div>
-        `;
-        })
+        `
+        )
         .join('');
     const thumbnailsLinks = `
         <div class="thumbnails-placeholder">
@@ -448,7 +448,7 @@ function updateSectionCamera() {
 }
 function createSectionCamera(data) {
     setTimeout(() => updateSectionCamera(), UPDATE_CAMERA_PERIOD);
-    const img = data?.thumbnails?.['current'] || `/snapshot/thumb/snapshot.jpg?w=${MAIN_CAMERA_WIDTH}&t=${Date.now()}`;
+    const img = data?.thumbnails?.current || `/snapshot/thumb/snapshot.jpg?w=${MAIN_CAMERA_WIDTH}&t=${Date.now()}`;
     return `
         <section class="section">
         	<div class="camera-container">
@@ -572,6 +572,7 @@ function schedule(vars) {
     }
 }
 
+// eslint-disable-next-line no-unused-vars
 function create(vars, data) {
     varsLast = vars;
     timezone = conf.location_data.timezone;

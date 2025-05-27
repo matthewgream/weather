@@ -19,7 +19,7 @@ const weatherPushNotifications = (function () {
         try {
             vapidPublicKey = (await (await fetch('/push/vapidPublicKey'))?.json())?.publicKey;
             serviceWorker = await navigator.serviceWorker.register('/static/js/mainview-worker.js');
-            isSubscribed = !!(await serviceWorker.pushManager.getSubscription());
+            isSubscribed = Boolean(await serviceWorker.pushManager.getSubscription());
             pushToggleListen();
             console.log(`push: initialised with service-worker (isSubscribed=${isSubscribed}):`, serviceWorker);
             return true;
@@ -97,7 +97,7 @@ const weatherPushNotifications = (function () {
         try {
             const subscription = await serviceWorker.pushManager.getSubscription();
             if (subscription) {
-                const endpoint = subscription.endpoint;
+                const { endpoint } = subscription;
                 await subscription.unsubscribe();
                 await fetch('/push/unsubscribe', {
                     method: 'POST',

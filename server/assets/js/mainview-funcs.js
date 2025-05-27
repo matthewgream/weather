@@ -3,7 +3,7 @@
 
 function isNumber(inputVal) {
     var oneDecimal = false,
-        inputStr = '' + inputVal;
+        inputStr = '' + String(inputVal);
     for (var i = 0; i < inputStr.length; i++) {
         const oneChar = inputStr.charAt(i);
         if (i === 0 && (oneChar === '-' || oneChar === '+')) continue;
@@ -77,6 +77,7 @@ function __jdTimeCentury(jd) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+// eslint-disable-next-line no-unused-vars
 function getDST(date = new Date()) {
     if (date.getMonth() > 10 || date.getMonth() < 2) return false; // November to February
     if (date.getMonth() > 3 && date.getMonth() < 9) return true; // April to September
@@ -131,7 +132,7 @@ function calcEquationOfTime(t) {
     const l0Rad = degToRad(calcGeomMeanLongSun(t)),
         e = calcEccentricityEarthOrbit(t),
         mRad = degToRad(calcGeomMeanAnomalySun(t)),
-        y = Math.pow(Math.tan(degToRad(calcObliquityCorrection(t)) / 2), 2);
+        y = Math.tan(degToRad(calcObliquityCorrection(t)) / 2) ** 2;
     const sin2l0 = Math.sin(2 * l0Rad),
         sinm = Math.sin(mRad),
         cos2l0 = Math.cos(2 * l0Rad),
@@ -180,6 +181,7 @@ const degreesBelowHorizon = {
     goldenHour: -6,
 };
 
+// eslint-disable-next-line no-unused-vars
 class SolarCalc {
     constructor(date, latitude, longitude) {
         this.date = date;
