@@ -27,10 +27,11 @@ class SingleEJSTemplateCache {
     constructor(templatePath, options = {}) {
         this.templatePath = path.resolve(templatePath);
         this.templateName = path.basename(templatePath, '.ejs');
+        this.debug = options.debug === true; // Default false
         this.minifyTemplate = options.minifyTemplate !== false; // Default true
         this.minifyOutput = options.minifyOutput === true; // Default false
         this.watch = options.watch !== false; // Default true
-        this.compress = (options.compress || '').split(',').map((type) => type.toLowerCase().trim());
+        this.compressionTypes = (options.compress || '').split(',').map((type) => type.toLowerCase().trim());
         this.compressionThreshold = options.compressionThreshold || 4096; // 4096 byte default
         this.compressionLevel = {
             gzip: options.compressionLevelGzip || 6,
@@ -47,6 +48,43 @@ class SingleEJSTemplateCache {
         this.lastHtml = undefined;
         this.watcher = undefined;
         this.isLoading = true;
+
+        this.compressionStats = {
+            total: {
+                requests: 0,
+                compressed: 0,
+                uncompressed: 0,
+                bytesSaved: 0,
+                compressionTime: 0,
+            },
+            byType: {
+                gzip: {
+                    requests: 0,
+                    compressed: 0,
+                    uncompressed: 0,
+                    bytesSaved: 0,
+                    compressionTime: 0,
+                    avgCompressionRatio: 0,
+                },
+                brotli: {
+                    requests: 0,
+                    compressed: 0,
+                    uncompressed: 0,
+                    bytesSaved: 0,
+                    compressionTime: 0,
+                    avgCompressionRatio: 0,
+                },
+            },
+            belowThreshold: {
+                count: 0,
+                totalSize: 0,
+            },
+            cache: {
+                hits: 0,
+                misses: 0,
+                hitRate: 0,
+            },
+        };
 
         this.loadTemplate()
             .then(() => {
@@ -79,8 +117,13 @@ class SingleEJSTemplateCache {
             this.lastHash = undefined;
             this.lastHtml = undefined;
             if (this.watch) this.setupWatcher();
+            const opts = [
+                `minTemplate:${this.minifyTemplate}`,
+                `minOutput:${this.minifyOutput}`,
+                ...this.compressionTypes.map((type) => `${type}:${this.compressionLevel?.[type] || '?'}`),
+            ];
             console.log(
-                `cache-ejs: template load '${this.templateName}' from '${this.templatePath}' (${originalSize} ${this.minifyTemplate ? ' to ' + this.cached.minifiedSize + ' bytes' : ''})`
+                `cache-ejs: template load '${this.templateName}' from '${this.templatePath}' (${originalSize} ${this.minifyTemplate ? 'to ' + this.cached.minifiedSize + ' bytes' : ''}): ${opts.join(', ')}`
             );
         } catch (e) {
             console.error(`cache-ejs: template load '${this.templateName}' from '${this.templatePath}' error:`, e);
@@ -194,13 +237,14 @@ class SingleEJSTemplateCache {
 
     compressionWrapper(name, detail, compressionFn, html, options = {}) {
         const htmlSize = Buffer.byteLength(html, 'utf8');
-        if (!this.compress.includes(name) || htmlSize <= this.compressionThreshold) return undefined;
+        if (!this.compressionTypes.includes(name) || htmlSize <= this.compressionThreshold) return undefined;
         const start = process.hrtime.bigint();
         const compressed = compressionFn(html, options);
         const time = Number(process.hrtime.bigint() - start) / 1_000_000;
         const compressedSize = compressed.length,
             reduction = Math.round((1 - compressedSize / htmlSize) * 100);
-        console.log(`cache-ejs: compressed [${name}:${detail}] ${htmlSize} -> ${compressedSize} bytes (${reduction}% reduction) in ${time.toFixed(2)}ms`);
+        if (this.debug)
+            console.log(`cache-ejs: compressed [${name}:${detail}] ${htmlSize} -> ${compressedSize} bytes (${reduction}% reduction) in ${time.toFixed(2)}ms`);
         return compressed;
     }
 
@@ -212,6 +256,7 @@ class SingleEJSTemplateCache {
             let html = this.cached.template(data);
             if (this.minifyOutput) html = await this.minifyOutputHTML(html);
             const htmlCompressed = {
+                // order in priority of serving
                 br: this.compressionWrapper('brotli', `${this.compressionLevel['brotli']}`, (html, opts) => zlib.brotliCompressSync(html, opts), html, {
                     params: { [zlib.constants.BROTLI_PARAM_QUALITY]: this.compressionLevel['brotli'] },
                 }),
