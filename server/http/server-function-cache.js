@@ -607,10 +607,11 @@ class StaticFileCache {
                 compressedSize: this.formatSize(stats.compressedSize),
                 saved: stats.originalSize === stats.compressedSize ? '0B' : this.formatSize(stats.originalSize - stats.compressedSize),
             })),
+            stats: this.getStats(),
         };
     }
 
-    getDetailedStats() {
+    getStats() {
         const files = this.detailedStats.files;
         const compression = this.detailedStats.compression;
 
@@ -678,7 +679,7 @@ module.exports = function (options = {}) {
     return {
         middleware: cache.createMiddleware(),
         getDiagnostics: () => cache.getDiagnostics(),
-        getStats: () => cache.getDetailedStats(),
+        getStats: () => cache.getStats(),
         stats: () => cache.getStatsString(),
         getFile: (path) => cache.getFile(path),
         hasFile: (path) => cache.hasFile(path),

@@ -93,36 +93,33 @@ class DiagnosticsManager {
         this.additionalDiagnostics = [];
         const basePath = options.path || '',
             basePort = options.port || 80;
-	    this.app = app;
+        this.app = app;
         app.use(expressStatus({ port: basePort, path: basePath + '/internal' }));
         app.use(morgan(options.morganFormat || 'combined', { stream: this.memoryLogs.createLogStream() }));
         app.use(this.requestStats.createMiddleware());
         app.get(basePath, (req, res) => res.send(this.getPage(basePath)));
         app.get(basePath + '/diagnostics', (req, res) => {
             const stats = this.requestStats.getStats();
-            const uptime = this._formatUptime(Date.now() - stats.startTime);
-            const logs = this.memoryLogs.getLogs().slice(-this.logLimitDisplay);
-            const additionalDiagnostics = this.additionalDiagnostics;
-            const formatTitle = this._formatTitle;
-            const formatValue = this._formatValue;
-            res.render('server-diagnostics', {
+            return res.render('server-diagnostics', {
                 stats,
-                uptime,
-                logs,
-                additionalDiagnostics,
+                uptime: this._formatUptime(Date.now() - stats.startTime),
+                logs: this.memoryLogs.getLogs().slice(-this.logLimitDisplay),
+                additionalDiagnostics: this.additionalDiagnostics,
                 process,
-                formatTitle,
-                formatValue,
+                formatTitle: this._formatTitle,
+                formatValue: this._formatValue,
             });
         });
     }
     getPage(basePath) {
-        const proxyLinks = (this.diagnosticsProxies || []).map(proxy => `
-    <a href="${proxy.path || `/status/${proxy.name.toLowerCase()}`}" class="status-link">
+        const proxyLinks = (this.diagnosticsProxies || [])
+            .map(
+                (proxy) => `<a href="${proxy.path || `/status/${proxy.name.toLowerCase()}`}" class="status-link">
         <div class="status-link-title">${proxy.name}</div>
         <div class="status-link-desc">${proxy.description || `Remote diagnostics for ${proxy.name}`}</div>
-    </a>`).join('');
-        
+    </a>`
+            )
+            .join('');
         return `<!DOCTYPE html>
 <html>
 <head>
@@ -164,11 +161,11 @@ class DiagnosticsManager {
         const proxyPath = proxyConfig.path || `/status/${name.toLowerCase()}`;
         const targetPath = proxyConfig.targetPath || '/status';
         if (!this.diagnosticsProxies) this.diagnosticsProxies = [];
-        this.diagnosticsProxies.push({ 
-            name, 
+        this.diagnosticsProxies.push({
+            name,
             path: proxyPath,
             description: proxyConfig.description || `Remote diagnostics for ${name}`,
-            target: proxyConfig.target
+            target: proxyConfig.target,
         });
         try {
             const { createProxyMiddleware } = require('http-proxy-middleware');
@@ -178,36 +175,60 @@ class DiagnosticsManager {
                 secure: false,
                 ws: true,
                 pathRewrite: (path, req) => (req.originalUrl || path).replace(proxyPath, targetPath),
-                onProxyReq: (proxyReq, req, res) => {
+                onProxyReq: (proxyReq, req) => {
                     proxyReq.setHeader('host', new URL(proxyConfig.target).host);
                     proxyReq.setHeader('x-forwarded-proto', 'https');
                     proxyReq.setHeader('x-forwarded-host', req.headers.host);
                     proxyReq.setHeader('x-forwarded-for', req.headers['x-forwarded-for'] || req.connection.remoteAddress);
                 },
-                onProxyRes: (proxyRes, req, res) => {
+                onProxyRes: (proxyRes) => {
                     if (proxyRes.statusCode >= 300 && proxyRes.statusCode < 400 && proxyRes.headers.location) {
-                        const originalLocation = proxyRes.headers.location;
+                        const locationOriginal = proxyRes.headers.location;
                         try {
-                            const locationUrl = new URL(originalLocation, proxyConfig.target);
-                            if (originalLocation.startsWith('/') || locationUrl.origin === new URL(proxyConfig.target).origin) {
-                                const newLocation = locationUrl.pathname + locationUrl.search + locationUrl.hash;
-                                proxyRes.headers.location = newLocation.startsWith(targetPath) ? newLocation.replace(targetPath, proxyPath) : proxyPath + newLocation;
+                            const locationUrl = new URL(locationOriginal, proxyConfig.target);
+                            if (locationOriginal.startsWith('/') || locationUrl.origin === new URL(proxyConfig.target).origin) {
+                                const locationNew = locationUrl.pathname + locationUrl.search + locationUrl.hash;
+                                proxyRes.headers.location = locationNew.startsWith(targetPath)
+                                    ? locationNew.replace(targetPath, proxyPath)
+                                    : proxyPath + locationNew;
                             }
                         } catch (e) {
                             console.error(`[DiagnosticsProxy] Error parsing redirect location:`, e);
                         }
                     }
+                    const contentType = proxyRes.headers['content-type'] || '';
+                    if (contentType.includes('text/html')) {
+                        delete proxyRes.headers['content-length'];
+                        proxyRes.pipe.bind(proxyRes);
+                        proxyRes.pipe = function (destination) {
+                            const chunks = [];
+                            proxyRes.on('data', (chunk) => chunks.push(chunk));
+                            proxyRes.on('end', () => {
+                                const modifiedBuffer = Buffer.from(
+                                    Buffer.concat(chunks)
+                                        .toString('utf8')
+                                        .replace(new RegExp(`(href=["'])${targetPath}(/[^"']*)(["'])`, 'g'), `$1${proxyPath}$2$3`)
+                                        .replace(new RegExp(`(href=["'])${targetPath}(["'])`, 'g'), `$1${proxyPath}$2`),
+                                    'utf8'
+                                );
+                                destination.setHeader('content-length', modifiedBuffer.length);
+                                destination.write(modifiedBuffer);
+                                destination.end();
+                            });
+                            return proxyRes;
+                        };
+                    }
                 },
                 onError: (err, req, res) => {
                     console.error(`[DiagnosticsProxy] Proxy error for ${name}:`, err.message);
                     res.status(500).send(`Proxy error: ${err.message}`);
-                }
+                },
             });
             this.app.use(proxyPath, proxy);
             console.log(`Registered diagnostics proxy: ${name} (${proxyPath} -> ${proxyConfig.target}${targetPath})`);
             return true;
-        } catch (error) {
-            console.error(`Failed to create diagnostics proxy for ${name}:`, error);
+        } catch (e) {
+            console.error(`Failed to create diagnostics proxy for ${name}:`, e);
             return false;
         }
     }
@@ -253,6 +274,7 @@ class DiagnosticsManager {
     _formatValue(value) {
         if (value === undefined) return '<em>None</em>';
         if (typeof value === 'boolean') return value ? '<span class="good">Enabled</span>' : '<span class="warning">Disabled</span>';
+        if (value instanceof Date) return value.toISOString();
         if (typeof value === 'object') return '<pre>' + JSON.stringify(value, undefined, 2) + '</pre>';
         if (typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://')))
             return `<a href="${value}" target="_blank">${value}</a>`;

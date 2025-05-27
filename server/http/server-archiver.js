@@ -60,6 +60,7 @@ diagnostics.registerDiagnosticsSource('Cache::/static', () => cache_static.getDi
 console.log(`Loaded 'cache' using 'directory=${configData.DATA_ASSETS}, path=/static, minify=true': ${cache_static.stats()}`);
 
 const server_snapshots = require('./server-function-snapshot-archiver.js')(app, '/snapshot', { directory: configData.STORAGE, templates: configData.VIEWS });
+server_snapshots.connectDiagnostics(diagnostics);
 console.log(`Loaded 'snapshots' on '/snapshot', using '${configData.STORAGE}'`);
 
 app.get('/', (req, res) => res.redirect(server_snapshots.getUrlList()));

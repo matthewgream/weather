@@ -83,20 +83,21 @@ function initialise(app, prefix, options) {
 
     //
 
+    const cacheSnapshotList = require('./server-function-cache-ejs.js')(path.join(templates, 'server-snapshot-list.ejs'), {
+        minifyOutput: true,
+        compress: 'brotli',
+    });
     app.get(
         prefix + '/list',
-        require('./server-function-cache-ejs.js')(path.join(templates, 'server-snapshot-list.ejs'), { minifyOutput: true, compress: 'brotli' }).routeHandler(
-            async () => ({
-                snapshotList: getSnapshotListOfDates(),
-                timelapseList: getTimelapseListOfFiles(),
-            })
-        )
+        cacheSnapshotList.routeHandler(async () => ({ snapshotList: getSnapshotListOfDates(), timelapseList: getTimelapseListOfFiles() }))
     );
+    const cacheSnapshotDate = require('./server-function-cache-ejs.js')(path.join(templates, 'server-snapshot-date.ejs'), {
+        minifyOutput: true,
+        compress: 'brotli',
+    });
     app.get(
         prefix + '/list/:date',
-        require('./server-function-cache-ejs.js')(path.join(templates, 'server-snapshot-date.ejs'), { minifyOutput: true, compress: 'brotli' }).routeHandler(
-            async (req) => getSnapshotListForDate(req.params.date)
-        )
+        cacheSnapshotDate.routeHandler(async (req) => getSnapshotListForDate(req.params.date))
     );
     app.get(prefix + '/file/:file', (req, res) => {
         const file = req.params.file;
@@ -124,6 +125,10 @@ function initialise(app, prefix, options) {
 
     return {
         getUrlList: () => prefix + '/list',
+        connectDiagnostics: (diagnostics) => {
+            diagnostics.registerDiagnosticsSource('Cache::/snapshotList', () => cacheSnapshotList.getDiagnostics());
+            diagnostics.registerDiagnosticsSource('Cache::/snapshotDate', () => cacheSnapshotDate.getDiagnostics());
+        },
     };
 }
 

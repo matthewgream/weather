@@ -322,7 +322,7 @@ class SingleEJSTemplateCache {
         try {
             const hash = crypto.createHash('md5').update(JSON.stringify(data)).digest('hex');
             if (this.lastHash === hash && this.lastHtml) {
-                this.updateCacheStatus(true);
+                this.updateCacheStats(true);
                 return this.lastHtml;
             }
             this.updateCacheStats(false);
@@ -370,6 +370,7 @@ class SingleEJSTemplateCache {
             outputMinificationEnabled: this.minifyOutput,
             watchingFile: this.watch,
             isLoaded: !!this.cached,
+            stats: this.getStats(),
         };
     }
 
