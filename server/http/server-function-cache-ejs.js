@@ -185,6 +185,8 @@ class SingleEJSTemplateCache {
         if (!this.cached) throw new Error(`Template '${this.templateName}' not loaded`);
         try {
             let html = this.cached.template(data);
+            const etag = `${this.cached.etag}-${crypto.createHash('md5').update(JSON.stringify(data)).digest('hex')}`;
+            const time = new Date().toUTCString();
             if (this.minifyOutput) {
                 //const originalSize = Buffer.byteLength(html, 'utf8');
                 html = await this.minifyOutputHTML(html);
@@ -193,8 +195,8 @@ class SingleEJSTemplateCache {
             }
             return {
                 html,
-                etag: this.cached.etag,
-                lastModified: this.cached.lastModified,
+                etag,
+                lastModified: time,
                 isMinifiedTemplate: this.minify,
                 isMinifiedOutput: this.minifyOutput,
             };
