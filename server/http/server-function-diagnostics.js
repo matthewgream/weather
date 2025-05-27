@@ -147,7 +147,7 @@ class DiagnosticsManager {
 
     registerDiagnosticsSource(name, sourceFunction) {
         if (typeof sourceFunction !== 'function') {
-            console.error(`Invalid diagnostics source function for ${name}`);
+            console.error(`diagnostics:source: ${name}: invalid function`);
             return false;
         }
         this.additionalDiagnostics.push({ name, sourceFunction });
@@ -155,7 +155,7 @@ class DiagnosticsManager {
     }
     registerDiagnosticsProxy(name, proxyConfig) {
         if (!proxyConfig || !proxyConfig.target) {
-            console.error(`Invalid diagnostics proxy configuration for ${name}`);
+            console.error(`diagnostics:proxy: ${name}: invalid configuration`);
             return false;
         }
         const proxyPath = proxyConfig.path || `/status/${name.toLowerCase()}`;
@@ -175,60 +175,59 @@ class DiagnosticsManager {
                 secure: false,
                 ws: true,
                 pathRewrite: (path, req) => (req.originalUrl || path).replace(proxyPath, targetPath),
-                onProxyReq: (proxyReq, req) => {
-                    proxyReq.setHeader('host', new URL(proxyConfig.target).host);
-                    proxyReq.setHeader('x-forwarded-proto', 'https');
-                    proxyReq.setHeader('x-forwarded-host', req.headers.host);
-                    proxyReq.setHeader('x-forwarded-for', req.headers['x-forwarded-for'] || req.connection.remoteAddress);
-                },
-                onProxyRes: (proxyRes) => {
-                    if (proxyRes.statusCode >= 300 && proxyRes.statusCode < 400 && proxyRes.headers.location) {
-                        const locationOriginal = proxyRes.headers.location;
-                        try {
-                            const locationUrl = new URL(locationOriginal, proxyConfig.target);
-                            if (locationOriginal.startsWith('/') || locationUrl.origin === new URL(proxyConfig.target).origin) {
-                                const locationNew = locationUrl.pathname + locationUrl.search + locationUrl.hash;
-                                proxyRes.headers.location = locationNew.startsWith(targetPath)
-                                    ? locationNew.replace(targetPath, proxyPath)
-                                    : proxyPath + locationNew;
+                on: {
+                    proxyReq: (proxyReq, req) => {
+                        proxyReq.setHeader('host', new URL(proxyConfig.target).host);
+                        proxyReq.setHeader('x-forwarded-proto', 'https');
+                        proxyReq.setHeader('x-forwarded-host', req.headers.host);
+                        proxyReq.setHeader('x-forwarded-for', req.headers['x-forwarded-for'] || req.connection.remoteAddress);
+                    },
+                    proxyRes: (proxyRes) => {
+                        if (proxyRes.statusCode >= 300 && proxyRes.statusCode < 400 && proxyRes.headers.location) {
+                            const locationOriginal = proxyRes.headers.location;
+                            try {
+                                const locationUrl = new URL(locationOriginal, proxyConfig.target);
+                                if (locationOriginal.startsWith('/') || locationUrl.origin === new URL(proxyConfig.target).origin) {
+                                    const locationNew = locationUrl.pathname + locationUrl.search + locationUrl.hash;
+                                    proxyRes.headers.location = locationNew.startsWith(targetPath)
+                                        ? locationNew.replace(targetPath, proxyPath)
+                                        : proxyPath + locationNew;
+                                }
+                            } catch (e) {
+                                console.error(`diagnostics:proxy: ${name}: error parsing redirect:`, e);
                             }
-                        } catch (e) {
-                            console.error(`[DiagnosticsProxy] Error parsing redirect location:`, e);
                         }
-                    }
-                    const contentType = proxyRes.headers['content-type'] || '';
-                    if (contentType.includes('text/html')) {
-                        delete proxyRes.headers['content-length'];
-                        proxyRes.pipe.bind(proxyRes);
-                        proxyRes.pipe = function (destination) {
-                            const chunks = [];
-                            proxyRes.on('data', (chunk) => chunks.push(chunk));
-                            proxyRes.on('end', () => {
-                                const modifiedBuffer = Buffer.from(
-                                    Buffer.concat(chunks)
-                                        .toString('utf8')
-                                        .replace(new RegExp(`(href=["'])${targetPath}(/[^"']*)(["'])`, 'g'), `$1${proxyPath}$2$3`)
-                                        .replace(new RegExp(`(href=["'])${targetPath}(["'])`, 'g'), `$1${proxyPath}$2`),
-                                    'utf8'
-                                );
-                                destination.setHeader('content-length', modifiedBuffer.length);
-                                destination.write(modifiedBuffer);
-                                destination.end();
-                            });
-                            return proxyRes;
-                        };
-                    }
-                },
-                onError: (err, req, res) => {
-                    console.error(`[DiagnosticsProxy] Proxy error for ${name}:`, err.message);
-                    res.status(500).send(`Proxy error: ${err.message}`);
+                        const contentType = proxyRes.headers['content-type'] || '';
+                        if (contentType.includes('text/html')) {
+                            delete proxyRes.headers['content-length'];
+                            proxyRes.pipe.bind(proxyRes);
+                            proxyRes.pipe = function (destination) {
+                                const chunks = [];
+                                proxyRes.on('data', (chunk) => chunks.push(chunk));
+                                proxyRes.on('end', () => {
+                                    const modifiedBuffer = Buffer.from(
+                                        Buffer.concat(chunks)
+                                            .toString('utf8')
+                                            .replace(new RegExp(`(href=["'])${targetPath}(/[^"']*)(["'])`, 'g'), `$1${proxyPath}$2$3`)
+                                            .replace(new RegExp(`(href=["'])${targetPath}(["'])`, 'g'), `$1${proxyPath}$2`),
+                                        'utf8'
+                                    );
+                                    destination.setHeader('content-length', modifiedBuffer.length);
+                                    destination.write(modifiedBuffer);
+                                    destination.end();
+                                });
+                                return proxyRes;
+                            };
+                        }
+                    },
+                    error: (err, _, res) => res.status(500).send(`Proxy error: ${err.message}`),
                 },
             });
             this.app.use(proxyPath, proxy);
-            console.log(`Registered diagnostics proxy: ${name} (${proxyPath} -> ${proxyConfig.target}${targetPath})`);
+            console.log(`diagnostics:proxy: ${name}: register setup (${proxyPath} -> ${proxyConfig.target}${targetPath})`);
             return true;
         } catch (e) {
-            console.error(`Failed to create diagnostics proxy for ${name}:`, e);
+            console.error(`diagnostics:proxy: ${name}: register failed:`, e);
             return false;
         }
     }

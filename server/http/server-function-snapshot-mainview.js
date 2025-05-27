@@ -177,7 +177,6 @@ function initialise(app, prefix, directory, server) {
             target: server,
             changeOrigin: true,
             secure: false,
-            logLevel: 'debug',
             selfHandleResponse: false,
             followRedirects: false,
             pathRewrite: { '^/': '/snapshot/' },
