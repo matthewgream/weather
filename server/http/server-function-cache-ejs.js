@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const ejs = require('ejs');
+const zlib = require('zlib');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -26,9 +27,15 @@ class SingleEJSTemplateCache {
     constructor(templatePath, options = {}) {
         this.templatePath = path.resolve(templatePath);
         this.templateName = path.basename(templatePath, '.ejs');
-        this.minify = options.minify !== false; // Default true
+        this.minifyTemplate = options.minifyTemplate !== false; // Default true
         this.minifyOutput = options.minifyOutput === true; // Default false
         this.watch = options.watch !== false; // Default true
+        this.compress = (options.compress || '').split(',').map((type) => type.toLowerCase().trim());
+        this.compressionThreshold = options.compressionThreshold || 4096; // 4096 byte default
+        this.compressionLevel = {
+            gzip: options.compressionLevelGzip || 6,
+            brotli: options.compressionLevelBrotli || 4,
+        };
         this.ejsOptions = {
             cache: false,
             compileDebug: false,
@@ -36,8 +43,11 @@ class SingleEJSTemplateCache {
             ...options.ejsOptions,
         };
         this.cached = undefined;
+        this.lastHash = undefined;
+        this.lastHtml = undefined;
         this.watcher = undefined;
         this.isLoading = true;
+
         this.loadTemplate()
             .then(() => {
                 this.isLoading = false;
@@ -52,8 +62,7 @@ class SingleEJSTemplateCache {
         try {
             const originalSource = fs.readFileSync(this.templatePath, 'utf8'),
                 originalSize = Buffer.byteLength(originalSource, 'utf8');
-            let templateSource = originalSource;
-            if (this.minify) templateSource = await this.minifyTemplateSource(originalSource);
+            const templateSource = this.minifyTemplate ? await this.minifyTemplateSource(originalSource) : originalSource;
             const template = ejs.compile(templateSource, this.ejsOptions);
             const etag = crypto.createHash('md5').update(originalSource).digest('hex');
             const lastModified = fs.statSync(this.templatePath).mtime?.toUTCString();
@@ -67,9 +76,11 @@ class SingleEJSTemplateCache {
                 minifiedSize: Buffer.byteLength(templateSource, 'utf8'),
                 loadedAt: new Date(),
             };
+            this.lastHash = undefined;
+            this.lastHtml = undefined;
             if (this.watch) this.setupWatcher();
             console.log(
-                `cache-ejs: template load '${this.templateName}' from '${this.templatePath}' (${originalSize} ${this.minify ? ' to ' + this.cached.minifiedSize + ' bytes' : ''})`
+                `cache-ejs: template load '${this.templateName}' from '${this.templatePath}' (${originalSize} ${this.minifyTemplate ? ' to ' + this.cached.minifiedSize + ' bytes' : ''})`
             );
         } catch (e) {
             console.error(`cache-ejs: template load '${this.templateName}' from '${this.templatePath}' error:`, e);
@@ -181,25 +192,43 @@ class SingleEJSTemplateCache {
             .trim();
     }
 
+    compressionWrapper(name, detail, compressionFn, html, options = {}) {
+        const htmlSize = Buffer.byteLength(html, 'utf8');
+        if (!this.compress.includes(name) || htmlSize <= this.compressionThreshold) return undefined;
+        const start = process.hrtime.bigint();
+        const compressed = compressionFn(html, options);
+        const time = Number(process.hrtime.bigint() - start) / 1_000_000;
+        const compressedSize = compressed.length,
+            reduction = Math.round((1 - compressedSize / htmlSize) * 100);
+        console.log(`cache-ejs: compressed [${name}:${detail}] ${htmlSize} -> ${compressedSize} bytes (${reduction}% reduction) in ${time.toFixed(2)}ms`);
+        return compressed;
+    }
+
     async renderDirect(data) {
         if (!this.cached) throw new Error(`Template '${this.templateName}' not loaded`);
         try {
+            const hash = crypto.createHash('md5').update(JSON.stringify(data)).digest('hex');
+            if (this.lastHash === hash && this.lastHtml) return this.lastHtml;
             let html = this.cached.template(data);
-            const etag = `${this.cached.etag}-${crypto.createHash('md5').update(JSON.stringify(data)).digest('hex')}`;
-            const time = new Date().toUTCString();
-            if (this.minifyOutput) {
-                //const originalSize = Buffer.byteLength(html, 'utf8');
-                html = await this.minifyOutputHTML(html);
-                //const minifiedSize = Buffer.byteLength(html, 'utf8');
-                //console.log(`cache-ejs: output minified (${originalSize} to ${minifiedSize} bytes)`);
-            }
-            return {
+            if (this.minifyOutput) html = await this.minifyOutputHTML(html);
+            const htmlCompressed = {
+                br: this.compressionWrapper('brotli', `${this.compressionLevel['brotli']}`, (html, opts) => zlib.brotliCompressSync(html, opts), html, {
+                    params: { [zlib.constants.BROTLI_PARAM_QUALITY]: this.compressionLevel['brotli'] },
+                }),
+                gzip: this.compressionWrapper('gzip', `${this.compressionLevel['gzip']}`, (html, opts) => zlib.gzipSync(html, opts), html, {
+                    level: this.compressionLevel['gzip'],
+                }),
+            };
+            this.lastHash = hash;
+            this.lastHtml = {
                 html,
-                etag,
-                lastModified: time,
-                isMinifiedTemplate: this.minify,
+                htmlCompressed,
+                etag: `${this.cached.etag}-${hash}`,
+                lastModified: new Date().toUTCString(),
+                isMinifiedTemplate: this.minifyTemplate,
                 isMinifiedOutput: this.minifyOutput,
             };
+            return this.lastHtml;
         } catch (e) {
             console.error(`cache-ejs: direct render error for '${this.templateName}':`, e);
             throw e;
@@ -215,7 +244,7 @@ class SingleEJSTemplateCache {
             loadedAt: this.cached?.loadedAt,
             originalSize: this.formatSize(this.cached?.originalSize || 0),
             minifiedSize: this.formatSize(this.cached?.minifiedSize || 0),
-            templateMinificationEnabled: this.minify,
+            templateMinificationEnabled: this.minifyTemplate,
             outputMinificationEnabled: this.minifyOutput,
             watchingFile: this.watch,
             isLoaded: !!this.cached,
@@ -250,17 +279,29 @@ module.exports = function (templatePath, options = {}) {
                 try {
                     const data = typeof dataProvider === 'function' ? await dataProvider(req) : dataProvider;
                     const result = await cache.renderDirect(data);
-                    res.set('Content-Type', 'text/html; charset=utf-8');
-                    res.set('ETag', `"${result.etag}"`);
+                    const etag = `"${result.etag}"`;
+                    res.set('ETag', etag);
                     res.set('Last-Modified', result.lastModified);
+                    if (req.headers?.['if-none-match'] === etag || req.headers?.['if-modified-since'] === result.lastModified) return res.status(304).end();
+                    res.set('Content-Type', 'text/html; charset=utf-8');
                     if (result.isMinifiedTemplate || result.isMinifiedOutput)
                         res.set(
                             'X-Minified',
                             [result.isMinifiedTemplate ? 'template' : undefined, result.isMinifiedOutput ? 'output' : undefined].filter(Boolean).join(',')
                         );
-                    if (req.headers?.['if-none-match'] === `"${result.etag}"` || req.headers?.['if-modified-since'] === result.lastModified)
-                        return res.status(304).end();
-                    res.send(result.html);
+                    if (
+                        !Object.entries(result.htmlCompressed).some(([type, html]) => {
+                            if (html && req.headers['accept-encoding']?.includes(type)) {
+                                res.set('Content-Encoding', type);
+                                res.set('Vary', 'Accept-Encoding');
+                                res.send(html);
+                                return true;
+                            }
+                            return false;
+                        })
+                    ) {
+                        res.send(result.html);
+                    }
                 } catch (e) {
                     console.error('cache-ejs: routeHandler error:', e);
                     res.status(500).send('Internal Server Error');

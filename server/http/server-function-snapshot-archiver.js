@@ -85,15 +85,17 @@ function initialise(app, prefix, options) {
 
     app.get(
         prefix + '/list',
-        require('./server-function-cache-ejs.js')(path.join(templates, 'server-snapshot-list.ejs'), { minifyOutput: true }).routeHandler(async () => ({
-            snapshotList: getSnapshotListOfDates(),
-            timelapseList: getTimelapseListOfFiles(),
-        }))
+        require('./server-function-cache-ejs.js')(path.join(templates, 'server-snapshot-list.ejs'), { minifyOutput: true, compress: 'brotli' }).routeHandler(
+            async () => ({
+                snapshotList: getSnapshotListOfDates(),
+                timelapseList: getTimelapseListOfFiles(),
+            })
+        )
     );
     app.get(
         prefix + '/list/:date',
-        require('./server-function-cache-ejs.js')(path.join(templates, 'server-snapshot-date.ejs'), { minifyOutput: true }).routeHandler(async (req) =>
-            getSnapshotListForDate(req.params.date)
+        require('./server-function-cache-ejs.js')(path.join(templates, 'server-snapshot-date.ejs'), { minifyOutput: true, compress: 'brotli' }).routeHandler(
+            async (req) => getSnapshotListForDate(req.params.date)
         )
     );
     app.get(prefix + '/file/:file', (req, res) => {
