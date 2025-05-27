@@ -242,9 +242,10 @@ mqtt_client.on('message', (topic, message) => {
 });
 console.log(`Loaded 'mqtt:subscriber' using 'server=${configData.MQTT}, topics=[${configData.CONTENT_DATA_SUBS.join(', ')}]'`);
 
-setInterval(() => {
-    mqtt_client.publish(configData.DIAGNOSTICS_PUBLISH_TOPIC, JSON.stringify(diagnostics.getPublishableStats()));
-}, configData.DIAGNOSTICS_PUBLISH_PERIOD * 1000);
+setInterval(
+    () => mqtt_client.publish(configData.DIAGNOSTICS_PUBLISH_TOPIC, JSON.stringify(diagnostics.getPublishableStats())),
+    configData.DIAGNOSTICS_PUBLISH_PERIOD * 1000
+);
 console.log(`Loaded 'mqtt:publisher' using 'topic=${configData.DIAGNOSTICS_PUBLISH_TOPIC}, period=${configData.DIAGNOSTICS_PUBLISH_PERIOD}'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
