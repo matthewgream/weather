@@ -4,6 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const zlib = require('zlib');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -70,7 +71,16 @@ class StaticFileCache {
             '.svg': { method: 'minifySVG', async: true },
             '.json': { method: 'minifyJSON', async: false },
         };
+        this.debug = options.debug === true; // Default false
+        this.compressionTypes = (options.compress || '').split(',').map((type) => type.toLowerCase().trim());
+        this.compressionThreshold = options.compressionThreshold || 2048; // 4096 byte default
+        this.compressionRatio = options.compressionRatio || 80; // Only store if compressed is less than 80% of original
+        this.compressionLevel = {
+            gzip: options.compressionLevelGzip || 6,
+            brotli: options.compressionLevelBrotli || 4,
+        };
         this.initializeMinifiers();
+        this.initDetailedStats();
         this.quickScan();
         this.startBackgroundLoading();
     }
@@ -145,6 +155,85 @@ class StaticFileCache {
         }
     }
 
+    initDetailedStats() {
+        this.detailedStats = {
+            files: {
+                loaded: 0,
+                loadErrors: 0,
+                loadTime: 0,
+                minified: 0,
+                minifyErrors: 0,
+                minifyTime: 0,
+            },
+            compression: {
+                total: {
+                    requests: 0,
+                    compressed: 0,
+                    uncompressed: 0,
+                    bytesSaved: 0,
+                    compressionTime: 0,
+                },
+                byType: {
+                    gzip: this.initCompressionTypeStats(),
+                    brotli: this.initCompressionTypeStats(),
+                },
+                belowThreshold: {
+                    count: 0,
+                    totalSize: 0,
+                },
+                skipRatio: {
+                    count: 0,
+                    totalSize: 0,
+                },
+            },
+            cache: {
+                hits: 0,
+                misses: 0,
+                notFound: 0,
+                servedWhileLoading: 0,
+                hitRate: 0,
+            },
+            byExtension: {},
+        };
+    }
+    initCompressionTypeStats() {
+        return {
+            requests: 0,
+            compressed: 0,
+            uncompressed: 0,
+            bytesSaved: 0,
+            compressionTime: 0,
+            avgCompressionRatio: 0,
+        };
+    }
+    updateCompressionStats(type, originalSize, compressedSize, time, wasCompressed) {
+        const stats = this.detailedStats.compression;
+        const typeStats = stats.byType[type];
+        if (typeStats) {
+            typeStats.requests++;
+            if (wasCompressed) {
+                typeStats.compressed++;
+                typeStats.bytesSaved += originalSize - compressedSize;
+                typeStats.compressionTime += time;
+                const totalBytes = typeStats.compressed * originalSize;
+                const totalCompressed = totalBytes - typeStats.bytesSaved;
+                typeStats.avgCompressionRatio = ((1 - totalCompressed / totalBytes) * 100).toFixed(1);
+            } else typeStats.uncompressed++;
+        }
+        stats.total.requests++;
+        if (wasCompressed) {
+            stats.total.compressed++;
+            stats.total.bytesSaved += originalSize - compressedSize;
+            stats.total.compressionTime += time;
+        } else stats.total.uncompressed++;
+    }
+    updateCacheStats(type) {
+        const cache = this.detailedStats.cache;
+        cache[type]++;
+        const total = cache.hits + cache.misses;
+        cache.hitRate = total > 0 ? ((cache.hits / total) * 100).toFixed(1) : 0;
+    }
+
     quickScan() {
         this.scanDirectory(this.directory);
     }
@@ -195,6 +284,7 @@ class StaticFileCache {
         }
     }
     async loadFile(filePath, relativePath) {
+        const loadStart = process.hrtime.bigint();
         try {
             const originalContent = fs.readFileSync(filePath);
             const ext = path.extname(relativePath).toLowerCase();
@@ -202,17 +292,45 @@ class StaticFileCache {
             let processedContent = originalContent;
             let isMinified = false;
             if (this.minify && this.canMinify(ext)) {
+                const minifyStart = process.hrtime.bigint();
                 try {
                     processedContent = await this.minifyContentAsync(originalContent, ext);
                     isMinified = true;
+                    const minifyTime = Number(process.hrtime.bigint() - minifyStart) / 1_000_000;
+                    this.detailedStats.files.minified++;
+                    this.detailedStats.files.minifyTime += minifyTime;
                 } catch (e) {
+                    this.detailedStats.files.minifyErrors++;
                     console.warn(`cache: minification failed for '${relativePath}':`, e.message);
                     processedContent = originalContent;
                 }
             }
             const etag = crypto.createHash('md5').update(processedContent).digest('hex');
+            const contentCompressed = {
+                // order in priority of serving
+                br: this.compressionWrapper(
+                    'brotli',
+                    `${this.compressionLevel['brotli']} <${relativePath}>`,
+                    (content, opts) => zlib.brotliCompressSync(content, opts),
+                    processedContent,
+                    {
+                        params: { [zlib.constants.BROTLI_PARAM_QUALITY]: this.compressionLevel['brotli'] },
+                    }
+                ),
+                gzip: this.compressionWrapper(
+                    'gzip',
+                    `${this.compressionLevel['gzip']} <${relativePath}>`,
+                    (content, opts) => zlib.gzipSync(content, opts),
+                    processedContent,
+                    {
+                        level: this.compressionLevel['gzip'],
+                    }
+                ),
+            };
+
             this.cache.set(relativePath, {
                 content: processedContent,
+                contentCompressed,
                 mimeType,
                 etag,
                 lastModified: fs.statSync(filePath).mtime.toUTCString(),
@@ -220,6 +338,20 @@ class StaticFileCache {
                 compressedSize: processedContent.length,
                 isMinified,
             });
+
+            if (!this.detailedStats.byExtension[ext])
+                this.detailedStats.byExtension[ext] = {
+                    files: 0,
+                    minified: 0,
+                    compressed: { gzip: 0, brotli: 0 },
+                };
+            this.detailedStats.byExtension[ext].files++;
+            if (isMinified) this.detailedStats.byExtension[ext].minified++;
+            if (contentCompressed.gzip) this.detailedStats.byExtension[ext].compressed.gzip++;
+            if (contentCompressed.br) this.detailedStats.byExtension[ext].compressed.brotli++;
+            const loadTime = Number(process.hrtime.bigint() - loadStart) / 1_000_000;
+            this.detailedStats.files.loaded++;
+            this.detailedStats.files.loadTime += loadTime;
             this.updateStats(ext, originalContent.length, processedContent.length);
         } catch (e) {
             console.error(`cache: failed to load '${relativePath}':`, e);
@@ -333,6 +465,45 @@ class StaticFileCache {
             .trim();
     }
 
+    compressionWrapper(name, detail, compressionFn, content, options = {}) {
+        const contentSize = content.length;
+        if (!this.compressionTypes.includes(name)) return undefined;
+
+        if (contentSize <= this.compressionThreshold) {
+            this.detailedStats.compression.belowThreshold.count++;
+            this.detailedStats.compression.belowThreshold.totalSize += contentSize;
+            return undefined;
+        }
+
+        const start = process.hrtime.bigint();
+        try {
+            const compressed = compressionFn(content, options);
+            const time = Number(process.hrtime.bigint() - start) / 1_000_000;
+            const compressedSize = compressed.length;
+            const ratio = (compressedSize / contentSize) * 100;
+            const reduction = Math.round((1 - compressedSize / contentSize) * 100);
+            if (ratio >= this.compressionRatio) {
+                this.detailedStats.compression.skipRatio.count++;
+                this.detailedStats.compression.skipRatio.totalSize += contentSize;
+                if (this.debug)
+                    console.log(
+                        `cache: compressed [${name}:${detail}] ${contentSize} -> ${compressedSize} bytes (${reduction}% reduction, ratio ${ratio.toFixed(1)}%) in ${time.toFixed(2)}ms - SKIPPED (ratio >= ${this.compressionRatio}%)`
+                    );
+                this.updateCompressionStats(name, contentSize, compressedSize, time, false);
+                return undefined;
+            }
+            if (this.debug)
+                console.log(
+                    `cache: compressed [${name}:${detail}] ${contentSize} -> ${compressedSize} bytes (${reduction}% reduction) in ${time.toFixed(2)}ms`
+                );
+            this.updateCompressionStats(name, contentSize, compressedSize, time, true);
+            return compressed;
+        } catch (e) {
+            console.warn(`cache: compression failed [${name}]:`, e.message);
+            return undefined;
+        }
+    }
+
     updateStats(ext, originalSize, compressedSize) {
         this.stats.files++;
         this.stats.totalOriginalSize += originalSize;
@@ -373,6 +544,7 @@ class StaticFileCache {
             const requestPath = req.path.slice(this.pathPrefix.length);
             const cleanPath = requestPath.startsWith('/') ? requestPath.slice(1) : requestPath;
             if (this.cache.has(cleanPath)) {
+                this.updateCacheStats('hits');
                 const cached = this.cache.get(cleanPath);
                 if (req.headers?.['if-none-match'] === `"${cached.etag}"`) return res.status(304).end();
                 if (req.headers?.['if-modified-since'] === cached.lastModified) return res.status(304).end();
@@ -380,17 +552,25 @@ class StaticFileCache {
                 res.set('ETag', `"${cached.etag}"`);
                 res.set('Last-Modified', cached.lastModified);
                 res.set('Cache-Control', 'public, max-age=31536000'); // 1 year
-                if (cached.isMinified) res.set('X-Minified', 'true');
+                if (cached.isMinified) res.set('X-Minified', 'output');
+                for (const [type, compressed] of Object.entries(cached.contentCompressed))
+                    if (compressed && req.headers['accept-encoding']?.includes(type)) {
+                        res.set('Content-Encoding', type);
+                        res.set('Vary', 'Accept-Encoding');
+                        return res.send(compressed);
+                    }
                 return res.send(cached.content);
             }
             if (this.isLoading) {
                 const filePath = path.join(this.directory, cleanPath);
                 if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+                    this.updateCacheStats('servedWhileLoading');
                     res.set('Content-Type', this.mimeTypes[path.extname(cleanPath).toLowerCase()] || 'application/octet-stream');
                     res.set('X-Cache-Status', 'loading');
                     return res.sendFile(filePath);
                 }
             }
+            this.updateCacheStats('notFound');
             return next();
         };
     }
@@ -429,6 +609,56 @@ class StaticFileCache {
             })),
         };
     }
+
+    getDetailedStats() {
+        const files = this.detailedStats.files;
+        const compression = this.detailedStats.compression;
+
+        return {
+            files: {
+                loaded: files.loaded,
+                loadErrors: files.loadErrors,
+                avgLoadTime: files.loaded > 0 ? `${(files.loadTime / files.loaded).toFixed(2)}ms` : '0ms',
+                minified: files.minified,
+                minifyErrors: files.minifyErrors,
+                avgMinifyTime: files.minified > 0 ? `${(files.minifyTime / files.minified).toFixed(2)}ms` : '0ms',
+            },
+            compression: {
+                total: {
+                    ...compression.total,
+                    avgCompressionTime:
+                        compression.total.compressed > 0 ? `${(compression.total.compressionTime / compression.total.compressed).toFixed(2)}ms` : '0ms',
+                    totalBytesSaved: this.formatSize(compression.total.bytesSaved),
+                },
+                byType: Object.entries(compression.byType).reduce((acc, [type, stats]) => {
+                    acc[type] = {
+                        ...stats,
+                        avgCompressionTime: stats.compressed > 0 ? `${(stats.compressionTime / stats.compressed).toFixed(2)}ms` : '0ms',
+                        totalBytesSaved: this.formatSize(stats.bytesSaved),
+                        avgCompressionRatio: `${stats.avgCompressionRatio}%`,
+                    };
+                    return acc;
+                }, {}),
+                belowThreshold: {
+                    ...compression.belowThreshold,
+                    avgSize:
+                        compression.belowThreshold.count > 0 ? this.formatSize(compression.belowThreshold.totalSize / compression.belowThreshold.count) : '0B',
+                    totalSize: this.formatSize(compression.belowThreshold.totalSize),
+                },
+                skipRatio: {
+                    ...compression.skipRatio,
+                    avgSize: compression.skipRatio.count > 0 ? this.formatSize(compression.skipRatio.totalSize / compression.skipRatio.count) : '0B',
+                    totalSize: this.formatSize(compression.skipRatio.totalSize),
+                },
+            },
+            cache: {
+                ...this.detailedStats.cache,
+                hitRate: `${this.detailedStats.cache.hitRate}%`,
+            },
+            byExtension: this.detailedStats.byExtension,
+        };
+    }
+
     getFile(relativePath) {
         return this.cache.get(relativePath);
     }
@@ -448,6 +678,7 @@ module.exports = function (options = {}) {
     return {
         middleware: cache.createMiddleware(),
         getDiagnostics: () => cache.getDiagnostics(),
+        getStats: () => cache.getDetailedStats(),
         stats: () => cache.getStatsString(),
         getFile: (path) => cache.getFile(path),
         hasFile: (path) => cache.hasFile(path),

@@ -77,6 +77,11 @@ const cache_static = require('./server-function-cache.js')({
     directory: configData.DATA_ASSETS,
     path: '/static',
     minify: true,
+    compress: 'gzip,brotli',
+    compressionThreshold: 2048,
+    compressionRatio: 75,
+    compressionLevelGzip: 9,
+    compressionLevelBrotli: 9,
     options: configData?.CACHE?.static,
 });
 app.use(cache_static.middleware);

@@ -31,8 +31,9 @@ class SingleEJSTemplateCache {
         this.minifyTemplate = options.minifyTemplate !== false; // Default true
         this.minifyOutput = options.minifyOutput === true; // Default false
         this.watch = options.watch !== false; // Default true
-        this.compressionTypes = (options.compress || '').split(',').map((type) => type.toLowerCase().trim());
+        this.compressionTypes = options.compress?.split(',').map((type) => type.toLowerCase().trim()) || [];
         this.compressionThreshold = options.compressionThreshold || 4096; // 4096 byte default
+        this.compressionRatio = options.compressionRatio || 0;
         this.compressionLevel = {
             gzip: options.compressionLevelGzip || 6,
             brotli: options.compressionLevelBrotli || 4,
@@ -48,43 +49,7 @@ class SingleEJSTemplateCache {
         this.lastHtml = undefined;
         this.watcher = undefined;
         this.isLoading = true;
-
-        this.compressionStats = {
-            total: {
-                requests: 0,
-                compressed: 0,
-                uncompressed: 0,
-                bytesSaved: 0,
-                compressionTime: 0,
-            },
-            byType: {
-                gzip: {
-                    requests: 0,
-                    compressed: 0,
-                    uncompressed: 0,
-                    bytesSaved: 0,
-                    compressionTime: 0,
-                    avgCompressionRatio: 0,
-                },
-                brotli: {
-                    requests: 0,
-                    compressed: 0,
-                    uncompressed: 0,
-                    bytesSaved: 0,
-                    compressionTime: 0,
-                    avgCompressionRatio: 0,
-                },
-            },
-            belowThreshold: {
-                count: 0,
-                totalSize: 0,
-            },
-            cache: {
-                hits: 0,
-                misses: 0,
-                hitRate: 0,
-            },
-        };
+        this.initCompressionStats();
 
         this.loadTemplate()
             .then(() => {
@@ -94,6 +59,84 @@ class SingleEJSTemplateCache {
                 console.error(`cache-ejs: failed to load template:`, e);
                 this.isLoading = false;
             });
+    }
+
+    initCompressionStats() {
+        this.stats = {
+            templates: {
+                loaded: 0,
+                reloaded: 0,
+                renderCount: 0,
+                renderTime: 0,
+                renderErrors: 0,
+            },
+            compression: {
+                total: {
+                    requests: 0,
+                    compressed: 0,
+                    uncompressed: 0,
+                    bytesSaved: 0,
+                    compressionTime: 0,
+                },
+                byType: {
+                    gzip: this.initCompressionTypeStats(),
+                    brotli: this.initCompressionTypeStats(),
+                },
+                belowThreshold: {
+                    count: 0,
+                    totalSize: 0,
+                },
+                skipRatio: {
+                    count: 0,
+                    totalSize: 0,
+                },
+            },
+            cache: {
+                hits: 0,
+                misses: 0,
+                hitRate: 0,
+            },
+        };
+    }
+    initCompressionTypeStats() {
+        return {
+            requests: 0,
+            compressed: 0,
+            uncompressed: 0,
+            bytesSaved: 0,
+            compressionTime: 0,
+            avgCompressionRatio: 0,
+        };
+    }
+    updateCompressionStats(type, originalSize, compressedSize, time, wasCompressed) {
+        const stats = this.stats.compression;
+        const typeStats = stats.byType[type];
+        if (typeStats) {
+            typeStats.requests++;
+            if (wasCompressed) {
+                typeStats.compressed++;
+                typeStats.bytesSaved += originalSize - compressedSize;
+                typeStats.compressionTime += time;
+                const totalBytes = typeStats.compressed * originalSize;
+                const totalCompressed = totalBytes - typeStats.bytesSaved;
+                typeStats.avgCompressionRatio = ((1 - totalCompressed / totalBytes) * 100).toFixed(1);
+            } else {
+                typeStats.uncompressed++;
+            }
+        }
+        stats.total.requests++;
+        if (wasCompressed) {
+            stats.total.compressed++;
+            stats.total.bytesSaved += originalSize - compressedSize;
+            stats.total.compressionTime += time;
+        } else stats.total.uncompressed++;
+    }
+    updateCacheStats(hit) {
+        const cache = this.stats.cache;
+        if (hit) cache.hits++;
+        else cache.misses++;
+        const total = cache.hits + cache.misses;
+        cache.hitRate = total > 0 ? ((cache.hits / total) * 100).toFixed(1) : 0;
     }
 
     async loadTemplate() {
@@ -122,6 +165,7 @@ class SingleEJSTemplateCache {
                 `minOutput:${this.minifyOutput}`,
                 ...this.compressionTypes.map((type) => `${type}:${this.compressionLevel?.[type] || '?'}`),
             ];
+            this.stats.templates.loaded++;
             console.log(
                 `cache-ejs: template load '${this.templateName}' from '${this.templatePath}' (${originalSize} ${this.minifyTemplate ? 'to ' + this.cached.minifiedSize + ' bytes' : ''}): ${opts.join(', ')}`
             );
@@ -137,6 +181,7 @@ class SingleEJSTemplateCache {
             this.watcher = fs.watchFile(this.templatePath, { interval: 1000 }, (curr, prev) => {
                 if (curr.mtime !== prev.mtime) {
                     console.log(`cache-ejs: template reload '${this.templateName}' (file changed)`);
+                    this.stats.templates.reloaded++;
                     this.loadTemplate().catch((e) => console.error(`cache-ejs: template reload failed:`, e));
                 }
             });
@@ -237,22 +282,50 @@ class SingleEJSTemplateCache {
 
     compressionWrapper(name, detail, compressionFn, html, options = {}) {
         const htmlSize = Buffer.byteLength(html, 'utf8');
-        if (!this.compressionTypes.includes(name) || htmlSize <= this.compressionThreshold) return undefined;
+        if (!this.compressionTypes.includes(name)) return undefined;
+
+        if (htmlSize <= this.compressionThreshold) {
+            this.stats.compression.belowThreshold.count++;
+            this.stats.compression.belowThreshold.totalSize += htmlSize;
+            return undefined;
+        }
+
         const start = process.hrtime.bigint();
         const compressed = compressionFn(html, options);
         const time = Number(process.hrtime.bigint() - start) / 1_000_000;
-        const compressedSize = compressed.length,
-            reduction = Math.round((1 - compressedSize / htmlSize) * 100);
+        const compressedSize = compressed.length;
+        const reduction = Math.round((1 - compressedSize / htmlSize) * 100);
+
+        // Check if we should skip due to insufficient compression
+        const ratio = (compressedSize / htmlSize) * 100;
+        if (this.compressionRatio && ratio >= this.compressionRatio) {
+            this.stats.compression.skipRatio.count++;
+            this.stats.compression.skipRatio.totalSize += htmlSize;
+            if (this.debug)
+                console.log(
+                    `cache-ejs: compressed [${name}:${detail}] ${htmlSize} -> ${compressedSize} bytes (${reduction}% reduction, ratio ${ratio.toFixed(1)}%) in ${time.toFixed(2)}ms - SKIPPED`
+                );
+            this.updateCompressionStats(name, htmlSize, compressedSize, time, false);
+            return undefined;
+        }
+
         if (this.debug)
             console.log(`cache-ejs: compressed [${name}:${detail}] ${htmlSize} -> ${compressedSize} bytes (${reduction}% reduction) in ${time.toFixed(2)}ms`);
+
+        this.updateCompressionStats(name, htmlSize, compressedSize, time, true);
         return compressed;
     }
 
     async renderDirect(data) {
         if (!this.cached) throw new Error(`Template '${this.templateName}' not loaded`);
+        const renderStart = process.hrtime.bigint();
         try {
             const hash = crypto.createHash('md5').update(JSON.stringify(data)).digest('hex');
-            if (this.lastHash === hash && this.lastHtml) return this.lastHtml;
+            if (this.lastHash === hash && this.lastHtml) {
+                this.updateCacheStatus(true);
+                return this.lastHtml;
+            }
+            this.updateCacheStats(false);
             let html = this.cached.template(data);
             if (this.minifyOutput) html = await this.minifyOutputHTML(html);
             const htmlCompressed = {
@@ -273,14 +346,18 @@ class SingleEJSTemplateCache {
                 isMinifiedTemplate: this.minifyTemplate,
                 isMinifiedOutput: this.minifyOutput,
             };
+            const renderTime = Number(process.hrtime.bigint() - renderStart) / 1_000_000;
+            this.stats.templates.renderCount++;
+            this.stats.templates.renderTime += renderTime;
             return this.lastHtml;
         } catch (e) {
+            this.stats.templates.renderErrors++;
             console.error(`cache-ejs: direct render error for '${this.templateName}':`, e);
             throw e;
         }
     }
 
-    getInfo() {
+    getDiagnostics() {
         return {
             templateName: this.templateName,
             templatePath: this.templatePath,
@@ -293,6 +370,55 @@ class SingleEJSTemplateCache {
             outputMinificationEnabled: this.minifyOutput,
             watchingFile: this.watch,
             isLoaded: !!this.cached,
+        };
+    }
+
+    getStats() {
+        const avgRenderTime = this.stats.templates.renderCount > 0 ? (this.stats.templates.renderTime / this.stats.templates.renderCount).toFixed(2) : 0;
+        return {
+            templateName: this.templateName,
+            templates: {
+                ...this.stats.templates,
+                avgRenderTime: `${avgRenderTime}ms`,
+            },
+            compression: {
+                ...this.stats.compression,
+                total: {
+                    ...this.stats.compression.total,
+                    avgCompressionTime:
+                        this.stats.compression.total.compressed > 0
+                            ? `${(this.stats.compression.total.compressionTime / this.stats.compression.total.compressed).toFixed(2)}ms`
+                            : '0ms',
+                    totalBytesSaved: this.formatSize(this.stats.compression.total.bytesSaved),
+                },
+                byType: Object.entries(this.stats.compression.byType).reduce((acc, [type, stats]) => {
+                    acc[type] = {
+                        ...stats,
+                        avgCompressionTime: stats.compressed > 0 ? `${(stats.compressionTime / stats.compressed).toFixed(2)}ms` : '0ms',
+                        totalBytesSaved: this.formatSize(stats.bytesSaved),
+                        avgCompressionRatio: `${stats.avgCompressionRatio}%`,
+                    };
+                    return acc;
+                }, {}),
+                belowThreshold: {
+                    ...this.stats.compression.belowThreshold,
+                    avgSize:
+                        this.stats.compression.belowThreshold.count > 0
+                            ? this.formatSize(this.stats.compression.belowThreshold.totalSize / this.stats.compression.belowThreshold.count)
+                            : '0B',
+                },
+                skipRatio: {
+                    ...this.stats.compression.skipRatio,
+                    avgSize:
+                        this.stats.compression.skipRatio.count > 0
+                            ? this.formatSize(this.stats.compression.skipRatio.totalSize / this.stats.compression.skipRatio.count)
+                            : '0B',
+                },
+            },
+            cache: {
+                ...this.stats.cache,
+                hitRate: `${this.stats.cache.hitRate}%`,
+            },
         };
     }
 
@@ -317,7 +443,8 @@ class SingleEJSTemplateCache {
 module.exports = function (templatePath, options = {}) {
     const cache = new SingleEJSTemplateCache(templatePath, options);
     return {
-        getInfo: () => cache.getInfo(),
+        getDiagnostics: () => cache.getDiagnostics(),
+        getStats: () => cache.getStats(),
         dispose: () => cache.dispose(),
         routeHandler: (dataProvider) => {
             return async (req, res) => {
@@ -334,22 +461,17 @@ module.exports = function (templatePath, options = {}) {
                             'X-Minified',
                             [result.isMinifiedTemplate ? 'template' : undefined, result.isMinifiedOutput ? 'output' : undefined].filter(Boolean).join(',')
                         );
-                    if (
-                        !Object.entries(result.htmlCompressed).some(([type, html]) => {
-                            if (html && req.headers['accept-encoding']?.includes(type)) {
-                                res.set('Content-Encoding', type);
-                                res.set('Vary', 'Accept-Encoding');
-                                res.send(html);
-                                return true;
-                            }
-                            return false;
-                        })
-                    ) {
-                        res.send(result.html);
+                    for (const [type, html] of Object.entries(result.htmlCompressed)) {
+                        if (html && req.headers['accept-encoding']?.includes(type)) {
+                            res.set('Content-Encoding', type);
+                            res.set('Vary', 'Accept-Encoding');
+                            return res.send(html);
+                        }
                     }
+                    return res.send(result.html);
                 } catch (e) {
                     console.error('cache-ejs: routeHandler error:', e);
-                    res.status(500).send('Internal Server Error');
+                    return res.status(500).send('Internal Server Error');
                 }
             };
         },
