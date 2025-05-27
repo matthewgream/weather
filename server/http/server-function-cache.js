@@ -333,7 +333,7 @@ class StaticFileCache {
                 contentCompressed,
                 mimeType,
                 etag,
-                lastModified: fs.statSync(filePath).mtime.toUTCString(),
+                lastModified: fs.statSync(filePath).mtime,
                 originalSize: originalContent.length,
                 compressedSize: processedContent.length,
                 isMinified,
@@ -546,11 +546,13 @@ class StaticFileCache {
             if (this.cache.has(cleanPath)) {
                 this.updateCacheStats('hits');
                 const cached = this.cache.get(cleanPath);
-                if (req.headers?.['if-none-match'] === `"${cached.etag}"`) return res.status(304).end();
-                if (req.headers?.['if-modified-since'] === cached.lastModified) return res.status(304).end();
+                const etag = `"${cached.etag}"`;
+                if (req.headers?.['if-none-match'] === etag) return res.status(304).end();
+                const lastModified = cached.lastModified?.toUTCString();
+                if (req.headers?.['if-modified-since'] === lastModified) return res.status(304).end();
                 res.set('Content-Type', cached.mimeType);
-                res.set('ETag', `"${cached.etag}"`);
-                res.set('Last-Modified', cached.lastModified);
+                res.set('ETag', etag);
+                res.set('Last-Modified', lastModified);
                 res.set('Cache-Control', 'public, max-age=31536000'); // 1 year
                 if (cached.isMinified) res.set('X-Minified', 'output');
                 for (const [type, compressed] of Object.entries(cached.contentCompressed))

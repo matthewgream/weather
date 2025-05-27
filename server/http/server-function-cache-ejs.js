@@ -144,15 +144,12 @@ class SingleEJSTemplateCache {
             const originalSource = fs.readFileSync(this.templatePath, 'utf8'),
                 originalSize = Buffer.byteLength(originalSource, 'utf8');
             const templateSource = this.minifyTemplate ? await this.minifyTemplateSource(originalSource) : originalSource;
-            const template = ejs.compile(templateSource, this.ejsOptions);
-            const etag = crypto.createHash('md5').update(originalSource).digest('hex');
-            const lastModified = fs.statSync(this.templatePath).mtime?.toUTCString();
             this.cached = {
-                template,
+                template: ejs.compile(templateSource, this.ejsOptions),
                 originalSource,
                 minifiedSource: templateSource,
-                etag,
-                lastModified,
+                etag: crypto.createHash('md5').update(originalSource).digest('hex'),
+                lastModified: fs.statSync(this.templatePath).mtime,
                 originalSize,
                 minifiedSize: Buffer.byteLength(templateSource, 'utf8'),
                 loadedAt: new Date(),
@@ -342,7 +339,7 @@ class SingleEJSTemplateCache {
                 html,
                 htmlCompressed,
                 etag: `${this.cached.etag}-${hash}`,
-                lastModified: new Date().toUTCString(),
+                lastModified: new Date(),
                 isMinifiedTemplate: this.minifyTemplate,
                 isMinifiedOutput: this.minifyOutput,
             };
@@ -454,8 +451,9 @@ module.exports = function (templatePath, options = {}) {
                     const result = await cache.renderDirect(data);
                     const etag = `"${result.etag}"`;
                     res.set('ETag', etag);
-                    res.set('Last-Modified', result.lastModified);
-                    if (req.headers?.['if-none-match'] === etag || req.headers?.['if-modified-since'] === result.lastModified) return res.status(304).end();
+                    const lastModified = result.lastModified?.toUTCString();
+                    res.set('Last-Modified', lastModified);
+                    if (req.headers?.['if-none-match'] === etag || req.headers?.['if-modified-since'] === lastModified) return res.status(304).end();
                     res.set('Content-Type', 'text/html; charset=utf-8');
                     if (result.isMinifiedTemplate || result.isMinifiedOutput)
                         res.set(
