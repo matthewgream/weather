@@ -410,6 +410,8 @@ function updateSectionThumbs() {
         const element = document.querySelector(`.thumbnail-image[data-thumbnail="${thumbnail.file}"]`);
         if (element) element.src = getThumbnailUrl(thumbnail.file, now);
     });
+    const element = document.querySelector('.snaps-nav-link[snaps-nav-type="day"]');
+    if (element) element.href = `/snapshot/list/${getThumbnailDay(new Date())}`;
 }
 function createSectionThumbs(data) {
     setTimeout(() => updateSectionThumbs(), UPDATE_THUMBS_PERIOD);
@@ -430,10 +432,10 @@ function createSectionThumbs(data) {
         <div class="thumbnails-placeholder">
             <div class="snaps-nav-box">
                 <div class="snaps-nav-item">
-                    <a href="/snapshot/list/${getThumbnailDay(new Date())}" class="snaps-nav-link" title="Password is required for access">day</a>
+                    <a href="/snapshot/list/${getThumbnailDay(new Date())}" class="snaps-nav-link" snaps-nav-type="day" title="Password is required for access">day</a>
                 </div>
                 <div class="snaps-nav-item">
-                    <a href="/snapshot/list" class="snaps-nav-link" title="Password is required for access">all</a>
+                    <a href="/snapshot/list" class="snaps-nav-link" snaps-nav-type="all" title="Password is required for access">all</a>
                 </div>
             </div>
         </div>
