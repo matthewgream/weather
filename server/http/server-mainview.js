@@ -64,8 +64,13 @@ console.log(`Loaded 'redirect' using 'http -> https'`);
 const credentials = require('./server-function-credentials.js')(configData.FQDN);
 console.log(`Loaded 'credentials' using '${configData.FQDN}'`);
 
+const authentication = require('./server-function-authentication.js')(app, '/status', { type: 'basic', basic: { user: '', pass: configData.PASS } });
+console.log(`Loaded 'authentication' on '/status' using 'type=basic, pass=${configData.PASS}'`);
+
 const diagnostics = require('./server-function-diagnostics.js')(app, { port: 8080, path: '/status' }); // XXX PORT_EXTERNAL
 console.log(`Loaded 'diagnostics' on '/status'`);
+
+diagnostics.registerDiagnosticsSource('Auth::/status', () => authentication.getDiagnostics());
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------

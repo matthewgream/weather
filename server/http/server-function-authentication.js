@@ -6,7 +6,7 @@ function typeToWWW(type) {
     return 'Undefined';
 }
 
-function initialise(app, options) {
+function initialise(app, path, options) {
     let type = options.type || 'basic';
 
     //
@@ -26,6 +26,8 @@ function initialise(app, options) {
     }
 
     app.use((req, res, next) => {
+        if (!req.path.startsWith(path)) return next();
+
         if (!req.headers.authorization) return authenticationDenied(res, 401, 'required');
         try {
             if (type === 'basic') {
@@ -46,6 +48,7 @@ function initialise(app, options) {
 
     return {
         getDiagnostics: () => ({
+            path,
             type: typeToWWW(type),
             denied: authDenied,
             allowed: authAllowed,
@@ -57,8 +60,8 @@ function initialise(app, options) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-module.exports = function (app, options) {
-    return initialise(app, options);
+module.exports = function (app, path, options) {
+    return initialise(app, path, options);
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

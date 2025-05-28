@@ -34,12 +34,13 @@ console.log(`Loaded 'redirect' using 'http -> https'`);
 const credentials = require('./server-function-credentials.js')(configData.FQDN);
 console.log(`Loaded 'credentials' using '${configData.FQDN}'`);
 
+const authentication = require('./server-function-authentication.js')(app, '/', { type: 'basic', basic: { user: '', pass: configData.PASS } });
+console.log(`Loaded 'authentication' on '/' using 'type=basic, pass=${configData.PASS}'`);
+
 const diagnostics = require('./server-function-diagnostics.js')(app, { port: 80, path: '/status' }); // XXX PORT_EXTERNAL
 console.log(`Loaded 'diagnostics' on '/status'`);
 
-const authentication = require('./server-function-authentication.js')(app, { type: 'basic', basic: { user: '', pass: configData.PASS } });
-diagnostics.registerDiagnosticsSource('Authentication', () => authentication.getDiagnostics());
-console.log(`Loaded 'authentication' using 'type=basic, pass=${configData.PASS}'`);
+diagnostics.registerDiagnosticsSource('Auth::/', () => authentication.getDiagnostics());
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
