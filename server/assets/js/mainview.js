@@ -5,6 +5,9 @@
 
 let timezone;
 
+function encodehtml(s) {
+    return s.replaceAll(/&/, '&amp;').replaceAll(/>/, '&gt;').replaceAll(/</, '&lt;').replaceAll(/"/, '&quot;');
+}
 function joinand(items) {
     if (!items || items.length === 0) return '';
     else if (items.length === 1) return items[0];
@@ -347,7 +350,10 @@ function createSectionDataSummary(data_location, vars) {
 
     ////
     if (aircraft?.alerts?.length > 0) {
-        const flights = aircraft.alerts.reduce((flights, alert) => ({ ...flights, [alert.flight]: [...(flights[alert.flight] || []), alert.text] }), {});
+        const flights = aircraft.alerts.reduce(
+            (flights, alert) => ({ ...flights, [alert.flight]: [...(flights[alert.flight] || []), encodehtml(alert.text)] }),
+            {}
+        );
         const text = Object.entries(flights)
             .map(([flight, alerts]) => `${flight} ${alerts.join(', ')}`)
             .join('; ');
