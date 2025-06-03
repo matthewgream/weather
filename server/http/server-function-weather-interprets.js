@@ -2,17 +2,17 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function interpretSolarUV(results, _situation, data, data_history, _store) {
-    const { solarRad: rad, solarUvi: uvi } = data;
-    const fiveMinutesAgo = data.timestamp - 5 * 60 * 1000;
+    const { timestamp, solarRad: rad, solarUvi: uvi } = data;
+    const fiveMinutesAgo = timestamp - 5 * 60 * 1000;
 
-    let uviSum = 0,
-        uviCnt = 0,
-        radSum = 0,
-        radCnt = 0,
+    let uviSum = uvi ?? 0,
+        uviCnt = uvi === undefined ? 0 : 1,
+        radSum = rad ?? 0,
+        radCnt = rad === undefined ? 0 : 1,
         uviAvg,
         radAvg;
     Object.entries(data_history)
-        .filter(([timestamp, _entry]) => timestamp > fiveMinutesAgo)
+        .filter(([timestamp, entry]) => timestamp > fiveMinutesAgo && (entry.solarUvi !== undefined || entry.solarRad !== undefined))
         .forEach(([_timestamp, entry]) => {
             if (entry.solarUvi !== undefined) {
                 uviSum += entry.solarUvi;
@@ -47,8 +47,8 @@ function interpretSolarUV(results, _situation, data, data_history, _store) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function interpretSnowDepth(results, situation, data, data_history, store) {
-    const { snowDepth, temp, windSpeed, rainRate } = data;
-    const { month, hour } = situation;
+    const { timestamp, snowDepth, temp, windSpeed, rainRate } = data;
+    const { month } = situation;
 
     if (snowDepth === undefined) return;
 
@@ -62,13 +62,13 @@ function interpretSnowDepth(results, situation, data, data_history, store) {
             daysWithSnow: 0,
         };
 
-    const oneDayAgo = data.timestamp - 24 * 60 * 60 * 1000;
+    const oneDayAgo = timestamp - 24 * 60 * 60 * 1000;
     let depth24hAgo;
 
     Object.entries(data_history)
         .filter(([timestamp, entry]) => timestamp > oneDayAgo && entry.snowDepth !== undefined)
         .sort(([a], [b]) => a - b)
-        .forEach(([timestamp, entry]) => {
+        .forEach(([_timestamp, entry]) => {
             if (depth24hAgo === undefined) depth24hAgo = entry.snowDepth;
         });
 
@@ -84,7 +84,7 @@ function interpretSnowDepth(results, situation, data, data_history, store) {
     }
 
     if (snowDepth > store.snow.maxDepth) store.snow.maxDepth = snowDepth;
-    if (snowDepth > 0 && store.snow.lastMeasurement === 0) store.snow.seasonStart = new Date(data.timestamp);
+    if (snowDepth > 0 && store.snow.lastMeasurement === 0) store.snow.seasonStart = new Date(timestamp);
     store.snow.lastMeasurement = snowDepth;
 
     if (snowDepth === 0) {
@@ -151,8 +151,8 @@ function interpretSnowDepth(results, situation, data, data_history, store) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function interpretIceDepth(results, situation, data, data_history, store) {
-    const { iceDepth, temp, snowDepth } = data;
-    const { month } = situation;
+    const { timestamp, iceDepth, temp, snowDepth } = data;
+    const { hour, month } = situation;
 
     if (iceDepth === undefined) return;
 
@@ -166,13 +166,13 @@ function interpretIceDepth(results, situation, data, data_history, store) {
             consecutiveSafeDays: 0,
         };
 
-    const oneWeekAgo = data.timestamp - 7 * 24 * 60 * 60 * 1000;
+    const oneWeekAgo = timestamp - 7 * 24 * 60 * 60 * 1000;
     let depth7dAgo;
 
     Object.entries(data_history)
         .filter(([timestamp, entry]) => timestamp > oneWeekAgo && entry.iceDepth !== undefined)
         .sort(([a], [b]) => a - b)
-        .forEach(([timestamp, entry]) => {
+        .forEach(([_timestamp, entry]) => {
             if (depth7dAgo === undefined) depth7dAgo = entry.iceDepth;
         });
 
@@ -187,8 +187,8 @@ function interpretIceDepth(results, situation, data, data_history, store) {
         }
     }
 
-    if (iceDepth > 0 && store.ice.maxDepth === 0) store.ice.formationDate = new Date(data.timestamp);
-    else if (iceDepth === 0 && store.ice.maxDepth > 0) store.ice.breakupDate = new Date(data.timestamp);
+    if (iceDepth > 0 && store.ice.maxDepth === 0) store.ice.formationDate = new Date(timestamp);
+    else if (iceDepth === 0 && store.ice.maxDepth > 0) store.ice.breakupDate = new Date(timestamp);
 
     if (iceDepth > store.ice.maxDepth) store.ice.maxDepth = iceDepth;
 
@@ -255,7 +255,7 @@ function interpretIceDepth(results, situation, data, data_history, store) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function interpretRadiation(results, situation, data, data_history, store) {
-    const { radiationCpm, radiationAcpm, radationUsvh, rainRate, windSpeed, pressure } = data;
+    const { timestamp, radiationCpm, radiationAcpm, radationUsvh, rainRate, solarUvi, windSpeed, pressure } = data;
     const { month, hour } = situation;
 
     if (radiationCpm === undefined && radiationAcpm === undefined) return;
@@ -270,16 +270,16 @@ function interpretRadiation(results, situation, data, data_history, store) {
             doseResetTime: undefined,
         };
 
-    const radiationValue = radiationAcpm !== undefined ? radiationAcpm : radiationCpm,
-        radiationSource = radiationAcpm !== undefined ? 'average' : 'instant';
+    const radiationValue = radiationAcpm === undefined ? radiationCpm : radiationAcpm,
+        radiationSource = radiationAcpm === undefined ? 'instant' : 'average';
 
-    const oneDayAgo = data.timestamp - 24 * 60 * 60 * 1000;
+    const oneDayAgo = timestamp - 24 * 60 * 60 * 1000;
     const historicalReadings = [];
 
     Object.entries(data_history)
         .filter(([timestamp, entry]) => timestamp > oneDayAgo && (entry.radiationAcpm !== undefined || entry.radiationCpm !== undefined))
         .forEach(([_, entry]) => {
-            const value = entry.radiationAcpm !== undefined ? entry.radiationAcpm : entry.radiationCpm;
+            const value = entry.radiationAcpm === undefined ? entry.radiationCpm : entry.radiationAcpm;
             if (value !== undefined) historicalReadings.push(value);
         });
 
@@ -291,11 +291,11 @@ function interpretRadiation(results, situation, data, data_history, store) {
     if (radiationValue > store.radiation.maxReading) store.radiation.maxReading = radiationValue;
 
     if (radationUsvh !== undefined) {
-        const now = new Date(data.timestamp);
+        const now = new Date(timestamp);
         const resetTime = store.radiation.doseResetTime ? new Date(store.radiation.doseResetTime) : undefined;
         if (!resetTime || now.getDate() !== resetTime.getDate()) {
             store.radiation.dailyDose = 0;
-            store.radiation.doseResetTime = data.timestamp;
+            store.radiation.doseResetTime = timestamp;
         }
         store.radiation.dailyDose += radationUsvh / 60;
     }
@@ -321,7 +321,7 @@ function interpretRadiation(results, situation, data, data_history, store) {
 
     if (store.radiation.baseline !== undefined && radiationValue > store.radiation.baseline * 2) {
         store.radiation.anomalyCount++;
-        store.radiation.lastAnomaly = data.timestamp;
+        store.radiation.lastAnomaly = timestamp;
         if (radiationValue > store.radiation.baseline * 3)
             results.phenomena.push(`radiation ${(radiationValue / store.radiation.baseline).toFixed(1)}x above baseline`);
     }
@@ -348,11 +348,11 @@ function interpretRadiation(results, situation, data, data_history, store) {
         if (store.radiation.dailyDose > 2.4) results.phenomena.push(`daily dose: ${store.radiation.dailyDose.toFixed(1)} µSv (above average)`);
     }
 
-    if (radiationValue > 50 && data.solarUvi > 5) results.phenomena.push('combined radiation and UV exposure');
+    if (radiationValue > 50 && solarUvi > 5) results.phenomena.push('combined radiation and UV exposure');
 
     if (radiationValue > 25 && radiationValue <= 40) if (month >= 11 || month <= 2) results.phenomena.push('typical winter indoor radon accumulation');
 
-    if (store.radiation.anomalyCount > 5 && store.radiation.lastAnomaly && data.timestamp - store.radiation.lastAnomaly < 3600000)
+    if (store.radiation.anomalyCount > 5 && store.radiation.lastAnomaly && timestamp - store.radiation.lastAnomaly < 3600000)
         results.alerts.push('sustained elevated radiation - investigate source');
 }
 // -----------------------------------------------------------------------------------------------------------------------------------------

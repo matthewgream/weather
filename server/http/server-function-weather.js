@@ -1,16 +1,8 @@
-
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const { 
-	interpretSolarUV,
-interpretSnowDepth,
-interpretIceDepth,
-interpretRadiation,
-} = require ('./server-function-weather-interprets.js');
-const {
-interpretBasedOnDate
-} = require ('./server-function-weather-bydatetime.js');
+const { interpretSolarUV, interpretSnowDepth, interpretIceDepth, interpretRadiation } = require('./server-function-weather-interprets.js');
+const { interpretBasedOnDate } = require('./server-function-weather-bydatetime.js');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -891,22 +883,9 @@ function __generateDescription(results) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function getWeatherInterpretationImpl(location_data, data, data_history, store) {
-    const {
-        temp,
-        humidity,
-        pressure,
-        windSpeed,
-        solarRad,
-        solarUvi,
-        rainRate,
-        radiationCpm,
-        radiationAcpm,
-        radationUsvh,
-        snowDepth,
-        iceDepth,
-        cloudCover = undefined,
-        season = getSeason(location_data.hemisphere),
-    } = data;
+    data.cloudCover = undefined;
+    data.season = getSeason(location_data.hemisphere);
+    const { temp, humidity, pressure, windSpeed, solarRad, rainRate, snowDepth, cloudCover } = data;
 
     const date = new Date();
     const month = date.getMonth(),

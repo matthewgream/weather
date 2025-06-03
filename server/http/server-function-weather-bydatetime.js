@@ -2,20 +2,19 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function interpretBasedOnDate(results, situation, data, data_history, store) {
-    const { temp, windSpeed, rainRate, snowDepth, cloudCover, humidity, pressure } = data;
+    const { season, temp, windSpeed, cloudCover, humidity } = data;
     const { month, hour, date, daylight } = situation;
 
     if (!store.datePatterns)
         store.datePatterns = {
-            lastSunrise: null,
-            lastSunset: null,
+            lastSunrise: undefined,
+            lastSunset: undefined,
             consecutiveDarkDays: 0,
             consecutiveBrightNights: 0,
             seasonTransitions: [],
         };
 
     const currentHourDecimal = hour + date.getMinutes() / 60;
-    const minute = date.getMinutes();
 
     const daylightPhase = getDaylightPhase(currentHourDecimal, daylight);
 
@@ -99,7 +98,7 @@ function interpretBasedOnDate(results, situation, data, data_history, store) {
 
         // Dawn and dusk temperature changes
         const nearSunrise = Math.abs(currentHourDecimal - daylight.sunriseDecimal) < 0.5,
-         nearSunset = Math.abs(currentHourDecimal - daylight.sunsetDecimal) < 0.5;
+            nearSunset = Math.abs(currentHourDecimal - daylight.sunsetDecimal) < 0.5;
         if (nearSunrise) {
             results.phenomena.push('sunrise period');
             if (month >= 9 && month <= 3 && temp < 0) results.phenomena.push('coldest time of day');
@@ -110,8 +109,8 @@ function interpretBasedOnDate(results, situation, data, data_history, store) {
     }
 
     // Seasonal interpretations with Nordic specifics
-    if (data.season && temp !== undefined)
-        switch (data.season) {
+    if (season && temp !== undefined)
+        switch (season) {
             case 'winter':
                 handleWinterPhenomena(results, situation, data, store);
                 break;
@@ -130,7 +129,7 @@ function interpretBasedOnDate(results, situation, data, data_history, store) {
     handleSpecialDates(results, situation, data, store);
 
     // Diurnal patterns
-    handleDiurnalPatterns(results, situation, data, store);
+    handleDiurnalPatterns(results, situation, data, data_history, store);
 
     // Forest-specific time patterns
     if (windSpeed > 5 && situation.location.forestCoverage === 'high') {
@@ -158,8 +157,8 @@ function getDaylightPhase(currentHourDecimal, daylight) {
     return 'night';
 }
 
-function handleWinterPhenomena(results, situation, data, store) {
-    const { temp, snowDepth, windSpeed } = data;
+function handleWinterPhenomena(results, situation, data, _store) {
+    const { temp } = data;
     const { daylight, month, hour } = situation;
 
     if (temp > 5) {
@@ -188,9 +187,9 @@ function handleWinterPhenomena(results, situation, data, store) {
     }
 }
 
-function handleSummerPhenomena(results, situation, data, store) {
-    const { temp, humidity, pressure } = data;
-    const { daylight, month, hour } = situation;
+function handleSummerPhenomena(results, situation, data, _store) {
+    const { temp, humidity } = data;
+    const { daylight, hour } = situation;
 
     if (temp < 12) {
         results.phenomena.push('cool summer day');
@@ -261,7 +260,7 @@ function handleAutumnPhenomena(results, situation, data, store) {
 }
 
 // Special date phenomena
-function handleSpecialDates(results, situation, data, store) {
+function handleSpecialDates(results, situation, data, _store) {
     const { month, date, daylight } = situation;
     const dayOfMonth = date.getDate();
 
@@ -288,11 +287,11 @@ function handleSpecialDates(results, situation, data, store) {
 }
 
 // Diurnal pattern analysis
-function handleDiurnalPatterns(results, situation, data, store) {
-    const { temp, humidity, pressure, windSpeed } = data;
+function handleDiurnalPatterns(results, situation, data, data_history, _store) {
+    const { timestamp, temp } = data;
     const { hour } = situation;
 
-    const twelveHoursAgo = data.timestamp - 12 * 60 * 60 * 1000;
+    const twelveHoursAgo = timestamp - 12 * 60 * 60 * 1000;
     let minTemp = temp,
         maxTemp = temp;
     Object.entries(data_history)
