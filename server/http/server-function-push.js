@@ -133,7 +133,12 @@ class PushNotificationManager {
             body: message,
             timestamp: new Date().toISOString(),
         };
-        return this.sendNotification(payload);
+		const options = {
+			TTL: 5*60, // seconds
+			// topic: 32 chars
+			// urgency: very-low,low,normal,high
+		};
+        return this.sendNotification(payload, options);
     }
 
     getDiagnostics() {

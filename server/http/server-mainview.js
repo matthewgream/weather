@@ -262,12 +262,12 @@ console.log(`Loaded 'mqtt:publisher' using 'topic=${configData.DIAGNOSTICS_PUBLI
 if (configData.SOURCE_AIRCRAFT_ADSB_MQTT_SERVER) {
     const alerts_active = {},
         alerts_expiry = 30 * 60 * 1000,
-        alerts_check = 5 * 60 * 1000;
+        alerts_check = 1 * 60 * 1000;
     setInterval(
         () =>
-            Object.values(alerts_active)
-                .filter((alert) => alert.expiry < Date.now())
-                .forEach((alert) => delete alerts_active[alert.id]),
+            Object.entries(alerts_active)
+                .filter(([_id, alert]) => alert.expiry < Date.now())
+                .forEach(([id, _alert]) => delete alerts_active[id]),
         alerts_check
     );
     const alerts_update = () => server_vars.update('aircraft', { alerts: Object.values(alerts_active) });
@@ -278,7 +278,7 @@ if (configData.SOURCE_AIRCRAFT_ADSB_MQTT_SERVER) {
         },
         onAlertInserted: (id, warn, flight, text) => {
             if (warn && text) {
-                alerts_active[id] = { id, flight, text, expiry: Date.now() + alerts_expiry };
+                alerts_active[id] = { flight, text, expiry: Date.now() + alerts_expiry };
                 notifications.notify('aircraft', `${flight}: ${text}`);
                 alerts_update();
             }

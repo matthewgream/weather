@@ -1,3 +1,17 @@
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+const { 
+	interpretSolarUV,
+interpretSnowDepth,
+interpretIceDepth,
+interpretRadiation,
+} = require ('./server-function-weather-interprets.js');
+const {
+interpretBasedOnDate
+} = require ('./server-function-weather-bydatetime.js');
+
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1025,106 +1039,9 @@ function getWeatherInterpretationImpl(location_data, data, data_history, store) 
     }
 
     interpretSolarUV(results, situation, data, data_history, store);
-
-    // Snow and Ice Depth Interpretation
-    if (snowDepth !== undefined) {
-        if (snowDepth === 0) {
-            if (month >= 11 || month <= 2) results.phenomena.push('no snow cover during winter');
-        } else if (snowDepth < 50) {
-            results.conditions.push('light snow cover');
-            if (month >= 3 && month <= 4) results.phenomena.push('spring snow melt beginning');
-        } else if (snowDepth < 200) {
-            results.conditions.push('moderate snow cover');
-            if (temp > 0) results.phenomena.push('snow compaction likely');
-        } else if (snowDepth < 500) {
-            results.conditions.push('deep snow cover');
-            results.phenomena.push('challenging forest mobility');
-            if (windSpeed > 5) results.phenomena.push('snow drifting possible');
-        } else {
-            results.conditions.push('very deep snow cover');
-            results.alerts.push('extreme snow depth');
-            results.phenomena.push('restricted mobility in forest');
-        }
-        if (month === 10 && snowDepth > 0) results.phenomena.push('early season snow');
-        else if (month === 4 && snowDepth > 100) results.phenomena.push('late season persistent snow pack');
-        else if (month >= 5 && month <= 8 && snowDepth > 0) results.phenomena.push('unusual summer snow');
-        if (snowDepth > 30) {
-            if (temp < -15) results.phenomena.push('powder snow conditions');
-            else if (temp < -5) results.phenomena.push('dry snow conditions');
-            else if (temp < 0) results.phenomena.push('packed snow conditions');
-            else if (temp > 0) {
-                results.phenomena.push('wet snow conditions');
-                if (temp > 5) results.phenomena.push('rapid snowmelt possible');
-            }
-        }
-    }
-
-    // Ice Depth Interpretation
-    if (iceDepth !== undefined) {
-        if (iceDepth === 0) {
-            if (month >= 11 || month <= 3) if (temp < -5) results.phenomena.push('ice formation beginning');
-        } else if (iceDepth < 50) {
-            results.conditions.push('thin ice cover');
-            if (month >= 11 || month <= 3) results.alerts.push('unsafe ice conditions');
-        } else if (iceDepth < 150) {
-            results.conditions.push('moderate ice cover');
-            if (month >= 11 || month <= 2) results.phenomena.push('lakes partially frozen');
-        } else if (iceDepth < 300) {
-            results.conditions.push('thick ice cover');
-            results.phenomena.push('lakes solidly frozen');
-        } else {
-            results.conditions.push('very thick ice cover');
-            results.phenomena.push('exceptional ice thickness');
-        }
-        // Season-specific ice interpretations
-        if (month === 10 && iceDepth > 0) results.phenomena.push('early lake ice formation');
-        else if (month === 4 && iceDepth > 100) results.phenomena.push('late season persistent ice');
-        else if (month >= 5 && month <= 9 && iceDepth > 0) results.phenomena.push('unusual season ice');
-        if (iceDepth > 0) {
-            if (temp > 0 && iceDepth < 150) results.alerts.push('weakening ice conditions');
-            if (iceDepth < 50) results.alerts.push('thin ice hazard');
-            else if (iceDepth >= 50 && iceDepth < 100) results.phenomena.push('ice may support single person');
-            else if (iceDepth >= 100 && iceDepth < 200) results.phenomena.push('ice supports group activity');
-            else if (iceDepth >= 200) results.phenomena.push('ice supports vehicle weight');
-        }
-        if (snowDepth > 100 && iceDepth > 100) results.phenomena.push('typical Nordic winter conditions');
-    }
-
-    // Radiation Interpretation: prefer ACPM (rolling average) but fall back to CPM if needed
-    const radiationValue = radiationAcpm === undefined ? radiationCpm : radiationAcpm;
-    const radiationSource = radiationAcpm === undefined ? 'instant' : 'average';
-    if (radiationValue !== undefined) {
-        // Background radiation in Sweden normally ranges from 5-30 CPM
-        if (radiationValue <= 30) {
-            // Normal background radiation - no specific condition
-        } else if (radiationValue > 30 && radiationValue <= 50) {
-            results.conditions.push('slightly elevated radiation');
-            results.phenomena.push('above normal background radiation');
-        } else if (radiationValue > 50 && radiationValue <= 100) {
-            results.conditions.push('moderately elevated radiation');
-            results.alerts.push(`elevated radiation levels (${radiationSource})`);
-            results.phenomena.push('investigate radiation source');
-        } else if (radiationValue > 100 && radiationValue <= 300) {
-            results.conditions.push('high radiation');
-            results.alerts.push(`high radiation levels (${radiationSource})`);
-            results.phenomena.push('minimize prolonged exposure');
-        } else if (radiationValue > 300) {
-            results.conditions.push('extremely high radiation');
-            results.alerts.push(`dangerous radiation levels (${radiationSource})`);
-            results.phenomena.push('seek immediate shelter');
-        }
-        if (radiationValue > 30) {
-            if (rainRate > 0) results.phenomena.push('possible radon washout in precipitation');
-            if (month >= 9 || month <= 3) results.phenomena.push('seasonal radon fluctuation possible');
-        }
-        if (radiationValue > 50 && solarUvi > 5) results.phenomena.push('combined radiation and UV exposure');
-        if (radationUsvh !== undefined) {
-            if (radationUsvh > 0.5) results.alerts.push(`radiation dose rate: ${radationUsvh.toFixed(2)} µSv/h`);
-            if (radationUsvh > 0.3 && radationUsvh <= 1) results.phenomena.push('above typical background dose rate');
-            else if (radationUsvh > 1 && radationUsvh <= 5) results.phenomena.push('elevated dose rate - limit prolonged exposure');
-            else if (radationUsvh > 5) results.phenomena.push('significant dose rate - health concern');
-        }
-    }
+    interpretSnowDepth(results, situation, data, data_history, store);
+    interpretIceDepth(results, situation, data, data_history, store);
+    interpretRadiation(results, situation, data, data_history, store);
 
     // Weather phenomena interpretations - Nordic forest context
     if (temp !== undefined && humidity !== undefined) {
@@ -1175,59 +1092,7 @@ function getWeatherInterpretationImpl(location_data, data, data_history, store) 
         }
     }
 
-    // Time of day specific phenomena - Nordic daylight considerations with precise calculations
-    if (temp !== undefined) {
-        if (month >= 5 && month <= 7) {
-            if (situation.daylight.isDaytime && hour > 20) results.phenomena.push('extended Nordic summer evening light');
-            if (situation.daylight.sunriseDecimal < 4.5 && hour < 7) results.phenomena.push(`early sunrise`);
-            if (!situation.daylight.isDaytime && hour > Math.floor(situation.daylight.sunsetDecimal) && hour < Math.floor(situation.daylight.sunsetDecimal) + 2)
-                results.phenomena.push('lingering twilight');
-        } else if (month >= 11 || month <= 1) {
-            if (!situation.daylight.isDaytime && hour >= 15 && hour < 17) results.phenomena.push(`early winter darkness`);
-            if (situation.daylight.daylightHours < 7)
-                results.phenomena.push(`short winter day (${Math.round(situation.daylight.daylightHours)} hours of daylight)`);
-            if (situation.daylight.isDaytime && temp < -5) results.phenomena.push('cold winter daylight');
-        }
-        const currentHourDecimal = hour + new Date().getMinutes() / 60;
-        if (
-            !situation.daylight.isDaytime &&
-            currentHourDecimal >= situation.daylight.sunsetDecimal &&
-            currentHourDecimal <= situation.daylight.civilDuskDecimal
-        )
-            results.phenomena.push('civil twilight');
-        if (temp < 3 && hour > Math.floor(situation.daylight.sunriseDecimal) && hour < Math.floor(situation.daylight.sunriseDecimal) + 3)
-            results.phenomena.push('morning chill');
-        if (temp > 22 && hour > 12 && hour < 16) results.phenomena.push('afternoon warmth');
-        if (windSpeed > 5 && location_data.forestCoverage === 'high') results.phenomena.push('forest wind effect');
-    }
-
-    // Season-specific interpretations for Nordic region
-    if (season && temp !== undefined) {
-        switch (season) {
-            case 'winter': {
-                if (temp > 5) results.phenomena.push('unusually mild winter day');
-                if (temp < -20) results.phenomena.push('severe Nordic winter conditions');
-                if (situation.daylight.daylightHours < 7) results.phenomena.push('short winter day');
-                break;
-            }
-            case 'summer': {
-                if (temp < 12) results.phenomena.push('cool summer day');
-                if (temp > 25) results.phenomena.push('hot Nordic summer day');
-                if (situation.daylight.daylightHours > 18) results.phenomena.push('extended Nordic summer daylight');
-                break;
-            }
-            case 'spring': {
-                if (month === 3 && temp > 10) results.phenomena.push('early spring warmth');
-                if (month === 4 && rainRate > 0 && temp > 5) results.phenomena.push('spring forest rain');
-                break;
-            }
-            case 'autumn': {
-                if (month === 9 && temp < 5) results.phenomena.push('early autumn chill');
-                if (month === 10 && rainRate > 0 && temp < 10) results.phenomena.push('cold autumn rain');
-                break;
-            }
-        }
-    }
+    interpretBasedOnDate(results, situation, data, data_history, store);
 
     // Solstice proximity interpretation
     const moonPhase = getMoonPhase(date);
@@ -1516,54 +1381,6 @@ function getDaylightHours(latitude, longitude, date = new Date()) {
             date.getHours() + date.getMinutes() / 60 < normalizeTime(solarNoon + hourAngle + utcOffset),
         isDST: getDST(date),
     };
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-function interpretSolarUV(results, _situation, data, data_history, _store) {
-    const { solarRad: rad, solarUvi: uvi } = data;
-    const fiveMinutesAgo = data.timestamp - 5 * 60 * 1000;
-
-    let uviSum = 0,
-        uviCnt = 0,
-        radSum = 0,
-        radCnt = 0,
-        uviAvg,
-        radAvg;
-    Object.entries(data_history)
-        .filter(([timestamp, _entry]) => timestamp > fiveMinutesAgo)
-        .forEach(([_timestamp, entry]) => {
-            if (entry.solarUvi !== undefined) {
-                uviSum += entry.solarUvi;
-                uviCnt++;
-            }
-            if (entry.solarRad !== undefined) {
-                radSum += entry.solarRad;
-                radCnt++;
-            }
-        });
-    if (uviCnt > 0) uviAvg = uviSum / uviCnt;
-    if (radCnt > 0) radAvg = radSum / radCnt;
-
-    if (radAvg !== undefined) {
-        if (radAvg > 800) results.conditions.push('intense sunlight');
-        else if (radAvg > 500) results.conditions.push('strong sunlight');
-    }
-
-    if (uviAvg !== undefined && uviCnt >= 3) {
-        if (uviAvg >= 11) {
-            results.conditions.push('extreme UV');
-            results.alerts.push('extreme UV (5-min avg)');
-        } else if (uviAvg >= 8) {
-            results.conditions.push('very high UV');
-            results.alerts.push('very high UV (5-min avg)');
-        } else if (uviAvg >= 6) {
-            results.conditions.push('high UV (5-min avg)');
-        } else if (uviAvg >= 3) {
-            results.conditions.push('moderate UV (5-min avg)');
-        }
-    }
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
