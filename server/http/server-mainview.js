@@ -149,6 +149,7 @@ function getWeatherInterpretation(vars) {
         const varsWeather = vars['weather/branna'] || {},
             varsRadiation = vars['sensors/radiation'] || {};
         const results = weather_module.getWeatherInterpretation(configData.LOCATION, {
+            timestamp: Date.now(),
             temp: varsWeather.temp,
             humidity: varsWeather.humidity,
             pressure: varsWeather.baromrel,

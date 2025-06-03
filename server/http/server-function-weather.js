@@ -876,7 +876,7 @@ function __generateDescription(results) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function getWeatherInterpretation(location_data, data) {
+function getWeatherInterpretationImpl(location_data, data, data_history, store) {
     const {
         temp,
         humidity,
@@ -894,22 +894,27 @@ function getWeatherInterpretation(location_data, data) {
         season = getSeason(location_data.hemisphere),
     } = data;
 
-    const dewPoint = calculateDewPoint(temp, humidity);
-    const heatIndex = calculateHeatIndex(temp, humidity);
-    const windChill = calculateWindChill(temp, windSpeed);
-    const feelsLike = calculateFeelsLike(temp, humidity, windSpeed);
     const date = new Date();
     const month = date.getMonth(),
         hour = date.getHours();
-    const daylight = getDaylightHours(location_data.latitude, location_data.longitude);
-
+    const situation = {
+        location: location_data,
+        dewPoint: calculateDewPoint(temp, humidity),
+        heatIndex: calculateHeatIndex(temp, humidity),
+        windChill: calculateWindChill(temp, windSpeed),
+        feelsLike: calculateFeelsLike(temp, humidity, windSpeed),
+        date,
+        month,
+        hour,
+        daylight: getDaylightHours(location_data.latitude, location_data.longitude),
+    };
     const results = {
         conditions: [],
         phenomena: [],
         comfort: undefined,
         alerts: [],
         details: undefined,
-        feelsLike,
+        feelsLike: situation.feelsLike,
     };
 
     // Atmospheric pressure conditions - Nordic context
@@ -1019,21 +1024,7 @@ function getWeatherInterpretation(location_data, data) {
         }
     }
 
-    // Solar radiation and UV conditions
-    if (solarRad !== undefined || solarUvi !== undefined) {
-        if (solarRad > 800) results.conditions.push('intense sunlight');
-        else if (solarRad > 500) results.conditions.push('strong sunlight');
-        if (solarUvi !== undefined) {
-            if (solarUvi >= 11) {
-                results.conditions.push('extreme UV');
-                results.alerts.push('extreme UV');
-            } else if (solarUvi >= 8) {
-                results.conditions.push('very high UV');
-                results.alerts.push('very high UV');
-            } else if (solarUvi >= 6) results.conditions.push('high UV');
-            else if (solarUvi >= 3) results.conditions.push('moderate UV');
-        }
-    }
+    interpretSolarUV(results, situation, data, data_history, store);
 
     // Snow and Ice Depth Interpretation
     if (snowDepth !== undefined) {
@@ -1152,7 +1143,7 @@ function getWeatherInterpretation(location_data, data) {
             results.alerts.push('forest ice hazard');
         }
         if (temp > 20 && humidity > 75) results.phenomena.push('humid for Nordic climate');
-        if (Math.abs(temp - dewPoint) < 3 && temp > 0) {
+        if (Math.abs(temp - situation.dewPoint) < 3 && temp > 0) {
             if (hour < 10 || hour > 18) results.phenomena.push('forest fog likely');
             else results.phenomena.push('fog likely');
         }
@@ -1171,7 +1162,7 @@ function getWeatherInterpretation(location_data, data) {
     // Wind chill effect
     if (temp !== undefined && windSpeed !== undefined) {
         if (temp < 10 && windSpeed > 3) {
-            const windChillDiff = Math.round(temp - windChill);
+            const windChillDiff = Math.round(temp - situation.windChill);
             if (windChillDiff >= 3) results.phenomena.push(`feels ${windChillDiff}°C colder due to wind`);
         }
     }
@@ -1179,7 +1170,7 @@ function getWeatherInterpretation(location_data, data) {
     // Heat index effect
     if (temp !== undefined && humidity !== undefined) {
         if (temp > 20 && humidity > 60) {
-            const heatIndexDiff = Math.round(heatIndex - temp);
+            const heatIndexDiff = Math.round(situation.heatIndex - temp);
             if (heatIndexDiff >= 3) results.phenomena.push(`feels ${heatIndexDiff}°C warmer due to humidity`);
         }
     }
@@ -1187,19 +1178,25 @@ function getWeatherInterpretation(location_data, data) {
     // Time of day specific phenomena - Nordic daylight considerations with precise calculations
     if (temp !== undefined) {
         if (month >= 5 && month <= 7) {
-            if (daylight.isDaytime && hour > 20) results.phenomena.push('extended Nordic summer evening light');
-            if (daylight.sunriseDecimal < 4.5 && hour < 7) results.phenomena.push(`early sunrise`);
-            if (!daylight.isDaytime && hour > Math.floor(daylight.sunsetDecimal) && hour < Math.floor(daylight.sunsetDecimal) + 2)
+            if (situation.daylight.isDaytime && hour > 20) results.phenomena.push('extended Nordic summer evening light');
+            if (situation.daylight.sunriseDecimal < 4.5 && hour < 7) results.phenomena.push(`early sunrise`);
+            if (!situation.daylight.isDaytime && hour > Math.floor(situation.daylight.sunsetDecimal) && hour < Math.floor(situation.daylight.sunsetDecimal) + 2)
                 results.phenomena.push('lingering twilight');
         } else if (month >= 11 || month <= 1) {
-            if (!daylight.isDaytime && hour >= 15 && hour < 17) results.phenomena.push(`early winter darkness`);
-            if (daylight.daylightHours < 7) results.phenomena.push(`short winter day (${Math.round(daylight.daylightHours)} hours of daylight)`);
-            if (daylight.isDaytime && temp < -5) results.phenomena.push('cold winter daylight');
+            if (!situation.daylight.isDaytime && hour >= 15 && hour < 17) results.phenomena.push(`early winter darkness`);
+            if (situation.daylight.daylightHours < 7)
+                results.phenomena.push(`short winter day (${Math.round(situation.daylight.daylightHours)} hours of daylight)`);
+            if (situation.daylight.isDaytime && temp < -5) results.phenomena.push('cold winter daylight');
         }
         const currentHourDecimal = hour + new Date().getMinutes() / 60;
-        if (!daylight.isDaytime && currentHourDecimal >= daylight.sunsetDecimal && currentHourDecimal <= daylight.civilDuskDecimal)
+        if (
+            !situation.daylight.isDaytime &&
+            currentHourDecimal >= situation.daylight.sunsetDecimal &&
+            currentHourDecimal <= situation.daylight.civilDuskDecimal
+        )
             results.phenomena.push('civil twilight');
-        if (temp < 3 && hour > Math.floor(daylight.sunriseDecimal) && hour < Math.floor(daylight.sunriseDecimal) + 3) results.phenomena.push('morning chill');
+        if (temp < 3 && hour > Math.floor(situation.daylight.sunriseDecimal) && hour < Math.floor(situation.daylight.sunriseDecimal) + 3)
+            results.phenomena.push('morning chill');
         if (temp > 22 && hour > 12 && hour < 16) results.phenomena.push('afternoon warmth');
         if (windSpeed > 5 && location_data.forestCoverage === 'high') results.phenomena.push('forest wind effect');
     }
@@ -1210,13 +1207,13 @@ function getWeatherInterpretation(location_data, data) {
             case 'winter': {
                 if (temp > 5) results.phenomena.push('unusually mild winter day');
                 if (temp < -20) results.phenomena.push('severe Nordic winter conditions');
-                if (daylight.daylightHours < 7) results.phenomena.push('short winter day');
+                if (situation.daylight.daylightHours < 7) results.phenomena.push('short winter day');
                 break;
             }
             case 'summer': {
                 if (temp < 12) results.phenomena.push('cool summer day');
                 if (temp > 25) results.phenomena.push('hot Nordic summer day');
-                if (daylight.daylightHours > 18) results.phenomena.push('extended Nordic summer daylight');
+                if (situation.daylight.daylightHours > 18) results.phenomena.push('extended Nordic summer daylight');
                 break;
             }
             case 'spring': {
@@ -1243,7 +1240,7 @@ function getWeatherInterpretation(location_data, data) {
         else results.phenomena.push(`'${solsticeInfo.type}' (${Math.abs(Math.floor(solsticeInfo.days))} day${solsticeInfo.days > 1 ? 's' : ''} ago)`);
         const isHighLatitude = location_data.latitude >= 59.5;
         if (solsticeInfo.type === 'longest day') {
-            if (daylight.daylightHours > 16) results.phenomena.push('extended daylight');
+            if (situation.daylight.daylightHours > 16) results.phenomena.push('extended daylight');
             if (isHighLatitude) {
                 // && cloudCover !== undefined && cloudCover < 50) { // XXX
                 results.phenomena.push('near-midnight sun');
@@ -1254,7 +1251,7 @@ function getWeatherInterpretation(location_data, data) {
                 // && cloudCover !== undefined && cloudCover < 40) // XXX
                 results.phenomena.push('solstice full moon (rare)'), (moonPhaseReported = true);
         } else if (solsticeInfo.type === 'shortest day') {
-            if (daylight.daylightHours < 8) results.phenomena.push('brief daylight');
+            if (situation.daylight.daylightHours < 8) results.phenomena.push('brief daylight');
             if (isHighLatitude) {
                 results.phenomena.push('extended darkness');
                 if (location_data.latitude > 66.5) results.phenomena.push('polar night (sun never rises)');
@@ -1366,7 +1363,7 @@ function getWeatherInterpretation(location_data, data) {
             results.alerts.push('use proper eye protection for solar eclipse viewing');
     }
 
-    const auroraPotential = getAuroraPotential(location_data.latitude, date.getMonth());
+    const auroraPotential = getAuroraPotential(location_data.latitude, month);
     if (auroraPotential.potential !== 'very low') {
         if (auroraPotential.visible)
             results.phenomena.push(
@@ -1519,6 +1516,70 @@ function getDaylightHours(latitude, longitude, date = new Date()) {
             date.getHours() + date.getMinutes() / 60 < normalizeTime(solarNoon + hourAngle + utcOffset),
         isDST: getDST(date),
     };
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+function interpretSolarUV(results, _situation, data, data_history, _store) {
+    const { solarRad: rad, solarUvi: uvi } = data;
+    const fiveMinutesAgo = data.timestamp - 5 * 60 * 1000;
+
+    let uviSum = 0,
+        uviCnt = 0,
+        radSum = 0,
+        radCnt = 0,
+        uviAvg,
+        radAvg;
+    Object.entries(data_history)
+        .filter(([timestamp, _entry]) => timestamp > fiveMinutesAgo)
+        .forEach(([_timestamp, entry]) => {
+            if (entry.solarUvi !== undefined) {
+                uviSum += entry.solarUvi;
+                uviCnt++;
+            }
+            if (entry.solarRad !== undefined) {
+                radSum += entry.solarRad;
+                radCnt++;
+            }
+        });
+    if (uviCnt > 0) uviAvg = uviSum / uviCnt;
+    if (radCnt > 0) radAvg = radSum / radCnt;
+
+    if (radAvg !== undefined) {
+        if (radAvg > 800) results.conditions.push('intense sunlight');
+        else if (radAvg > 500) results.conditions.push('strong sunlight');
+    }
+
+    if (uviAvg !== undefined && uviCnt >= 3) {
+        if (uviAvg >= 11) {
+            results.conditions.push('extreme UV');
+            results.alerts.push('extreme UV (5-min avg)');
+        } else if (uviAvg >= 8) {
+            results.conditions.push('very high UV');
+            results.alerts.push('very high UV (5-min avg)');
+        } else if (uviAvg >= 6) {
+            results.conditions.push('high UV (5-min avg)');
+        } else if (uviAvg >= 3) {
+            results.conditions.push('moderate UV (5-min avg)');
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+const weatherCache = {},
+    weatherStore = {};
+const CACHE_DURATION = 6 * 60 * 60 * 1000;
+
+function getWeatherInterpretation(location_data, data) {
+    const cacheExpiration = data.timestamp - CACHE_DURATION;
+    Object.keys(weatherCache)
+        .filter((timestamp) => timestamp < cacheExpiration)
+        .forEach((timestamp) => delete weatherCache[timestamp]);
+    weatherCache[data.timestamp] = data;
+    return getWeatherInterpretationImpl(location_data, data, weatherCache, weatherStore);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
