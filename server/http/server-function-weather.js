@@ -1525,10 +1525,10 @@ function interpretSolarUV(results, _situation, data, data_history, _store) {
     const { solarRad: rad, solarUvi: uvi } = data;
     const fiveMinutesAgo = data.timestamp - 5 * 60 * 1000;
 
-    let uviSum = 0,
-        uviCnt = 0,
-        radSum = 0,
-        radCnt = 0,
+    let uviSum = uvi ?? 0,
+        uviCnt = uvi === undefined ? 0 : 1,
+        radSum = rad ?? 0,
+        radCnt = rad === undefined ? 0 : 1,
         uviAvg,
         radAvg;
     Object.entries(data_history)
