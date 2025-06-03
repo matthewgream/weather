@@ -50,6 +50,10 @@ h2 {
 .label {
     font-weight: bold;
 }
+.label-leader {
+    color: var(--primary-color);
+    font-weight: bold;
+}
 .value {
     color: var(--primary-color);
     font-size: var(--font-size-lg);

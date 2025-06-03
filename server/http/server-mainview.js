@@ -12,7 +12,7 @@ const configList = Object.entries(configData)
     .map(([k, v]) => k.toLowerCase() + '=' + v)
     .join(', ');
 configData.CONTENT_DATA_SUBS = ['weather/#', 'sensors/#', 'snapshots/#', 'alert/#'];
-configData.CONTENT_VIEW_VARS = ['weather/branna', 'sensors/radiation', 'aircraft', 'interpretation'];
+configData.CONTENT_VIEW_VARS = ['weather/ulrikashus', 'weather/branna', 'sensors/radiation', 'aircraft', 'interpretation'];
 configData.DIAGNOSTICS_PUBLISH_TOPIC = 'server/mainview';
 configData.DIAGNOSTICS_PUBLISH_PERIOD = 60;
 configData.DATA_VIEWS = path.join(configData.DATA, 'http');
@@ -78,6 +78,7 @@ diagnostics.registerDiagnosticsSource('Auth::/status', () => authentication.getD
 app.use(exp.static(configData.DATA_CACHE));
 console.log(`Loaded 'static' using '${configData.DATA_CACHE}'`);
 
+//app.use('/static', exp.static(configData.DATA_ASSETS));
 const cache_static = require('./server-function-cache.js')({
     directory: configData.DATA_ASSETS,
     path: '/static',
