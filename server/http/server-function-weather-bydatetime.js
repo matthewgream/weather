@@ -2,8 +2,8 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function interpretBasedOnDate(results, situation, data, data_history, store) {
-    const { season, temp, windSpeed, cloudCover, humidity } = data;
-    const { month, hour, date, daylight } = situation;
+    const { temp, windSpeed, cloudCover, humidity } = data;
+    const { month, hour, date, daylight, season } = situation;
 
     if (!store.datePatterns)
         store.datePatterns = {
@@ -259,7 +259,6 @@ function handleAutumnPhenomena(results, situation, data, store) {
     if (daylightChange < -0.05) results.phenomena.push(`rapidly shortening days (${Math.round(daylightChange * 60)} min/day)`);
 }
 
-// Special date phenomena
 function handleSpecialDates(results, situation, data, _store) {
     const { month, date, daylight } = situation;
     const dayOfMonth = date.getDate();
@@ -286,7 +285,6 @@ function handleSpecialDates(results, situation, data, _store) {
     }
 }
 
-// Diurnal pattern analysis
 function handleDiurnalPatterns(results, situation, data, data_history, _store) {
     const { timestamp, temp } = data;
     const { hour } = situation;
@@ -316,11 +314,11 @@ function handleDiurnalPatterns(results, situation, data, data_history, _store) {
 }
 
 function calculateDaylightChange(situation, store) {
-    const currentDaylight = situation.daylight.daylightHours;
-    const lastDaylight = store.datePatterns.lastDaylightHours || currentDaylight;
-    store.datePatterns.lastDaylightHours = currentDaylight;
+    const currentDaylight = situation.daylight.daylightHours,
+        previousDaylight = store.datePatterns.previousDaylightHours || currentDaylight;
+    store.datePatterns.previousDaylightHours = currentDaylight;
     const daysElapsed = 1; // Simplified for daily change
-    return (currentDaylight - lastDaylight) / daysElapsed;
+    return (currentDaylight - previousDaylight) / daysElapsed;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
