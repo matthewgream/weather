@@ -328,11 +328,11 @@ class SingleEJSTemplateCache {
             if (this.minifyOutput) html = await this.minifyOutputHTML(html);
             const htmlCompressed = {
                 // order in priority of serving
-                br: this.compressionWrapper('brotli', `${this.compressionLevel['brotli']}`, (html, opts) => zlib.brotliCompressSync(html, opts), html, {
-                    params: { [zlib.constants.BROTLI_PARAM_QUALITY]: this.compressionLevel['brotli'] },
+                br: this.compressionWrapper('brotli', `${this.compressionLevel.brotli}`, (html, opts) => zlib.brotliCompressSync(html, opts), html, {
+                    params: { [zlib.constants.BROTLI_PARAM_QUALITY]: this.compressionLevel.brotli },
                 }),
-                gzip: this.compressionWrapper('gzip', `${this.compressionLevel['gzip']}`, (html, opts) => zlib.gzipSync(html, opts), html, {
-                    level: this.compressionLevel['gzip'],
+                gzip: this.compressionWrapper('gzip', `${this.compressionLevel.gzip}`, (html, opts) => zlib.gzipSync(html, opts), html, {
+                    level: this.compressionLevel.gzip,
                 }),
             };
             this.lastHash = hash;

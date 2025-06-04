@@ -149,6 +149,7 @@ function initialise(app, prefix, directory, server) {
         const thumbnails = {};
         for (const interval of SNAPSHOT_INTERVALS)
             thumbnails[`M${interval}`] = await createThumbnailFromImage(`snapshot_M${interval}.jpg`, THUMBNAIL_WIDTH_SNAPSHOT);
+        // eslint-disable-next-line dot-notation
         thumbnails['current'] = await createThumbnailFromImage('snapshot.jpg', THUMBNAIL_WIDTH_CAMERA);
         return thumbnails;
     }

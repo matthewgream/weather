@@ -3,7 +3,7 @@
 
 const helpers = require('./server-function-weather-helpers.js');
 
-/* XXX for each data
+/* XXX for each
 function hasSignificantDataGap(sortedEntries, maxGapHours = 3) {
     for (let i = 1; i < sortedEntries.length; i++) {
         const gap = (sortedEntries[i][0] - sortedEntries[i-1][0]) / 3600000;
@@ -14,11 +14,8 @@ function hasSignificantDataGap(sortedEntries, maxGapHours = 3) {
 */
 
 /* XXX for each
-// Add to each relevant function:
-// Example for temperature:
 const percentile95 = historicalValues.sort((a,b) => a-b)[Math.floor(historicalValues.length * 0.95)];
 const percentile5 = historicalValues.sort((a,b) => a-b)[Math.floor(historicalValues.length * 0.05)];
-
 if (temp > percentile95) {
     results.phenomena.push('temperature in top 5% for recent period');
 } else if (temp < percentile5) {
@@ -26,10 +23,24 @@ if (temp > percentile95) {
 }
 */
 
+// XXX a lot of the store data is not used
+
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretTemperature(results, situation, data, data_history, store, _options) {
+function calculateVariance(values) {
+    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    return values.reduce((sum, val) => sum + (val - mean) ** 2, 0) / values.length;
+}
+
+function getCardinalDirection(degrees) {
+    return ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(degrees / 45) % 8];
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+function interpretTemperature(results, situation, data, data_previous, store, _options) {
     const { timestamp, temp, humidity, windSpeed, snowDepth } = data;
     const { month, hour, location } = situation;
 
@@ -50,16 +61,18 @@ function interpretTemperature(results, situation, data, data_history, store, _op
         twentyFourHoursAgo = timestamp - 24 * 60 * 60 * 1000,
         sevenDaysAgo = timestamp - 7 * 24 * 60 * 60 * 1000;
     let temp1hAgo, temp6hAgo, temp24hAgo;
+    let variance6hAgo;
     let min24h = temp,
         max24h = temp,
         min7d = temp,
         max7d = temp;
     let minTime24h = timestamp,
         maxTime24h = timestamp;
-    Object.entries(data_history)
+    Object.entries(data_previous)
         .filter(([timestamp, entry]) => timestamp > sevenDaysAgo && entry.temp !== undefined)
         .sort(([a], [b]) => a - b)
         .forEach(([timestamp, entry]) => {
+            // XXX all of these are incorrect and should be "nearest"
             if (timestamp > oneHourAgo && temp1hAgo === undefined) temp1hAgo = entry.temp;
             if (timestamp > sixHoursAgo && temp6hAgo === undefined) temp6hAgo = entry.temp;
             if (timestamp > twentyFourHoursAgo) {
@@ -78,6 +91,12 @@ function interpretTemperature(results, situation, data, data_history, store, _op
                 max7d = Math.max(max7d, entry.temp);
             }
         });
+    if (temp6hAgo !== undefined) {
+        const samples = Object.entries(data_previous)
+            .filter(([timestamp, entry]) => timestamp > sixHoursAgo && entry.temp !== undefined)
+            .map(([_timestamp, entry]) => entry.temp);
+        if (samples.length > 3) variance6hAgo = calculateVariance(samples);
+    }
     store.temperature.extremes24h = { min: min24h, max: max24h, minTime: minTime24h, maxTime: maxTime24h };
     store.temperature.extremes7d = { min: min7d, max: max7d };
 
@@ -115,16 +134,7 @@ function interpretTemperature(results, situation, data, data_history, store, _op
         if (change1h < -5 && temp < 5) results.alerts.push('flash freeze possible');
     } else if (Math.abs(change6h) > 10)
         results.phenomena.push(`significant temperature ${change6h > 0 ? 'rise' : 'drop'}: ${Math.abs(change6h).toFixed(1)}°C in 6 hours`);
-
-    if (temp6hAgo !== undefined) {
-        const samples = Object.entries(data_history)
-            .filter(([timestamp, entry]) => timestamp > sixHoursAgo && entry.temp !== undefined)
-            .map(([_timestamp, entry]) => entry.temp);
-        if (samples.length > 3) {
-            const variance = calculateVariance(samples);
-            if (variance > 4) results.phenomena.push('unstable temperature conditions');
-        }
-    }
+    if (variance6hAgo > 4) results.phenomena.push('unstable temperature conditions');
 
     const diurnalRange = max24h - min24h;
     if (diurnalRange > 20) {
@@ -181,7 +191,7 @@ function interpretTemperature(results, situation, data, data_history, store, _op
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretPressure(results, situation, data, data_history, store, _options) {
+function interpretPressure(results, situation, data, data_previous, store, _options) {
     const { timestamp, pressure, temp, windSpeed, humidity } = data;
     const { month, location } = situation;
 
@@ -205,7 +215,7 @@ function interpretPressure(results, situation, data, data_history, store, _optio
     let closest1hAgo, closest3hAgo, closest24hAgo;
     let min24h = adjustedPressure,
         max24h = adjustedPressure;
-    Object.entries(data_history)
+    Object.entries(data_previous)
         .filter(([timestamp, entry]) => timestamp > twentyFourHoursAgo && entry.pressure !== undefined)
         .sort(([a], [b]) => a - b)
         .forEach(([timestamp, entry]) => {
@@ -303,7 +313,7 @@ function interpretPressure(results, situation, data, data_history, store, _optio
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretHumidity(results, situation, data, data_history, store, _options) {
+function interpretHumidity(results, situation, data, data_previous, store, _options) {
     const { timestamp, humidity, temp, pressure, windSpeed, windDir, rainRate } = data;
     const { month, hour, location, dewPoint, heatIndex } = situation;
 
@@ -336,7 +346,7 @@ function interpretHumidity(results, situation, data, data_history, store, _optio
         currentHumidStreak = 0;
     let maxDryStreak = 0,
         maxHumidStreak = 0;
-    Object.entries(data_history)
+    Object.entries(data_previous)
         .filter(([timestamp, entry]) => timestamp > twentyFourHoursAgo && entry.humidity !== undefined)
         .sort(([a], [b]) => a - b)
         .forEach(([timestamp, entry]) => {
@@ -465,7 +475,7 @@ function interpretHumidity(results, situation, data, data_history, store, _optio
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretWindSpeed(results, situation, data, data_history, store, _options) {
+function interpretWind(results, situation, data, data_previous, store, _options) {
     const { timestamp, windSpeed, windGust, windDir, temp, pressure, rainRate } = data;
     const { month, hour, location, snowDepth, windChill } = situation;
 
@@ -493,7 +503,7 @@ function interpretWindSpeed(results, situation, data, data_history, store, _opti
     let calmHours = 0,
         stormHours = 0;
     let previousTimestamp;
-    Object.entries(data_history)
+    Object.entries(data_previous)
         .filter(([timestamp, entry]) => timestamp > twentyFourHoursAgo && entry.windSpeed !== undefined)
         .sort(([a], [b]) => a - b)
         .forEach(([timestamp, entry]) => {
@@ -631,14 +641,10 @@ function interpretWindSpeed(results, situation, data, data_history, store, _opti
     }
 }
 
-function getCardinalDirection(degrees) {
-    return ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(degrees / 45) % 8];
-}
-
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretCloudCover(results, situation, data, data_history, store, _options) {
+function interpretClouds(results, situation, data, data_previous, store, _options) {
     const { timestamp, cloudCover, temp, humidity, pressure, solarRad, rainRate } = data;
     const { month, hour, date, daylight, dewPoint } = situation;
 
@@ -669,7 +675,7 @@ function interpretCloudCover(results, situation, data, data_history, store, _opt
     const cloudChanges = [];
 
     let previousTimestamp;
-    Object.entries(data_history)
+    Object.entries(data_previous)
         .filter(([timestamp, entry]) => timestamp > twentyFourHoursAgo && entry.cloudCover !== undefined)
         .sort(([a], [b]) => a - b)
         .forEach(([timestamp, entry]) => {
@@ -750,7 +756,7 @@ function interpretCloudCover(results, situation, data, data_history, store, _opt
     }
     if (!daylight.isDaytime) {
         if (cloudCover < 20) {
-            const moonPhase = helpers.getMoonPhase(date);
+            const moonPhase = helpers.getLunarPhase(date);
             if (moonPhase < 0.2 || moonPhase > 0.8) results.phenomena.push('dark skies - good for astronomy');
         } else if (cloudCover > 80 && situation.location.lightPollution !== 'low') results.phenomena.push('cloud reflection of urban lights');
     }
@@ -786,15 +792,10 @@ function interpretCloudCover(results, situation, data, data_history, store, _opt
     }
 }
 
-function calculateVariance(values) {
-    const mean = values.reduce((a, b) => a + b, 0) / values.length;
-    return values.reduce((sum, val) => sum + (val - mean) ** 2, 0) / values.length;
-}
-
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretRainRate(results, situation, data, data_history, store, _options) {
+function interpretPrecipitation(results, situation, data, data_previous, store, _options) {
     const { timestamp, rainRate, temp, humidity, pressure, windSpeed, windDir, snowDepth } = data;
     const { month, hour, location } = situation;
 
@@ -822,7 +823,7 @@ function interpretRainRate(results, situation, data, data_history, store, _optio
     let consecutiveWetHours = 0;
     let lastDryTime = timestamp;
     let previousTimestamp;
-    Object.entries(data_history)
+    Object.entries(data_previous)
         .filter(([timestamp, entry]) => timestamp > sevenDaysAgo && entry.rainRate !== undefined)
         .sort(([a], [b]) => a - b)
         .forEach(([timestamp, entry]) => {
@@ -974,17 +975,17 @@ function interpretRainRate(results, situation, data, data_history, store, _optio
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretSolarUV(results, _situation, data, data_history, _store, _options) {
+function interpretLight(results, _situation, data, data_previous, _store, _options) {
     const { timestamp, solarRad: rad, solarUvi: uvi } = data;
-    const fiveMinutesAgo = timestamp - 5 * 60 * 1000;
 
+    const fiveMinutesAgo = timestamp - 5 * 60 * 1000;
     let uviSum = uvi ?? 0,
         uviCnt = uvi === undefined ? 0 : 1,
         radSum = rad ?? 0,
         radCnt = rad === undefined ? 0 : 1,
         uviAvg,
         radAvg;
-    Object.entries(data_history)
+    Object.entries(data_previous)
         .filter(([timestamp, entry]) => timestamp > fiveMinutesAgo && (entry.solarUvi !== undefined || entry.solarRad !== undefined))
         .sort(([a], [b]) => a - b)
         .forEach(([_timestamp, entry]) => {
@@ -1020,7 +1021,7 @@ function interpretSolarUV(results, _situation, data, data_history, _store, _opti
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretSnowDepth(results, situation, data, data_history, store, _options) {
+function interpretSnow(results, situation, data, data_previous, store, _options) {
     const { timestamp, snowDepth, temp, windSpeed, rainRate } = data;
     const { month } = situation;
 
@@ -1040,7 +1041,7 @@ function interpretSnowDepth(results, situation, data, data_history, store, _opti
     let depth24hAgo;
 
     const accumulations = [];
-    Object.entries(data_history)
+    Object.entries(data_previous)
         .filter(([timestamp, entry]) => timestamp > oneDayAgo && entry.snowDepth !== undefined)
         .sort(([a], [b]) => a - b)
         .forEach(([_timestamp, entry]) => {
@@ -1133,7 +1134,7 @@ function interpretSnowDepth(results, situation, data, data_history, store, _opti
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretIceDepth(results, situation, data, data_history, store, _options) {
+function interpretIce(results, situation, data, data_previous, store, _options) {
     const { timestamp, iceDepth, temp, snowDepth } = data;
     const { hour, month } = situation;
 
@@ -1152,7 +1153,7 @@ function interpretIceDepth(results, situation, data, data_history, store, _optio
     const oneWeekAgo = timestamp - 7 * 24 * 60 * 60 * 1000;
     let depth7dAgo;
 
-    Object.entries(data_history)
+    Object.entries(data_previous)
         .filter(([timestamp, entry]) => timestamp > oneWeekAgo && entry.iceDepth !== undefined)
         .sort(([a], [b]) => a - b)
         .forEach(([_timestamp, entry]) => {
@@ -1240,7 +1241,7 @@ function interpretIceDepth(results, situation, data, data_history, store, _optio
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretRadiation(results, situation, data, data_history, store, _options) {
+function interpretRadiation(results, situation, data, data_previous, store, _options) {
     const { timestamp, radiationCpm, radiationAcpm, radationUsvh, rainRate, solarUvi, windSpeed, pressure } = data;
     const { month, hour } = situation;
 
@@ -1261,7 +1262,7 @@ function interpretRadiation(results, situation, data, data_history, store, _opti
 
     const oneDayAgo = timestamp - 24 * 60 * 60 * 1000;
     const historicalReadings = [];
-    Object.entries(data_history)
+    Object.entries(data_previous)
         .filter(([timestamp, entry]) => timestamp > oneDayAgo && (entry.radiationAcpm !== undefined || entry.radiationCpm !== undefined))
         .sort(([a], [b]) => a - b)
         .forEach(([_, entry]) => {
@@ -1368,7 +1369,7 @@ function getAuroraPotential(latitude, month, solarActivity = undefined) {
     return { potential: 'very low', visible: false };
 }
 
-function interpretComplexPhenomena(results, situation, data, data_history, store, _options) {
+function interpretComplexPhenomena(results, situation, data, data_previous, store, _options) {
     const { timestamp, temp, humidity, pressure, windSpeed, rainRate, snowDepth, cloudCover } = data;
     const { month, hour, date, location, dewPoint, windChill, heatIndex, daylight } = situation;
 
@@ -1433,7 +1434,7 @@ function interpretComplexPhenomena(results, situation, data, data_history, store
             results.phenomena.push('dry forest conditions');
             const threeDaysAgo = timestamp - 3 * 24 * 60 * 60 * 1000;
             let consecutiveDryHours = 0;
-            Object.entries(data_history)
+            Object.entries(data_previous)
                 .filter(([timestamp, entry]) => timestamp > threeDaysAgo && entry.humidity !== undefined && entry.rainRate !== undefined)
                 .sort(([a], [b]) => a - b)
                 .forEach(([_, entry]) => {
@@ -1516,7 +1517,7 @@ function interpretComplexPhenomena(results, situation, data, data_history, store
 
     const auroraPotential = getAuroraPotential(location.latitude, month);
     if (auroraPotential.potential !== 'very low') {
-        const moonPhase = helpers.getMoonPhase(date);
+        const moonPhase = helpers.getLunarPhase(date);
         if (auroraPotential.visible)
             results.phenomena.push(
                 `aurora borealis likely visible (best time: ${auroraPotential.bestTime}${cloudCover !== undefined && cloudCover < 30 && moonPhase < 0.3 ? ', with good visbility' : ''})`
@@ -1534,12 +1535,12 @@ module.exports = function (_options) {
         interpretTemperature,
         interpretPressure,
         interpretHumidity,
-        interpretWindSpeed,
-        interpretCloudCover,
-        interpretRainRate,
-        interpretSolarUV,
-        interpretIceDepth,
-        interpretSnowDepth,
+        interpretWind,
+        interpretClouds,
+        interpretPrecipitation,
+        interpretLight,
+        interpretSnow,
+        interpretIce,
         interpretRadiation,
         interpretComplexPhenomena,
     };

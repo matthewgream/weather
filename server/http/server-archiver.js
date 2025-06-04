@@ -87,6 +87,7 @@ app.use((req, res) => {
     const req_ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
     console.error(`[${new Date().toISOString()}] 404 Not Found: ${req.method} ${req.url} from ${req_ip}`);
     console.error(`  User-Agent: ${req.headers['user-agent']}`);
+    // eslint-disable-next-line dot-notation
     console.error(`  Referrer: ${req.headers['referer'] || 'none'}`);
     console.error(`  Route path: ${req.path}`);
     res.status(404).send('not found');

@@ -298,7 +298,7 @@ function isNearCrossQuarter(date = new Date(), hemisphere = 'northern', daysWind
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function getMoonPhase(date = new Date()) {
+function getLunarPhase(date = new Date()) {
     const lunarNewBase = new Date(2000, 0, 6),
         lunarCycle = 29.53059;
     const days = (date.getTime() - lunarNewBase.getTime()) / msPerDay;
@@ -307,8 +307,8 @@ function getMoonPhase(date = new Date()) {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function getMoonDistance(date = new Date()) {
-    const phase = getMoonPhase(date),
+function getLunarDistance(date = new Date()) {
+    const phase = getLunarPhase(date),
         distance = 384400 * (1 - 0.0549 * Math.cos(phase * 2 * Math.PI));
     return {
         distance, // in km
@@ -334,8 +334,8 @@ module.exports = {
     isNearSolstice,
     isNearEquinox,
     isNearCrossQuarter,
-    getMoonPhase,
-    getMoonDistance,
+    getLunarPhase,
+    getLunarDistance,
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

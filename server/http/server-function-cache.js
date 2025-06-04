@@ -311,20 +311,20 @@ class StaticFileCache {
                 // order in priority of serving
                 br: this.compressionWrapper(
                     'brotli',
-                    `${this.compressionLevel['brotli']} <${relativePath}>`,
+                    `${this.compressionLevel.brotli} <${relativePath}>`,
                     (content, opts) => zlib.brotliCompressSync(content, opts),
                     processedContent,
                     {
-                        params: { [zlib.constants.BROTLI_PARAM_QUALITY]: this.compressionLevel['brotli'] },
+                        params: { [zlib.constants.BROTLI_PARAM_QUALITY]: this.compressionLevel.brotli },
                     }
                 ),
                 gzip: this.compressionWrapper(
                     'gzip',
-                    `${this.compressionLevel['gzip']} <${relativePath}>`,
+                    `${this.compressionLevel.gzip} <${relativePath}>`,
                     (content, opts) => zlib.gzipSync(content, opts),
                     processedContent,
                     {
-                        level: this.compressionLevel['gzip'],
+                        level: this.compressionLevel.gzip,
                     }
                 ),
             };

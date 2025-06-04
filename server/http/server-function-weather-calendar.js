@@ -6,20 +6,20 @@ const helpers = require('./server-function-weather-helpers.js');
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretCalendarBased(results, situation, data, data_history, store, _options) {
-    const { temp, windSpeed, cloudCover, humidity } = data;
-    const { month, hour, date, daylight, season } = situation;
+function interpretCalendar(results, situation, data, data_previous, store, _options) {
+    const { temp, cloudCover, humidity } = data;
+    const { minutes, month, hour, daylight, season } = situation;
 
-    if (!store.datePatterns)
-        store.datePatterns = {
-            lastSunrise: undefined,
-            lastSunset: undefined,
-            consecutiveDarkDays: 0,
-            consecutiveBrightNights: 0,
-            seasonTransitions: [],
+    if (!store.calendar)
+        store.calendar = {
+            lastSunrise: undefined, // XXX unused
+            lastSunset: undefined, // XXX unused
+            consecutiveDarkDays: 0, // XXX unused
+            consecutiveBrightNights: 0, // XXX unused
+            seasonTransitions: [], // XXX unused
         };
 
-    const currentHourDecimal = hour + date.getMinutes() / 60;
+    const currentHourDecimal = hour + minutes / 60;
 
     const daylightPhase = helpers.getDaylightPhase(currentHourDecimal, daylight);
 
@@ -43,7 +43,7 @@ function interpretCalendarBased(results, situation, data, data_history, store, _
             if (situation.location.latitude > 63) {
                 if (daylight.daylightHours > 23) {
                     results.phenomena.push('midnight sun period');
-                    store.datePatterns.consecutiveBrightNights++;
+                    store.calendar.consecutiveBrightNights++;
                 } else if (daylight.daylightHours > 20) results.phenomena.push('bright night - sun barely sets');
             }
         }
@@ -58,7 +58,7 @@ function interpretCalendarBased(results, situation, data, data_history, store, _
                 results.phenomena.push(`short winter day (${Math.round(daylight.daylightHours)} hours of daylight)`);
                 if (daylight.daylightHours < 5) {
                     results.phenomena.push('minimal daylight period');
-                    store.datePatterns.consecutiveDarkDays++;
+                    store.calendar.consecutiveDarkDays++;
                 }
             }
             if (daylight.isDaytime && temp < -5) {
@@ -113,8 +113,11 @@ function interpretCalendarBased(results, situation, data, data_history, store, _
         }
     }
 
+    // Diurnal patterns
+    handleDiurnalPatterns(results, situation, data, data_previous, store);
+
     // Seasonal interpretations with Nordic specifics
-    if (season && temp !== undefined)
+    if (temp !== undefined && season)
         switch (season) {
             case 'winter':
                 handleWinterPhenomena(results, situation, data, store);
@@ -132,15 +135,6 @@ function interpretCalendarBased(results, situation, data, data_history, store, _
 
     // Special date-based phenomena
     handleSpecialDates(results, situation, data, store);
-
-    // Diurnal patterns
-    handleDiurnalPatterns(results, situation, data, data_history, store);
-
-    // Forest-specific time patterns
-    if (windSpeed > 5 && situation.location.forestCoverage === 'high') {
-        results.phenomena.push('forest wind effect');
-        if (hour >= 10 && hour <= 16) results.phenomena.push('daytime forest breeze');
-    }
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -256,26 +250,25 @@ function handleAutumnPhenomena(results, situation, data, store) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function handleSpecialDates(results, situation, data, _store) {
-    const { month, date, daylight } = situation;
-    const dayOfMonth = date.getDate();
+    const { month, day, daylight } = situation;
 
     // Midsummer proximity (around June 21-24)
-    if (month === 6 && dayOfMonth >= 19 && dayOfMonth <= 25) {
+    if (month === 6 && day >= 19 && day <= 25) {
         results.phenomena.push('midsummer period');
-        if (dayOfMonth >= 21 && dayOfMonth <= 24) {
+        if (day >= 21 && day <= 24) {
             results.phenomena.push('peak midsummer celebration time');
             if (situation.location.latitude > 60) results.phenomena.push('traditional white night festivities');
         }
     }
 
     // Lucia (December 13)
-    if (month === 12 && dayOfMonth === 13) {
+    if (month === 12 && day === 13) {
         results.phenomena.push('Lucia Day - festival of lights');
         if (daylight.daylightHours < 6) results.phenomena.push('traditional celebration during darkest period');
     }
 
     // Crayfish season (August)
-    if (month === 8 && dayOfMonth >= 8) {
+    if (month === 8 && day >= 8) {
         results.phenomena.push('crayfish season');
         if (data.temp > 15 && data.cloudCover < 50) results.phenomena.push('good conditions for outdoor crayfish party');
     }
@@ -283,14 +276,14 @@ function handleSpecialDates(results, situation, data, _store) {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function handleDiurnalPatterns(results, situation, data, data_history, _store) {
+function handleDiurnalPatterns(results, situation, data, data_previous, _store) {
     const { timestamp, temp } = data;
     const { hour } = situation;
 
     const twelveHoursAgo = timestamp - 12 * 60 * 60 * 1000;
     let minTemp = temp,
         maxTemp = temp;
-    Object.entries(data_history)
+    Object.entries(data_previous)
         .filter(([timestamp, entry]) => timestamp > twelveHoursAgo && entry.temp !== undefined)
         .forEach(([_, entry]) => {
             minTemp = Math.min(minTemp, entry.temp);
@@ -315,8 +308,8 @@ function handleDiurnalPatterns(results, situation, data, data_history, _store) {
 
 function calculateDaylightChange(situation, store) {
     const currentDaylight = situation.daylight.daylightHours,
-        previousDaylight = store.datePatterns.previousDaylightHours || currentDaylight;
-    store.datePatterns.previousDaylightHours = currentDaylight;
+        previousDaylight = store.calendar.previousDaylightHours || currentDaylight;
+    store.calendar.previousDaylightHours = currentDaylight;
     const daysElapsed = 1; // Simplified for daily change
     return (currentDaylight - previousDaylight) / daysElapsed;
 }
@@ -326,7 +319,7 @@ function calculateDaylightChange(situation, store) {
 
 module.exports = function (_options) {
     return {
-        interpretCalendarBased,
+        interpretCalendar,
     };
 };
 
