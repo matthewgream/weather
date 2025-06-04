@@ -1,7 +1,14 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const { interpretSolarUV, interpretSnowDepth, interpretIceDepth, interpretRadiation } = require('./server-function-weather-interprets.js');
+const {
+ interpretPressure,
+ interpretTemperature,
+ interpretHumidity,
+ interpretWindSpeed,
+ interpretCloudCover,
+ interpretRainRate,
+ interpretSolarUV, interpretSnowDepth, interpretIceDepth, interpretRadiation, interpretComplexPhenomena } = require('./server-function-weather-interprets.js');
 const { interpretBasedOnDate } = require('./server-function-weather-bydatetime.js');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -910,167 +917,17 @@ function getWeatherInterpretationImpl(location_data, data, data_history, store) 
         feelsLike: situation.feelsLike,
     };
 
-    // Atmospheric pressure conditions - Nordic context
-    if (pressure !== undefined) {
-        const adjustedPressure = pressure * Math.exp(location_data.elevation / (29.3 * (temp + 273)));
-        if (adjustedPressure < 970) {
-            results.conditions.push('severe storm conditions');
-            results.alerts.push('dangerously low pressure');
-        } else if (adjustedPressure < 990) results.conditions.push('stormy');
-        else if (adjustedPressure < 1000) results.conditions.push('unsettled');
-        else if (adjustedPressure >= 1000 && adjustedPressure <= 1015);
-        else if (adjustedPressure > 1015 && adjustedPressure <= 1025) results.conditions.push('settled');
-        else if (adjustedPressure > 1025) results.conditions.push('stable high pressure');
-        // Nordic-specific pressure context - Fall through early spring
-        if (month >= 9 && month <= 3) {
-            if (adjustedPressure > 1020)
-                results.phenomena.push('clear winter conditions likely'); // High pressure in winter often brings very cold conditions
-            else if (adjustedPressure < 990 && temp > 0) results.phenomena.push('winter rain likely'); // Low pressure in winter with temps above freezing often brings rain
-        }
-    }
-
-    // Temperature conditions - adjusted for Swedish climate where cold is more common and heat more exceptional
-    if (temp !== undefined) {
-        if (temp < -25) {
-            results.conditions.push('extremely cold');
-            results.alerts.push('extreme cold');
-        } else if (temp < -15) results.conditions.push('very cold');
-        else if (temp < -5) results.conditions.push('cold');
-        else if (temp < 0) results.conditions.push('freezing');
-        else if (temp < 5) results.conditions.push('chilly');
-        else if (temp < 10) results.conditions.push('cool');
-        else if (temp >= 10 && temp < 18) results.conditions.push('mild');
-        else if (temp >= 18 && temp < 23) results.conditions.push('warm');
-        else if (temp >= 23 && temp < 28) results.conditions.push('hot');
-        else {
-            results.conditions.push('very hot');
-            if (temp >= 30) results.alerts.push('unusual heat for this region');
-        }
-        // Season-specific temperature context for Sweden
-        if (month >= 11 || month <= 2) {
-            if (temp > 5) results.phenomena.push('unseasonably warm for winter');
-            else if (temp < -20) results.phenomena.push('extreme Nordic winter conditions');
-        } else if (month >= 6 && month <= 8) {
-            if (temp > 25) results.phenomena.push('unusually hot for this region');
-            else if (temp < 10) results.phenomena.push('unseasonably cool for summer');
-        }
-    }
-
-    // Humidity conditions
-    if (humidity !== undefined) {
-        if (humidity > 90) results.conditions.push('very humid');
-        else if (humidity > 70) results.conditions.push('humid');
-        else if (humidity >= 30 && humidity <= 60);
-        else if (humidity < 30) {
-            results.conditions.push('dry');
-            if (humidity < 15) results.conditions.push('extremely dry');
-        }
-    }
-
-    // Wind conditions - using Beaufort scale as reference
-    if (windSpeed !== undefined) {
-        if (windSpeed < 0.5) results.conditions.push('calm');
-        else if (windSpeed < 1.5) results.conditions.push('light air');
-        else if (windSpeed < 3.3) results.conditions.push('light breeze');
-        else if (windSpeed < 5.5) results.conditions.push('gentle breeze');
-        else if (windSpeed < 7.9) results.conditions.push('moderate breeze');
-        else if (windSpeed < 10.7) results.conditions.push('fresh breeze');
-        else if (windSpeed < 13.8) results.conditions.push('strong breeze');
-        else if (windSpeed < 17.1) {
-            results.conditions.push('near gale');
-            results.alerts.push('strong wind');
-        } else if (windSpeed < 20.7) {
-            results.conditions.push('gale');
-            results.alerts.push('gale');
-        } else if (windSpeed < 24.4) {
-            results.conditions.push('strong gale');
-            results.alerts.push('strong gale');
-        } else if (windSpeed < 28.4) {
-            results.conditions.push('storm');
-            results.alerts.push('storm');
-        } else if (windSpeed < 32.6) {
-            results.conditions.push('violent storm');
-            results.alerts.push('violent storm');
-        } else {
-            results.conditions.push('hurricane force');
-            results.alerts.push('hurricane force wind');
-        }
-    }
-
-    // Cloud cover conditions
-    if (cloudCover !== undefined) {
-        if (cloudCover < 10) results.conditions.push('clear sky');
-        else if (cloudCover < 30) results.conditions.push('mostly clear');
-        else if (cloudCover < 70) results.conditions.push('partly cloudy');
-        else if (cloudCover < 90) results.conditions.push('mostly cloudy');
-        else results.conditions.push('overcast');
-    }
-
-    // Precipitation conditions
-    if (rainRate !== undefined) {
-        if (rainRate > 0 && rainRate < 0.5) results.conditions.push('light rain');
-        else if (rainRate >= 0.5 && rainRate < 4) results.conditions.push('moderate rain');
-        else if (rainRate >= 4 && rainRate < 8) results.conditions.push('heavy rain');
-        else if (rainRate >= 8) {
-            results.conditions.push('very heavy rain');
-            results.alerts.push('heavy rainfall');
-        }
-    }
-
+    interpretTemperature(results, situation, data, data_history, store);
+    interpretPressure(results, situation, data, data_history, store);
+    interpretHumidity(results, situation, data, data_history, store);
+    interpretWindSpeed(results, situation, data, data_history, store);
+    interpretCloudCover(results, situation, data, data_history, store);
+    interpretRainRate(results, situation, data, data_history, store);
     interpretSolarUV(results, situation, data, data_history, store);
     interpretSnowDepth(results, situation, data, data_history, store);
     interpretIceDepth(results, situation, data, data_history, store);
     interpretRadiation(results, situation, data, data_history, store);
-
-    // Weather phenomena interpretations - Nordic forest context
-    if (temp !== undefined && humidity !== undefined) {
-        if (temp < 0 && humidity > 70) {
-            if (rainRate > 0) {
-                if (temp < -10) results.phenomena.push('light powder snow likely');
-                else results.phenomena.push('snow likely');
-            } else if (temp < -2) results.phenomena.push('frost likely');
-        }
-        if ((temp < 0 || snowDepth > 0) && cloudCover > 70 && month >= 10 && month <= 3) {
-            results.phenomena.push('snow accumulation on trees possible');
-            if (windSpeed > 5) results.alerts.push('risk of snow-laden branches');
-        }
-        if (temp < 2 && temp > -8 && rainRate > 0) {
-            results.phenomena.push('freezing rain possible');
-            results.alerts.push('forest ice hazard');
-        }
-        if (temp > 20 && humidity > 75) results.phenomena.push('humid for Nordic climate');
-        if (Math.abs(temp - situation.dewPoint) < 3 && temp > 0) {
-            if (hour < 10 || hour > 18) results.phenomena.push('forest fog likely');
-            else results.phenomena.push('fog likely');
-        }
-        if (month >= 5 && month <= 8 && temp > 22 && humidity < 40 && rainRate === 0) {
-            results.phenomena.push('dry forest conditions');
-            if (humidity < 30 && temp > 25) results.alerts.push('forest fire risk');
-        }
-    }
-
-    // Precipitation predictions based on pressure and humidity
-    if (pressure !== undefined && humidity !== undefined) {
-        if (pressure < 1000 && humidity > 75) results.phenomena.push('rain likely');
-        else if (pressure > 1020 && humidity < 40) results.phenomena.push('clear and dry');
-    }
-
-    // Wind chill effect
-    if (temp !== undefined && windSpeed !== undefined) {
-        if (temp < 10 && windSpeed > 3) {
-            const windChillDiff = Math.round(temp - situation.windChill);
-            if (windChillDiff >= 3) results.phenomena.push(`feels ${windChillDiff}°C colder due to wind`);
-        }
-    }
-
-    // Heat index effect
-    if (temp !== undefined && humidity !== undefined) {
-        if (temp > 20 && humidity > 60) {
-            const heatIndexDiff = Math.round(situation.heatIndex - temp);
-            if (heatIndexDiff >= 3) results.phenomena.push(`feels ${heatIndexDiff}°C warmer due to humidity`);
-        }
-    }
-
+    interpretComplexPhenomena(results, situation, data, data_history, store);
     interpretBasedOnDate(results, situation, data, data_history, store);
 
     // Solstice proximity interpretation
@@ -1367,7 +1224,7 @@ function getDaylightHours(latitude, longitude, date = new Date()) {
 
 const weatherCache = {},
     weatherStore = {};
-const CACHE_DURATION = 6 * 60 * 60 * 1000;
+const CACHE_DURATION = (24 + 1) * 60 * 60 * 1000; // 25 hours, for now
 
 function getWeatherInterpretation(location_data, data) {
     const cacheExpiration = data.timestamp - CACHE_DURATION;
