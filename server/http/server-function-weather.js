@@ -1083,12 +1083,18 @@ function getWeatherInterpretationImpl(location_data, data, data_history, store) 
 const weatherCache = {},
     weatherStore = {};
 const CACHE_DURATION = (24 + 1) * 60 * 60 * 1000; // 25 hours, for now
+let lastPrunned = Date.now();
+const PRUNE_INTERVAL = 5 * 60 * 1000;
 
 function getWeatherInterpretation(location_data, data) {
+    // XXX should suppress minor updates to singular variables, or something
     const cacheExpiration = data.timestamp - CACHE_DURATION;
-    Object.keys(weatherCache)
-        .filter((timestamp) => timestamp < cacheExpiration)
-        .forEach((timestamp) => delete weatherCache[timestamp]);
+    if (lastPrunned + PRUNE_INTERVAL < Date.now()) {
+        Object.keys(weatherCache)
+            .filter((timestamp) => timestamp < cacheExpiration)
+            .forEach((timestamp) => delete weatherCache[timestamp]);
+        lastPrunned = Date.now();
+    }
     weatherCache[data.timestamp] = data;
     return getWeatherInterpretationImpl(location_data, data, weatherCache, weatherStore);
 }
