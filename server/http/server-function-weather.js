@@ -6,7 +6,8 @@ const helpers = require('./server-function-weather-helpers.js');
 const interpreters = {
     ...require('./server-function-weather-conditions.js')(options),
     ...require('./server-function-weather-calendar.js')(options),
-    ...require('./server-function-weather-celestial.js')(options),
+    ...require('./server-function-weather-astronomy.js')(options),
+    ...require('./server-function-weather-eclipses.js')(options),
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -690,129 +691,11 @@ function getSolarEclipse(date = new Date(), latitude = undefined, longitude = un
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function __generateDescription(results) {
-    let details = '';
-    if (results.conditions.length > 0) details = joinand([...new Set(results.conditions)]);
-    if (results.phenomena.length > 0) details += (details ? ': ' : '') + joinand([...new Set(results.phenomena)]);
-    if (details) {
-        details = details.charAt(0).toUpperCase() + details.slice(1);
-        if (!details.endsWith('.')) details += '.';
-    }
-    return details || undefined;
-}
+function interpretEclipses(results, situation, data, _data_history, _store, _options) {
+    const { cloudCover } = data;
+    const { location, date } = situation;
 
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-function getWeatherInterpretationImpl(location_data, data, data_history, store, options) {
-    data.cloudCover = undefined; // for now
-    const { temp, humidity, windSpeed, solarRad, snowDepth, cloudCover } = data;
-
-    const date = new Date();
-    const month = date.getMonth(),
-        hour = date.getHours();
-    const situation = {
-        location: location_data,
-        dewPoint: helpers.calculateDewPoint(temp, humidity),
-        heatIndex: helpers.calculateHeatIndex(temp, humidity),
-        windChill: helpers.calculateWindChill(temp, windSpeed),
-        feelsLike: helpers.calculateFeelsLike(temp, humidity, windSpeed),
-        date,
-        month,
-        hour,
-        daylight: helpers.getDaylightHours(location_data.latitude, location_data.longitude),
-        season: helpers.getSeason(location_data.hemisphere),
-    };
-    const results = {
-        conditions: [],
-        phenomena: [],
-        comfort: undefined,
-        alerts: [],
-        details: undefined,
-        feelsLike: situation.feelsLike,
-    };
-
-    Object.entries(interpreters).forEach(([name, func]) => {
-        try {
-            func(results, situation, data, data_history, store, options);
-        } catch (e) {
-            console.error(`weather: interpreter '${name}' error:`, e);
-        }
-    });
-
-    // ---> XXX to be replaced by interepretSolarAndLunarPhase
-
-    // Solstice proximity interpretation
-    const moonPhase = helpers.getMoonPhase(date);
-    const solsticeInfo = helpers.isNearSolstice(date, location_data.hemisphere, 28);
-    let moonPhaseReported = false;
-    if (solsticeInfo.near) {
-        if (solsticeInfo.exact) results.phenomena.push(`'${solsticeInfo.type}' today`);
-        else if (solsticeInfo.days > 0)
-            results.phenomena.push(`'${solsticeInfo.type}' (in ${Math.ceil(solsticeInfo.days)} day${solsticeInfo.days > 1 ? 's' : ''})`);
-        else results.phenomena.push(`'${solsticeInfo.type}' (${Math.abs(Math.floor(solsticeInfo.days))} day${solsticeInfo.days > 1 ? 's' : ''} ago)`);
-        const isHighLatitude = location_data.latitude >= 59.5;
-        if (solsticeInfo.type === 'longest day') {
-            if (situation.daylight.daylightHours > 16) results.phenomena.push('extended daylight');
-            if (isHighLatitude) {
-                // && cloudCover !== undefined && cloudCover < 50) { // XXX
-                results.phenomena.push('near-midnight sun');
-                if (location_data.latitude > 66) results.phenomena.push('true midnight sun (sun never sets)');
-                else if (location_data.latitude > 60) results.phenomena.push('bright nights (civil twilight all night)');
-            }
-            if (moonPhase >= 0.48 && moonPhase <= 0.52)
-                // && cloudCover !== undefined && cloudCover < 40) // XXX
-                results.phenomena.push('solstice full moon (rare)'), (moonPhaseReported = true);
-        } else if (solsticeInfo.type === 'shortest day') {
-            if (situation.daylight.daylightHours < 8) results.phenomena.push('brief daylight');
-            if (isHighLatitude) {
-                results.phenomena.push('extended darkness');
-                if (location_data.latitude > 66.5) results.phenomena.push('polar night (sun never rises)');
-                else if (location_data.latitude > 60) results.phenomena.push('very short days (less than 6 hours of daylight)');
-                else if (location_data.latitude > 59) results.phenomena.push('short days (approx 6 hours of daylight)');
-            }
-            if (moonPhase >= 0.48 && moonPhase <= 0.52)
-                // && cloudCover !== undefined && cloudCover < 40) // XXX
-                results.phenomena.push('winter solstice full moon (special illumination)'), (moonPhaseReported = true);
-        }
-    }
-    // Moon phase interpretation
-    if (!moonPhaseReported && moonPhase >= 0.48 && moonPhase <= 0.52) {
-        results.phenomena.push('full moon tonight');
-        if (cloudCover !== undefined && cloudCover < 40) results.phenomena.push('good visibility for night activities');
-        if ((temp < 0 || snowDepth > 0) && cloudCover !== undefined && cloudCover < 30)
-            // XXX
-            results.phenomena.push('enhanced snow reflection in moonlight');
-    } else if (moonPhase >= 0.98 || moonPhase <= 0.02) {
-        results.phenomena.push('new moon tonight');
-        if (location_data.lightPollution === 'low' && cloudCover !== undefined && cloudCover < 30)
-            // XXX
-            results.phenomena.push('excellent stargazing conditions');
-    } else if ((moonPhase >= 0.23 && moonPhase <= 0.27) || (moonPhase >= 0.73 && moonPhase <= 0.77))
-        results.phenomena.push(`${moonPhase < 0.5 ? 'first' : 'last'} quarter moon tonight`);
-
-    const moonDistanceInfo = helpers.getMoonDistance(date);
-    if (moonDistanceInfo.isSupermoon && moonPhase >= 0.48 && moonPhase <= 0.52) results.phenomena.push('supermoon (larger and brighter)');
-    else if (moonDistanceInfo.isMicromoon && moonPhase >= 0.48 && moonPhase <= 0.52) results.phenomena.push('micromoon (smaller and dimmer)');
-
-    const crossQuarterInfo = helpers.isNearCrossQuarter(date, location_data.hemisphere);
-    if (crossQuarterInfo.isCrossQuarter) results.phenomena.push(`cross-quarter ${crossQuarterInfo.name}`);
-
-    const equinoxInfo = helpers.isNearEquinox(date, location_data.hemisphere, 14);
-    if (equinoxInfo.near) {
-        if (equinoxInfo.exact) results.phenomena.push(`${equinoxInfo.type} today (equal day/night)`);
-        else if (equinoxInfo.days > 0)
-            results.phenomena.push(`${equinoxInfo.type} (in ${Math.ceil(equinoxInfo.days)} day${Math.ceil(equinoxInfo.days) > 1 ? 's' : ''})`);
-        else
-            results.phenomena.push(
-                `${equinoxInfo.type} (${Math.abs(Math.floor(equinoxInfo.days))} day${Math.abs(Math.floor(equinoxInfo.days)) > 1 ? 's' : ''} ago)`
-            );
-        results.phenomena.push(`rapidly ${equinoxInfo.type.includes('spring') ? 'increasing' : 'decreasing'} daylight`);
-    }
-
-    // <--- XXX replaced by SolarAndLunar
-
-    const lunarEclipseInfo = getLunarEclipse(date, location_data.latitude, location_data.longitude, 14);
+    const lunarEclipseInfo = getLunarEclipse(date, location.latitude, location.longitude, 14);
     if (lunarEclipseInfo.isEclipse) {
         results.phenomena.push(`${lunarEclipseInfo.type} lunar eclipse today`);
         if (lunarEclipseInfo.type === 'total' || lunarEclipseInfo.magnitude > 0.6)
@@ -833,7 +716,7 @@ function getWeatherInterpretationImpl(location_data, data, data_history, store, 
         if (lunarEclipseInfo.type === 'total' && lunarEclipseInfo.magnitude > 1.2) results.alerts.push('rare deep total lunar eclipse');
     }
 
-    const solarEclipseInfo = getSolarEclipse(date, location_data.latitude, location_data.longitude, 14);
+    const solarEclipseInfo = getSolarEclipse(date, location.latitude, location.longitude, 14);
     if (solarEclipseInfo.isEclipse) {
         results.phenomena.push(`${solarEclipseInfo.type} solar eclipse today`);
         if (solarEclipseInfo.magnitude) results.phenomena.push(`(magnitude: ${solarEclipseInfo.magnitude.toFixed(2)})`);
@@ -876,10 +759,63 @@ function getWeatherInterpretationImpl(location_data, data, data_history, store, 
         if (solarEclipseInfo.visibilityLocation && solarEclipseInfo.visibilityLocation !== 'not visible')
             results.alerts.push('use proper eye protection for solar eclipse viewing');
     }
+}
 
-    //
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
-    results.comfort = helpers.calculateComfortLevel(temp, humidity, windSpeed, solarRad);
+function __generateDescription(results) {
+    let details = '';
+    if (results.conditions.length > 0) details = joinand([...new Set(results.conditions)]);
+    if (results.phenomena.length > 0) details += (details ? ': ' : '') + joinand([...new Set(results.phenomena)]);
+    if (details) {
+        details = details.charAt(0).toUpperCase() + details.slice(1);
+        if (!details.endsWith('.')) details += '.';
+    }
+    return details || undefined;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+function getWeatherInterpretationImpl(location, data, data_history, store, options) {
+    data.cloudCover = undefined; // for now
+    const { temp, humidity, windSpeed, solarRad } = data;
+
+    const date = new Date();
+    const situation = {
+        location,
+        date,
+        minute: date.getMinutes(),
+        hour: date.getHours(),
+        day: date.getDate(),
+        month: date.getMonth(),
+        year: date.getFullYear(),
+        season: helpers.getSeason(location.hemisphere),
+        daylight: helpers.getDaylightHours(location.latitude, location.longitude),
+        dewPoint: helpers.calculateDewPoint(temp, humidity),
+        windChill: helpers.calculateWindChill(temp, windSpeed),
+        heatIndex: helpers.calculateHeatIndex(temp, humidity),
+    };
+    const results = {
+        conditions: [],
+        phenomena: [],
+        alerts: [],
+        feelsLike: helpers.calculateFeelsLike(temp, humidity, windSpeed),
+        comfort: helpers.calculateComfortLevel(temp, humidity, windSpeed, solarRad),
+        details: undefined,
+    };
+
+    // XXX they often calculate on historical and not current data, we need to fix it
+    Object.entries(interpreters).forEach(([name, func]) => {
+        try {
+            func(results, situation, data, data_history, store, options);
+        } catch (e) {
+            console.error(`weather: interpreter '${name}' error:`, e);
+        }
+    });
+    interpretEclipses(results, situation, data, data_history, store, options);
+
     results.details = __generateDescription(results);
 
     return results;
