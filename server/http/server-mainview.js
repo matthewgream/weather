@@ -143,26 +143,31 @@ console.log(`Loaded '/' using 'server-mainview' && data/vars`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const weather_module = require('./server-function-weather.js');
+const weather_module = require('./server-function-weather.js')({ debug: false });
 function getWeatherInterpretation(vars) {
     try {
         const varsWeather = vars['weather/branna'] || {},
             varsRadiation = vars['sensors/radiation'] || {};
-        const results = weather_module.getWeatherInterpretation(configData.LOCATION, {
-            timestamp: Date.now(),
-            temp: varsWeather.temp,
-            humidity: varsWeather.humidity,
-            pressure: varsWeather.baromrel,
-            windSpeed: varsWeather.windspeed ? varsWeather.windspeed / 3.6 : undefined,
-            solarRad: varsWeather.solarradiation,
-            solarUvi: varsWeather.uv,
-            rainRate: varsWeather.rainrate,
-            radiationCpm: varsRadiation.cpm,
-            radiationAcpm: varsRadiation.acpm,
-            radiationUsvh: varsRadiation.usvh,
-            snowDepth: undefined,
-            iceDepth: undefined,
-        });
+        const results = weather_module.getWeatherInterpretation(
+            configData.LOCATION,
+            {
+                timestamp: Date.now(),
+                temp: varsWeather.temp,
+                humidity: varsWeather.humidity,
+                pressure: varsWeather.baromrel,
+                windSpeed: varsWeather.windspeed ? varsWeather.windspeed / 3.6 : undefined,
+                windGust: varsWeather.windgust ? varsWeather.windgust / 3.6 : undefined,
+                solarRad: varsWeather.solarradiation,
+                solarUvi: varsWeather.uv,
+                rainRate: varsWeather.rainrate,
+                radiationCpm: varsRadiation.cpm,
+                radiationAcpm: varsRadiation.acpm,
+                radiationUsvh: varsRadiation.usvh,
+                snowDepth: undefined,
+                iceDepth: undefined,
+            },
+            { suppress: { stable: true } }
+        );
         return results;
     } catch (e) {
         console.error(`getWeatherInterpretation, error:`, e);

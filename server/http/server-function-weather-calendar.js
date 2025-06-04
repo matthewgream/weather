@@ -1,7 +1,12 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretBasedOnDate(results, situation, data, data_history, store) {
+const helpers = require('./server-function-weather-helpers.js');
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+function interpretCalendarBased(results, situation, data, data_history, store, _options) {
     const { temp, windSpeed, cloudCover, humidity } = data;
     const { month, hour, date, daylight, season } = situation;
 
@@ -16,7 +21,7 @@ function interpretBasedOnDate(results, situation, data, data_history, store) {
 
     const currentHourDecimal = hour + date.getMinutes() / 60;
 
-    const daylightPhase = getDaylightPhase(currentHourDecimal, daylight);
+    const daylightPhase = helpers.getDaylightPhase(currentHourDecimal, daylight);
 
     if (temp !== undefined) {
         // Summer daylight phenomena (May-July)
@@ -138,24 +143,7 @@ function interpretBasedOnDate(results, situation, data, data_history, store) {
     }
 }
 
-function getDaylightPhase(currentHourDecimal, daylight) {
-    if (daylight.isDaytime) return 'day';
-
-    // Calculate nautical and astronomical twilight times
-    const nauticalDawnDecimal = daylight.civilDawnDecimal - 1, // Approximate
-        nauticalDuskDecimal = daylight.civilDuskDecimal + 1, // Approximate
-        astronomicalDawnDecimal = nauticalDawnDecimal - 1, // Approximate
-        astronomicalDuskDecimal = nauticalDuskDecimal + 1; // Approximate
-
-    if (currentHourDecimal >= daylight.civilDawnDecimal && currentHourDecimal < daylight.sunriseDecimal) return 'civil_dawn';
-    else if (currentHourDecimal >= daylight.sunsetDecimal && currentHourDecimal <= daylight.civilDuskDecimal) return 'civil_twilight';
-    else if (currentHourDecimal >= nauticalDawnDecimal && currentHourDecimal < daylight.civilDawnDecimal) return 'nautical_dawn';
-    else if (currentHourDecimal > daylight.civilDuskDecimal && currentHourDecimal <= nauticalDuskDecimal) return 'nautical_twilight';
-    else if (currentHourDecimal >= astronomicalDawnDecimal && currentHourDecimal < nauticalDawnDecimal) return 'astronomical_dawn';
-    else if (currentHourDecimal > nauticalDuskDecimal && currentHourDecimal <= astronomicalDuskDecimal) return 'astronomical_twilight';
-
-    return 'night';
-}
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
 function handleWinterPhenomena(results, situation, data, _store) {
     const { temp } = data;
@@ -186,6 +174,8 @@ function handleWinterPhenomena(results, situation, data, _store) {
         else if (temp > -5 && temp < 2) results.phenomena.push('brief winter afternoon warmth');
     }
 }
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
 function handleSummerPhenomena(results, situation, data, _store) {
     const { temp, humidity } = data;
@@ -218,6 +208,8 @@ function handleSummerPhenomena(results, situation, data, _store) {
         }
 }
 
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 function handleSpringPhenomena(results, situation, data, store) {
     const { temp, rainRate, snowDepth } = data;
     const { month, hour, daylight } = situation;
@@ -237,6 +229,8 @@ function handleSpringPhenomena(results, situation, data, store) {
     const daylightChange = calculateDaylightChange(situation, store);
     if (daylightChange > 0.05) results.phenomena.push(`rapidly lengthening days (+${Math.round(daylightChange * 60)} min/day)`);
 }
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
 function handleAutumnPhenomena(results, situation, data, store) {
     const { temp, rainRate, windSpeed, humidity } = data;
@@ -258,6 +252,8 @@ function handleAutumnPhenomena(results, situation, data, store) {
     const daylightChange = calculateDaylightChange(situation, store);
     if (daylightChange < -0.05) results.phenomena.push(`rapidly shortening days (${Math.round(daylightChange * 60)} min/day)`);
 }
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
 function handleSpecialDates(results, situation, data, _store) {
     const { month, date, daylight } = situation;
@@ -284,6 +280,8 @@ function handleSpecialDates(results, situation, data, _store) {
         if (data.temp > 15 && data.cloudCover < 50) results.phenomena.push('good conditions for outdoor crayfish party');
     }
 }
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
 function handleDiurnalPatterns(results, situation, data, data_history, _store) {
     const { timestamp, temp } = data;
@@ -313,6 +311,8 @@ function handleDiurnalPatterns(results, situation, data, data_history, _store) {
     else if (hour >= 21 && hour < 24) results.phenomena.push('late evening');
 }
 
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 function calculateDaylightChange(situation, store) {
     const currentDaylight = situation.daylight.daylightHours,
         previousDaylight = store.datePatterns.previousDaylightHours || currentDaylight;
@@ -324,8 +324,10 @@ function calculateDaylightChange(situation, store) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-module.exports = {
-    interpretBasedOnDate,
+module.exports = function (_options) {
+    return {
+        interpretCalendarBased,
+    };
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

@@ -1,21 +1,13 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+const options = {};
 const helpers = require('./server-function-weather-helpers.js');
-const {
-    interpretPressure,
-    interpretTemperature,
-    interpretHumidity,
-    interpretWindSpeed,
-    interpretCloudCover,
-    interpretRainRate,
-    interpretSolarUV,
-    interpretSnowDepth,
-    interpretIceDepth,
-    interpretRadiation,
-    interpretComplexPhenomena,
-} = require('./server-function-weather-interprets.js');
-const { interpretBasedOnDate } = require('./server-function-weather-bydatetime.js');
+const interpreters = {
+    ...require('./server-function-weather-conditions.js')(options),
+    ...require('./server-function-weather-calendar.js')(options),
+    ...require('./server-function-weather-celestial.js')(options),
+};
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -112,17 +104,6 @@ function localSiderealTime(jd, longitude) {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
-
-function getMoonDistance(date = new Date()) {
-    const phase = helpers.getMoonPhase(date),
-        distance = 384400 * (1 - 0.0549 * Math.cos(phase * 2 * Math.PI));
-    return {
-        distance, // in km
-        isSupermoon: distance < 367000 && Math.abs(phase - 0.5) < 0.1, // Full moon at perigee
-        isMicromoon: distance > 400000 && Math.abs(phase - 0.5) < 0.1, // Full moon at apogee
-        isCloseApproach: distance < 370000, // Generally close approach
-    };
-}
 
 /**
  * Calculates moon position with medium precision (~1 arcminute accuracy)
@@ -709,169 +690,6 @@ function getSolarEclipse(date = new Date(), latitude = undefined, longitude = un
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function isNearSolstice(date = new Date(), hemisphere = 'northern', daysWindow = 7) {
-    const year = date.getFullYear(),
-        msPerDay = 1000 * 60 * 60 * 24,
-        isNorthern = hemisphere === 'northern';
-    const currentYearSummerSolstice = new Date(year, 5, 21),
-        currentYearWinterSolstice = new Date(year, 11, 21); // June 21 / December 21
-    const prevYearWinterSolstice = new Date(year - 1, 11, 21),
-        nextYearSummerSolstice = new Date(year + 1, 5, 21); // Dec 21 / June 21
-    const currentYearLongestDay = isNorthern ? currentYearSummerSolstice : currentYearWinterSolstice;
-    const currentYearShortestDay = isNorthern ? currentYearWinterSolstice : currentYearSummerSolstice;
-    const otherYearRelevantSolstice = isNorthern
-        ? date.getMonth() < 6
-            ? prevYearWinterSolstice
-            : nextYearSummerSolstice
-        : date.getMonth() < 6
-          ? new Date(year - 1, 5, 21)
-          : new Date(year + 1, 11, 21);
-    const daysToCurrYearLongest = (currentYearLongestDay.getTime() - date.getTime()) / msPerDay,
-        daysToCurrYearShortest = (currentYearShortestDay.getTime() - date.getTime()) / msPerDay,
-        daysToOtherYearSolstice = (otherYearRelevantSolstice.getTime() - date.getTime()) / msPerDay;
-    if (Math.abs(daysToCurrYearLongest) <= daysWindow)
-        return {
-            near: true,
-            type: 'longest day',
-            exact: Math.abs(daysToCurrYearLongest) < 1,
-            days: daysToCurrYearLongest,
-        };
-    else if (Math.abs(daysToCurrYearShortest) <= daysWindow)
-        return {
-            near: true,
-            type: 'shortest day',
-            exact: Math.abs(daysToCurrYearShortest) < 1,
-            days: daysToCurrYearShortest,
-        };
-    else if (Math.abs(daysToOtherYearSolstice) <= daysWindow)
-        return {
-            near: true,
-            type: (isNorthern && date.getMonth() < 6) || (!isNorthern && date.getMonth() >= 6) ? 'shortest day' : 'longest day',
-            exact: Math.abs(daysToOtherYearSolstice) < 1,
-            days: daysToOtherYearSolstice,
-        };
-    return { near: false };
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-function isNearEquinox(date = new Date(), hemisphere = 'northern', daysWindow = 7) {
-    const year = date.getFullYear(),
-        msPerDay = 1000 * 60 * 60 * 24,
-        isNorthern = hemisphere === 'northern';
-    const springEquinox = new Date(year, 2, 20),
-        autumnEquinox = new Date(year, 8, 22); // March 20 / September 22
-    const firstEquinox = isNorthern ? springEquinox : autumnEquinox,
-        secondEquinox = isNorthern ? autumnEquinox : springEquinox;
-    const daysToFirst = (firstEquinox.getTime() - date.getTime()) / msPerDay,
-        daysToSecond = (secondEquinox.getTime() - date.getTime()) / msPerDay;
-    const prevYearSecondEquinox = new Date(year - 1, 8, 22),
-        daysToPrevYearSecond = (prevYearSecondEquinox.getTime() - date.getTime()) / msPerDay;
-    const nextYearFirstEquinox = new Date(year + 1, 2, 20),
-        daysToNextYearFirst = (nextYearFirstEquinox.getTime() - date.getTime()) / msPerDay;
-    if (Math.abs(daysToFirst) <= daysWindow)
-        return {
-            near: true,
-            type: isNorthern ? 'spring equinox' : 'autumn equinox',
-            exact: Math.abs(daysToFirst) < 1,
-            days: daysToFirst,
-        };
-    else if (Math.abs(daysToSecond) <= daysWindow)
-        return {
-            near: true,
-            type: isNorthern ? 'autumn equinox' : 'spring equinox',
-            exact: Math.abs(daysToSecond) < 1,
-            days: daysToSecond,
-        };
-    else if (Math.abs(daysToPrevYearSecond) <= daysWindow)
-        return {
-            near: true,
-            type: isNorthern ? 'autumn equinox' : 'spring equinox',
-            exact: Math.abs(daysToPrevYearSecond) < 1,
-            days: daysToPrevYearSecond,
-        };
-    else if (Math.abs(daysToNextYearFirst) <= daysWindow)
-        return {
-            near: true,
-            type: isNorthern ? 'spring equinox' : 'autumn equinox',
-            exact: Math.abs(daysToNextYearFirst) < 1,
-            days: daysToNextYearFirst,
-        };
-    return { near: false };
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-function getCrossQuarterDay(date = new Date(), hemisphere = 'northern', daysWindow = 3) {
-    const year = date.getFullYear(),
-        msPerDay = 1000 * 60 * 60 * 24,
-        isNorthern = hemisphere === 'northern';
-    const imbolc = new Date(year, 1, 1),
-        beltane = new Date(year, 4, 1),
-        lughnasadh = new Date(year, 7, 1),
-        samhain = new Date(year, 10, 1); // Feb 1 / May 1 / Aug 1 / Nov 1
-    const daysToImbolc = Math.abs(date.getTime() - imbolc.getTime()) / msPerDay,
-        daysToBeltane = Math.abs(date.getTime() - beltane.getTime()) / msPerDay,
-        daysToLughnasadh = Math.abs(date.getTime() - lughnasadh.getTime()) / msPerDay,
-        daysToSamhain = Math.abs(date.getTime() - samhain.getTime()) / msPerDay;
-    if (daysToImbolc <= daysWindow)
-        return {
-            isCrossQuarter: true,
-            name: isNorthern ? 'Imbolc (early spring)' : 'Lughnasadh (early autumn)',
-            days: daysToImbolc,
-        };
-    else if (daysToBeltane <= daysWindow)
-        return {
-            isCrossQuarter: true,
-            name: isNorthern ? 'Beltane (early summer)' : 'Samhain (early winter)',
-            days: daysToBeltane,
-        };
-    else if (daysToLughnasadh <= daysWindow)
-        return {
-            isCrossQuarter: true,
-            name: isNorthern ? 'Lughnasadh (early autumn)' : 'Imbolc (early spring)',
-            days: daysToLughnasadh,
-        };
-    else if (daysToSamhain <= daysWindow)
-        return {
-            isCrossQuarter: true,
-            name: isNorthern ? 'Samhain (early winter)' : 'Beltane (early summer)',
-            days: daysToSamhain,
-        };
-    return { isCrossQuarter: false };
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-function getAuroraPotential(latitude, month, solarActivity = undefined) {
-    const isDarkSeason = month <= 2 || month >= 9;
-    if (latitude >= 65)
-        return {
-            potential: isDarkSeason ? 'very high' : 'moderate',
-            visible: isDarkSeason,
-            bestTime: '22:00-02:00',
-        };
-    else if (latitude >= 60)
-        return {
-            potential: isDarkSeason ? 'high' : 'low',
-            visible: isDarkSeason && solarActivity === 'high',
-            bestTime: '23:00-01:00',
-        };
-    else if (latitude >= 55)
-        return {
-            potential: isDarkSeason ? 'moderate' : 'very low',
-            visible: isDarkSeason && solarActivity === 'very high',
-            bestTime: '00:00-01:00',
-        };
-    return { potential: 'very low', visible: false };
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
 function __generateDescription(results) {
     let details = '';
     if (results.conditions.length > 0) details = joinand([...new Set(results.conditions)]);
@@ -886,7 +704,7 @@ function __generateDescription(results) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function getWeatherInterpretationImpl(location_data, data, data_history, store) {
+function getWeatherInterpretationImpl(location_data, data, data_history, store, options) {
     data.cloudCover = undefined; // for now
     const { temp, humidity, windSpeed, solarRad, snowDepth, cloudCover } = data;
 
@@ -914,22 +732,19 @@ function getWeatherInterpretationImpl(location_data, data, data_history, store) 
         feelsLike: situation.feelsLike,
     };
 
-    interpretTemperature(results, situation, data, data_history, store);
-    interpretPressure(results, situation, data, data_history, store);
-    interpretHumidity(results, situation, data, data_history, store);
-    interpretWindSpeed(results, situation, data, data_history, store);
-    interpretCloudCover(results, situation, data, data_history, store);
-    interpretRainRate(results, situation, data, data_history, store);
-    interpretSolarUV(results, situation, data, data_history, store);
-    interpretSnowDepth(results, situation, data, data_history, store);
-    interpretIceDepth(results, situation, data, data_history, store);
-    interpretRadiation(results, situation, data, data_history, store);
-    interpretComplexPhenomena(results, situation, data, data_history, store);
-    interpretBasedOnDate(results, situation, data, data_history, store);
+    Object.entries(interpreters).forEach(([name, func]) => {
+        try {
+            func(results, situation, data, data_history, store, options);
+        } catch (e) {
+            console.error(`weather: interpreter '${name}' error:`, e);
+        }
+    });
+
+    // ---> XXX to be replaced by interepretSolarAndLunarPhase
 
     // Solstice proximity interpretation
     const moonPhase = helpers.getMoonPhase(date);
-    const solsticeInfo = isNearSolstice(date, location_data.hemisphere, 28);
+    const solsticeInfo = helpers.isNearSolstice(date, location_data.hemisphere, 28);
     let moonPhaseReported = false;
     if (solsticeInfo.near) {
         if (solsticeInfo.exact) results.phenomena.push(`'${solsticeInfo.type}' today`);
@@ -961,7 +776,6 @@ function getWeatherInterpretationImpl(location_data, data, data_history, store) 
                 results.phenomena.push('winter solstice full moon (special illumination)'), (moonPhaseReported = true);
         }
     }
-
     // Moon phase interpretation
     if (!moonPhaseReported && moonPhase >= 0.48 && moonPhase <= 0.52) {
         results.phenomena.push('full moon tonight');
@@ -977,14 +791,14 @@ function getWeatherInterpretationImpl(location_data, data, data_history, store) 
     } else if ((moonPhase >= 0.23 && moonPhase <= 0.27) || (moonPhase >= 0.73 && moonPhase <= 0.77))
         results.phenomena.push(`${moonPhase < 0.5 ? 'first' : 'last'} quarter moon tonight`);
 
-    const moonDistanceInfo = getMoonDistance(date);
+    const moonDistanceInfo = helpers.getMoonDistance(date);
     if (moonDistanceInfo.isSupermoon && moonPhase >= 0.48 && moonPhase <= 0.52) results.phenomena.push('supermoon (larger and brighter)');
     else if (moonDistanceInfo.isMicromoon && moonPhase >= 0.48 && moonPhase <= 0.52) results.phenomena.push('micromoon (smaller and dimmer)');
 
-    const crossQuarterInfo = getCrossQuarterDay(date, location_data.hemisphere);
+    const crossQuarterInfo = helpers.isNearCrossQuarter(date, location_data.hemisphere);
     if (crossQuarterInfo.isCrossQuarter) results.phenomena.push(`cross-quarter ${crossQuarterInfo.name}`);
 
-    const equinoxInfo = isNearEquinox(date, location_data.hemisphere, 14);
+    const equinoxInfo = helpers.isNearEquinox(date, location_data.hemisphere, 14);
     if (equinoxInfo.near) {
         if (equinoxInfo.exact) results.phenomena.push(`${equinoxInfo.type} today (equal day/night)`);
         else if (equinoxInfo.days > 0)
@@ -995,6 +809,8 @@ function getWeatherInterpretationImpl(location_data, data, data_history, store) 
             );
         results.phenomena.push(`rapidly ${equinoxInfo.type.includes('spring') ? 'increasing' : 'decreasing'} daylight`);
     }
+
+    // <--- XXX replaced by SolarAndLunar
 
     const lunarEclipseInfo = getLunarEclipse(date, location_data.latitude, location_data.longitude, 14);
     if (lunarEclipseInfo.isEclipse) {
@@ -1061,15 +877,7 @@ function getWeatherInterpretationImpl(location_data, data, data_history, store) 
             results.alerts.push('use proper eye protection for solar eclipse viewing');
     }
 
-    const auroraPotential = getAuroraPotential(location_data.latitude, month);
-    if (auroraPotential.potential !== 'very low') {
-        if (auroraPotential.visible)
-            results.phenomena.push(
-                `aurora borealis likely visible (best time: ${auroraPotential.bestTime}${cloudCover !== undefined && cloudCover < 30 && moonPhase < 0.3 ? ', with good visbility' : ''})`
-            );
-        else if (auroraPotential.potential === 'high' || auroraPotential.potential === 'very high')
-            results.phenomena.push('potential for aurora activity (if dark enough)');
-    }
+    //
 
     results.comfort = helpers.calculateComfortLevel(temp, humidity, windSpeed, solarRad);
     results.details = __generateDescription(results);
@@ -1086,7 +894,7 @@ const CACHE_DURATION = (24 + 1) * 60 * 60 * 1000; // 25 hours, for now
 let lastPrunned = Date.now();
 const PRUNE_INTERVAL = 5 * 60 * 1000;
 
-function getWeatherInterpretation(location_data, data) {
+function getWeatherInterpretation(location_data, data, options = {}) {
     // XXX should suppress minor updates to singular variables, or something
     const cacheExpiration = data.timestamp - CACHE_DURATION;
     if (lastPrunned + PRUNE_INTERVAL < Date.now()) {
@@ -1096,13 +904,15 @@ function getWeatherInterpretation(location_data, data) {
         lastPrunned = Date.now();
     }
     weatherCache[data.timestamp] = data;
-    return getWeatherInterpretationImpl(location_data, data, weatherCache, weatherStore);
+    return getWeatherInterpretationImpl(location_data, data, weatherCache, weatherStore, options);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-module.exports = { getWeatherInterpretation };
+module.exports = function (_options = {}) {
+    return { getWeatherInterpretation };
+};
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------

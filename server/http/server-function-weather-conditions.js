@@ -3,111 +3,33 @@
 
 const helpers = require('./server-function-weather-helpers.js');
 
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-function interpretPressure(results, situation, data, data_history, store) {
-    const { timestamp, pressure, temp, windSpeed, humidity } = data;
-    const { month, location } = situation;
-
-    if (pressure === undefined) return;
-
-    if (!store.pressure)
-        store.pressure = {
-            trend: 'stable',
-            changeRate: 0,
-            lastReading: pressure,
-            lastTimestamp: timestamp,
-            extremes24h: { min: pressure, max: pressure },
-            rapidChanges: [],
-        };
-
-    const adjustedPressure = pressure * Math.exp(location.elevation / (29.3 * (temp + 273)));
-    const oneHourAgo = timestamp - 60 * 60 * 1000,
-        threeHoursAgo = timestamp - 3 * 60 * 60 * 1000,
-        twentyFourHoursAgo = timestamp - 24 * 60 * 60 * 1000;
-    let pressure1hAgo, pressure3hAgo, pressure24hAgo;
-    let min24h = adjustedPressure,
-        max24h = adjustedPressure;
-    Object.entries(data_history)
-        .filter(([timestamp, entry]) => timestamp > twentyFourHoursAgo && entry.pressure !== undefined)
-        .sort(([a], [b]) => a - b)
-        .forEach(([timestamp, entry]) => {
-            const adjP = entry.pressure * Math.exp(location.elevation / (29.3 * ((entry.temp || temp) + 273)));
-            if (timestamp > oneHourAgo && pressure1hAgo === undefined) pressure1hAgo = adjP;
-            if (timestamp > threeHoursAgo && pressure3hAgo === undefined) pressure3hAgo = adjP;
-            if (timestamp > twentyFourHoursAgo && pressure24hAgo === undefined) pressure24hAgo = adjP;
-            min24h = Math.min(min24h, adjP);
-            max24h = Math.max(max24h, adjP);
-        });
-    store.pressure.extremes24h = { min: min24h, max: max24h };
-    const change1h = pressure1hAgo ? adjustedPressure - pressure1hAgo : 0,
-        change3h = pressure3hAgo ? adjustedPressure - pressure3hAgo : 0,
-        change24h = pressure24hAgo ? adjustedPressure - pressure24hAgo : 0; // XXX unused
-
-    if (Math.abs(change3h) < 1) store.pressure.trend = 'stable';
-    else if (change3h > 0) store.pressure.trend = 'rising';
-    else store.pressure.trend = 'falling';
-
-    if (adjustedPressure < 970) {
-        results.conditions.push('severe storm conditions');
-        results.alerts.push('dangerously low pressure');
-    } else if (adjustedPressure < 990) {
-        results.conditions.push('stormy');
-        if (windSpeed > 10) results.alerts.push('storm system active');
-    } else if (adjustedPressure < 1000) results.conditions.push('unsettled');
-    else if (adjustedPressure >= 1000 && adjustedPressure <= 1015) {
-        // Normal range - no condition added
-    } else if (adjustedPressure > 1015 && adjustedPressure <= 1025) results.conditions.push('settled');
-    else if (adjustedPressure > 1025) results.conditions.push('stable high pressure');
-
-    if (Math.abs(change1h) > 3) {
-        results.alerts.push(`rapid pressure ${change1h > 0 ? 'rise' : 'drop'}: ${Math.abs(change1h).toFixed(1)} hPa/hour`);
-        store.pressure.rapidChanges.push({ timestamp, change: change1h });
-    } else if (Math.abs(change3h) > 5)
-        results.phenomena.push(`significant pressure ${change3h > 0 ? 'rise' : 'drop'}: ${Math.abs(change3h).toFixed(1)} hPa in 3 hours`);
-
-    if (store.pressure.trend === 'falling') {
-        if (change3h < -5) {
-            results.phenomena.push('rapidly falling pressure - storm approaching');
-            if (month >= 9 || month <= 3) results.phenomena.push('winter storm possible');
-        } else if (change3h < -3) results.phenomena.push('falling pressure - weather deteriorating');
-    } else if (store.pressure.trend === 'rising') {
-        if (change3h > 5) results.phenomena.push('rapidly rising pressure - clearing conditions');
-        else if (change3h > 3) results.phenomena.push('rising pressure - improving weather');
+/* XXX for each data
+function hasSignificantDataGap(sortedEntries, maxGapHours = 3) {
+    for (let i = 1; i < sortedEntries.length; i++) {
+        const gap = (sortedEntries[i][0] - sortedEntries[i-1][0]) / 3600000;
+        if (gap > maxGapHours) return true;
     }
-
-    if (month >= 9 || month <= 3) {
-        // Fall through early spring
-        if (adjustedPressure > 1020) {
-            results.phenomena.push('clear winter conditions likely');
-            if (temp < -10) results.phenomena.push('cold high pressure system');
-        } else if (adjustedPressure < 990 && temp > 0) {
-            results.phenomena.push('winter rain likely');
-            if (change3h < -3) results.alerts.push('winter storm developing');
-        }
-    } else if (month >= 6 && month <= 8) {
-        // Summer
-        if (adjustedPressure < 1005 && humidity > 70) results.phenomena.push('summer low pressure - showers possible');
-        else if (adjustedPressure > 1020) results.phenomena.push('summer high pressure - warm and dry');
-    }
-
-    const range24h = max24h - min24h;
-    if (range24h > 20) {
-        results.phenomena.push(`extreme pressure variation: ${range24h.toFixed(1)} hPa in 24h`);
-        results.alerts.push('unstable atmospheric conditions');
-    } else if (range24h < 3) results.phenomena.push('very stable pressure');
-
-    if (adjustedPressure < 1000 && Math.abs(change3h) > 3) results.phenomena.push('barometric pressure changes may affect sensitive individuals');
-
-    store.pressure.lastReading = adjustedPressure;
-    store.pressure.lastTimestamp = timestamp;
+    return false;
 }
+*/
+
+/* XXX for each
+// Add to each relevant function:
+// Example for temperature:
+const percentile95 = historicalValues.sort((a,b) => a-b)[Math.floor(historicalValues.length * 0.95)];
+const percentile5 = historicalValues.sort((a,b) => a-b)[Math.floor(historicalValues.length * 0.05)];
+
+if (temp > percentile95) {
+    results.phenomena.push('temperature in top 5% for recent period');
+} else if (temp < percentile5) {
+    results.phenomena.push('temperature in bottom 5% for recent period');
+}
+*/
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretTemperature(results, situation, data, data_history, store) {
+function interpretTemperature(results, situation, data, data_history, store, _options) {
     const { timestamp, temp, humidity, windSpeed, snowDepth } = data;
     const { month, hour, location } = situation;
 
@@ -172,9 +94,12 @@ function interpretTemperature(results, situation, data, data_history, store) {
     else if (temp < 10) results.conditions.push('cool');
     else if (temp >= 10 && temp < 18) results.conditions.push('mild');
     else if (temp >= 18 && temp < 23) results.conditions.push('warm');
-    else if (temp >= 23 && temp < 28) {
+    else if (temp >= 22 && temp < 27) {
+        results.conditions.push('warm to hot');
+        results.phenomena.push('warm for Nordic climate');
+    } else if (temp >= 23 && temp < 28) {
         results.conditions.push('hot');
-        if (location.latitude > 60) results.phenomena.push('unusually warm for this latitude');
+        if (location.latitude > 59) results.phenomena.push('unusually warm for this latitude');
     } else {
         results.conditions.push('very hot');
         if (temp >= 30) {
@@ -191,6 +116,16 @@ function interpretTemperature(results, situation, data, data_history, store) {
     } else if (Math.abs(change6h) > 10)
         results.phenomena.push(`significant temperature ${change6h > 0 ? 'rise' : 'drop'}: ${Math.abs(change6h).toFixed(1)}°C in 6 hours`);
 
+    if (temp6hAgo !== undefined) {
+        const samples = Object.entries(data_history)
+            .filter(([timestamp, entry]) => timestamp > sixHoursAgo && entry.temp !== undefined)
+            .map(([_timestamp, entry]) => entry.temp);
+        if (samples.length > 3) {
+            const variance = calculateVariance(samples);
+            if (variance > 4) results.phenomena.push('unstable temperature conditions');
+        }
+    }
+
     const diurnalRange = max24h - min24h;
     if (diurnalRange > 20) {
         results.phenomena.push(`extreme temperature variation: ${diurnalRange.toFixed(1)}°C range`);
@@ -199,6 +134,18 @@ function interpretTemperature(results, situation, data, data_history, store) {
         results.phenomena.push(`stable temperatures: only ${diurnalRange.toFixed(1)}°C variation`);
         if (humidity > 80) results.phenomena.push('maritime influence likely');
     }
+
+    if (temp <= 0 && temp24hAgo > 0) {
+        store.temperature.frostDays++;
+        results.phenomena.push('first frost of the period');
+    } else if (temp > 0 && min24h <= 0) results.phenomena.push('frost occurred in last 24 hours');
+
+    if (max7d - min7d > 30) results.phenomena.push(`extreme weekly temperature range: ${(max7d - min7d).toFixed(1)}°C`);
+
+    const minHour = new Date(minTime24h).getHours(),
+        maxHour = new Date(maxTime24h).getHours();
+    if (minHour >= 10 && minHour <= 18) results.phenomena.push('unusual daytime temperature minimum');
+    if (maxHour >= 22 || maxHour <= 6) results.phenomena.push('unusual nighttime temperature maximum');
 
     if (month >= 11 || month <= 2) {
         // Winter
@@ -226,18 +173,6 @@ function interpretTemperature(results, situation, data, data_history, store) {
         if (hour >= 0 && hour <= 6 && min24h > 20) results.phenomena.push('tropical night (min temp > 20°C)');
     }
 
-    if (temp <= 0 && temp24hAgo > 0) {
-        store.temperature.frostDays++;
-        results.phenomena.push('first frost of the period');
-    } else if (temp > 0 && min24h <= 0) results.phenomena.push('frost occurred in last 24 hours');
-
-    if (max7d - min7d > 30) results.phenomena.push(`extreme weekly temperature range: ${(max7d - min7d).toFixed(1)}°C`);
-
-    const minHour = new Date(minTime24h).getHours(),
-        maxHour = new Date(maxTime24h).getHours();
-    if (minHour >= 10 && minHour <= 18) results.phenomena.push('unusual daytime temperature minimum');
-    if (maxHour >= 22 || maxHour <= 6) results.phenomena.push('unusual nighttime temperature maximum');
-
     if (location.elevation > 500 && temp < temp24hAgo - 5) results.phenomena.push('cold air pooling in valley possible');
 
     store.temperature.rateOfChange = change1h;
@@ -246,8 +181,130 @@ function interpretTemperature(results, situation, data, data_history, store) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretHumidity(results, situation, data, data_history, store) {
-    const { timestamp, humidity, temp, pressure, windSpeed, rainRate } = data;
+function interpretPressure(results, situation, data, data_history, store, _options) {
+    const { timestamp, pressure, temp, windSpeed, humidity } = data;
+    const { month, location } = situation;
+
+    if (pressure === undefined) return;
+
+    if (!store.pressure)
+        store.pressure = {
+            trend: 'stable',
+            changeRate: 0,
+            lastReading: pressure,
+            lastTimestamp: timestamp,
+            extremes24h: { min: pressure, max: pressure },
+            rapidChanges: [],
+        };
+
+    const adjustedPressure = pressure * Math.exp(location.elevation / (29.3 * (273.15 + temp)));
+    const oneHourAgo = timestamp - 60 * 60 * 1000,
+        threeHoursAgo = timestamp - 3 * 60 * 60 * 1000,
+        twentyFourHoursAgo = timestamp - 24 * 60 * 60 * 1000;
+    let pressure1hAgo, pressure3hAgo, pressure24hAgo;
+    let closest1hAgo, closest3hAgo, closest24hAgo;
+    let min24h = adjustedPressure,
+        max24h = adjustedPressure;
+    Object.entries(data_history)
+        .filter(([timestamp, entry]) => timestamp > twentyFourHoursAgo && entry.pressure !== undefined)
+        .sort(([a], [b]) => a - b)
+        .forEach(([timestamp, entry]) => {
+            const adjP = entry.pressure * Math.exp(location.elevation / (29.3 * ((entry.temp || temp) + 273)));
+            if (timestamp <= oneHourAgo && (!closest1hAgo || timestamp > closest1hAgo)) {
+                closest1hAgo = timestamp;
+                pressure1hAgo = adjP;
+            }
+            if (timestamp <= threeHoursAgo && (!closest3hAgo || timestamp > closest3hAgo)) {
+                closest3hAgo = timestamp;
+                pressure3hAgo = adjP;
+            }
+            if (timestamp <= twentyFourHoursAgo && (!closest24hAgo || timestamp > closest24hAgo)) {
+                closest24hAgo = timestamp;
+                pressure24hAgo = adjP;
+            }
+            min24h = Math.min(min24h, adjP);
+            max24h = Math.max(max24h, adjP);
+        });
+    store.pressure.extremes24h = { min: min24h, max: max24h };
+    const change1h = pressure1hAgo ? adjustedPressure - pressure1hAgo : 0,
+        change3h = pressure3hAgo ? adjustedPressure - pressure3hAgo : 0,
+        change24h = pressure24hAgo ? adjustedPressure - pressure24hAgo : 0;
+
+    if (Math.abs(change3h) < 1) store.pressure.trend = 'stable';
+    else if (change3h > 0) store.pressure.trend = 'rising';
+    else store.pressure.trend = 'falling';
+
+    if (adjustedPressure < 970) {
+        results.conditions.push('severe storm conditions');
+        results.alerts.push('dangerously low pressure');
+    } else if (adjustedPressure < 990) {
+        results.conditions.push('stormy');
+        if (windSpeed > 10) results.alerts.push('storm system active');
+    } else if (adjustedPressure < 1000) results.conditions.push('unsettled');
+    else if (adjustedPressure >= 1000 && adjustedPressure <= 1015) {
+        // Normal range - no condition added
+    } else if (adjustedPressure > 1015 && adjustedPressure <= 1025) results.conditions.push('settled');
+    else if (adjustedPressure > 1025) results.conditions.push('stable high pressure');
+
+    if (Math.abs(change1h) > 3) {
+        results.alerts.push(`rapid pressure ${change1h > 0 ? 'rise' : 'drop'}: ${Math.abs(change1h).toFixed(1)} hPa/hour`);
+        store.pressure.rapidChanges.push({ timestamp, change: change1h });
+    } else if (Math.abs(change3h) > 5)
+        results.phenomena.push(`significant pressure ${change3h > 0 ? 'rise' : 'drop'}: ${Math.abs(change3h).toFixed(1)} hPa in 3 hours`);
+
+    if (store.pressure.trend === 'falling') {
+        if (change3h < -5) {
+            results.phenomena.push('rapidly falling pressure - storm approaching');
+            if (month >= 9 || month <= 3) results.phenomena.push('winter storm possible');
+        } else if (change3h < -3) results.phenomena.push('falling pressure - weather deteriorating');
+    } else if (store.pressure.trend === 'rising') {
+        if (change3h > 5) results.phenomena.push('rapidly rising pressure - clearing conditions');
+        else if (change3h > 3) results.phenomena.push('rising pressure - improving weather');
+    }
+    if (Math.abs(change24h) > 10) {
+        results.phenomena.push(`significant 24h pressure ${change24h > 0 ? 'rise' : 'drop'}: ${Math.abs(change24h).toFixed(1)} hPa`);
+        if (change24h > 15) results.phenomena.push('strong high pressure building');
+        else if (change24h < -15) results.phenomena.push('deepening low pressure system');
+    }
+
+    const range24h = max24h - min24h;
+    if (range24h > 20) {
+        results.phenomena.push(`extreme pressure variation: ${range24h.toFixed(1)} hPa in 24h`);
+        results.alerts.push('unstable atmospheric conditions');
+    } else if (range24h < 3) results.phenomena.push('very stable pressure');
+
+    if (adjustedPressure < 1000 && Math.abs(change3h) > 3) results.phenomena.push('barometric pressure changes may affect sensitive individuals');
+
+    if (location.forestCoverage === 'high' && change3h < -5) results.phenomena.push('storm approaching - forest wind damage possible');
+
+    if (month >= 9 || month <= 3) {
+        // Fall through early spring
+        if (adjustedPressure > 1020) {
+            results.phenomena.push('clear winter conditions likely');
+            if (temp < -10) results.phenomena.push('cold high pressure system');
+        } else if (adjustedPressure < 990 && temp > 0) {
+            results.phenomena.push('winter rain likely');
+            if (change3h < -3) results.alerts.push('winter storm developing');
+        }
+    } else if (month >= 6 && month <= 8) {
+        // Summer
+        if (adjustedPressure < 1005 && humidity > 70) results.phenomena.push('summer low pressure - showers possible');
+        else if (adjustedPressure > 1020) results.phenomena.push('summer high pressure - warm and dry');
+    }
+    if (month >= 11 || month <= 2) {
+        // Winter
+        if (change24h > 10 && adjustedPressure > 1020) results.phenomena.push('arctic high strengthening - colder weather likely');
+    }
+
+    store.pressure.lastReading = adjustedPressure;
+    store.pressure.lastTimestamp = timestamp;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+function interpretHumidity(results, situation, data, data_history, store, _options) {
+    const { timestamp, humidity, temp, pressure, windSpeed, windDir, rainRate } = data;
     const { month, hour, location, dewPoint, heatIndex } = situation;
 
     if (humidity === undefined) return;
@@ -261,6 +318,8 @@ function interpretHumidity(results, situation, data, data_history, store) {
             dewPointTrend: 'stable',
             consecutiveDryHours: 0,
             consecutiveHumidHours: 0,
+            currentDryStreak: 0,
+            currentHumidStreak: 0,
         };
 
     const sixHoursAgo = timestamp - 6 * 60 * 60 * 1000,
@@ -272,7 +331,11 @@ function interpretHumidity(results, situation, data, data_history, store) {
         daytimeCount = 0;
     let nighttimeSum = 0,
         nighttimeCount = 0;
-    const humidityChanges = []; // XXX unused
+    let lastDryTimestamp, lastHumidTimestamp;
+    let currentDryStreak = 0,
+        currentHumidStreak = 0;
+    let maxDryStreak = 0,
+        maxHumidStreak = 0;
     Object.entries(data_history)
         .filter(([timestamp, entry]) => timestamp > twentyFourHoursAgo && entry.humidity !== undefined)
         .sort(([a], [b]) => a - b)
@@ -288,12 +351,31 @@ function interpretHumidity(results, situation, data, data_history, store) {
                 nighttimeSum += entry.humidity;
                 nighttimeCount++;
             }
-            if (entry.humidity < 30) store.humidity.consecutiveDryHours++;
-            else store.humidity.consecutiveDryHours = 0;
-            if (entry.humidity > 90) store.humidity.consecutiveHumidHours++;
-            else store.humidity.consecutiveHumidHours = 0;
-            humidityChanges.push(entry.humidity);
+            if (entry.humidity < 30) {
+                if (lastDryTimestamp && timestamp - lastDryTimestamp <= 2 * 3600000)
+                    // 2 hour gap tolerance
+                    currentDryStreak += (timestamp - lastDryTimestamp) / 3600000;
+                else currentDryStreak = 1; // Reset to 1 hour
+                lastDryTimestamp = timestamp;
+                maxDryStreak = Math.max(maxDryStreak, currentDryStreak);
+            } else {
+                currentDryStreak = 0;
+                lastDryTimestamp = undefined;
+            }
+            if (entry.humidity > 90) {
+                if (lastHumidTimestamp && timestamp - lastHumidTimestamp <= 2 * 3600000) currentHumidStreak += (timestamp - lastHumidTimestamp) / 3600000;
+                else currentHumidStreak = 1;
+                lastHumidTimestamp = timestamp;
+                maxHumidStreak = Math.max(maxHumidStreak, currentHumidStreak);
+            } else {
+                currentHumidStreak = 0;
+                lastHumidTimestamp = undefined;
+            }
         });
+    store.humidity.consecutiveDryHours = maxDryStreak;
+    store.humidity.consecutiveHumidHours = maxHumidStreak;
+    store.humidity.currentDryStreak = currentDryStreak;
+    store.humidity.currentHumidStreak = currentHumidStreak;
     store.humidity.extremes24h = { min: min24h, max: max24h };
     if (daytimeCount > 0) store.humidity.avgDaytime = daytimeSum / daytimeCount;
     if (nighttimeCount > 0) store.humidity.avgNighttime = nighttimeSum / nighttimeCount;
@@ -329,6 +411,33 @@ function interpretHumidity(results, situation, data, data_history, store) {
         }
     }
 
+    const diurnalRange = max24h - min24h;
+    if (diurnalRange > 40) {
+        results.phenomena.push(`large humidity variation: ${diurnalRange}% range`);
+        if (store.humidity.avgDaytime < store.humidity.avgNighttime - 20) results.phenomena.push('typical daily humidity cycle');
+    } else if (diurnalRange < 10) results.phenomena.push('stable humidity levels');
+
+    if (store.humidity.consecutiveDryHours > 24) results.phenomena.push(`prolonged dry conditions: ${Math.round(store.humidity.consecutiveDryHours)} hours`);
+    if (store.humidity.consecutiveHumidHours > 12)
+        results.phenomena.push(`prolonged humid conditions: ${Math.round(store.humidity.consecutiveHumidHours)} hours`);
+    if (store.humidity.currentDryStreak > 0 && humidity < 30) results.phenomena.push(`ongoing dry spell: ${Math.round(store.humidity.currentDryStreak)} hours`);
+    if (humidity < 30 && store.humidity.consecutiveDryHours > 24) {
+        results.phenomena.push('prolonged dry air - hydration important');
+    } else if (humidity > 70 && temp > 20) {
+        const apparentTemp = heatIndex || temp;
+        if (apparentTemp > temp + 5) results.phenomena.push('humidity making it feel much warmer');
+    }
+
+    if (rainRate > 0 && humidity < 70) results.phenomena.push('dry air - limited precipitation despite rain');
+    else if (humidity > 95 && rainRate === 0) results.phenomena.push('saturated air - precipitation imminent');
+
+    if (humidity > 80 && windDir >= 180 && windDir <= 270) results.phenomena.push('moisture from Baltic Sea region');
+
+    if (hour >= 18 || hour <= 6) {
+        if (humidity < 30 && temp < 0) results.phenomena.push('indoor heating will create very dry conditions');
+        else if (humidity > 80 && temp > 0) results.phenomena.push('indoor condensation risk');
+    }
+
     if (month >= 11 || month <= 2) {
         // Winter
         if (humidity < 40 && temp < -10) results.phenomena.push('arctic dry air');
@@ -347,37 +456,16 @@ function interpretHumidity(results, situation, data, data_history, store) {
         }
     }
 
-    const diurnalRange = max24h - min24h;
-    if (diurnalRange > 40) {
-        results.phenomena.push(`large humidity variation: ${diurnalRange}% range`);
-        if (store.humidity.avgDaytime < store.humidity.avgNighttime - 20) results.phenomena.push('typical daily humidity cycle');
-    } else if (diurnalRange < 10) results.phenomena.push('stable humidity levels');
-
     if (location.forestCoverage === 'high') {
         if (humidity > 85 && temp > 15) results.phenomena.push('forest transpiration contributing to humidity');
         if (humidity < 30 && windSpeed > 10) results.phenomena.push('desiccating conditions in forest');
-    }
-
-    if (humidity < 30 && store.humidity.consecutiveDryHours > 24) {
-        results.phenomena.push('prolonged dry air - hydration important');
-    } else if (humidity > 70 && temp > 20) {
-        const apparentTemp = heatIndex || temp;
-        if (apparentTemp > temp + 5) results.phenomena.push('humidity making it feel much warmer');
-    }
-
-    if (rainRate > 0 && humidity < 70) results.phenomena.push('dry air - limited precipitation despite rain');
-    else if (humidity > 95 && rainRate === 0) results.phenomena.push('saturated air - precipitation imminent');
-
-    if (hour >= 18 || hour <= 6) {
-        if (humidity < 30 && temp < 0) results.phenomena.push('indoor heating will create very dry conditions');
-        else if (humidity > 80 && temp > 0) results.phenomena.push('indoor condensation risk');
     }
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretWindSpeed(results, situation, data, data_history, store) {
+function interpretWindSpeed(results, situation, data, data_history, store, _options) {
     const { timestamp, windSpeed, windGust, windDir, temp, pressure, rainRate } = data;
     const { month, hour, location, snowDepth, windChill } = situation;
 
@@ -399,11 +487,12 @@ function interpretWindSpeed(results, situation, data, data_history, store) {
         twentyFourHoursAgo = timestamp - 24 * 60 * 60 * 1000;
     let maxSpeed24h = windSpeed,
         maxGust24h = windGust || windSpeed;
-    let speedSum6h = 0,
-        speedCount6h = 0;
+    let weightedSpeedSum6h = 0;
+    let totalTime6h = 0;
     const directionHistory = [];
     let calmHours = 0,
         stormHours = 0;
+    let previousTimestamp;
     Object.entries(data_history)
         .filter(([timestamp, entry]) => timestamp > twentyFourHoursAgo && entry.windSpeed !== undefined)
         .sort(([a], [b]) => a - b)
@@ -411,15 +500,19 @@ function interpretWindSpeed(results, situation, data, data_history, store) {
             maxSpeed24h = Math.max(maxSpeed24h, entry.windSpeed);
             if (entry.windGust) maxGust24h = Math.max(maxGust24h, entry.windGust);
             if (timestamp > sixHoursAgo) {
-                speedSum6h += entry.windSpeed;
-                speedCount6h++;
+                if (previousTimestamp && previousTimestamp > sixHoursAgo) {
+                    const timeDiff = Math.min((timestamp - previousTimestamp) / 3600000, 3); // hours, capped at 3
+                    weightedSpeedSum6h += entry.windSpeed * timeDiff;
+                    totalTime6h += timeDiff;
+                }
             }
             if (entry.windDir !== undefined) directionHistory.push(entry.windDir);
             if (entry.windSpeed < 0.5) calmHours++;
             if (entry.windSpeed > 17.1) stormHours++;
+            previousTimestamp = timestamp;
         });
     store.wind.extremes24h = { maxSpeed: maxSpeed24h, maxGust: maxGust24h };
-    if (speedCount6h > 0) store.wind.avgSpeed6h = speedSum6h / speedCount6h;
+    store.wind.avgSpeed6h = totalTime6h > 0 ? weightedSpeedSum6h / totalTime6h : windSpeed;
     store.wind.calmHours = calmHours;
     store.wind.stormHours = stormHours;
 
@@ -484,20 +577,11 @@ function interpretWindSpeed(results, situation, data, data_history, store) {
             } else if (cardinalDir === 'SW' || cardinalDir === 'W') results.phenomena.push('milder Atlantic influence');
         }
     }
-
-    if (month >= 9 && month <= 3) {
-        // Fall through spring
-        if (windSpeed > 15) {
-            results.phenomena.push('autumn/winter storm conditions');
-            if (pressure < 990) results.phenomena.push('deep low pressure system');
-        }
-    } else if (month >= 6 && month <= 8) {
-        // Summer
-        if (windSpeed < 2 && hour >= 10 && hour <= 16) {
-            results.phenomena.push('calm summer conditions');
-            if (temp > 25) results.phenomena.push('still, hot conditions');
-        }
-    }
+    const directionChanges = [];
+    for (let i = 1; i < directionHistory.length; i++) directionChanges.push(((directionHistory[i] - directionHistory[i - 1] + 180) % 360) - 180);
+    const avgDirectionChange = directionChanges.reduce((a, b) => a + b, 0) / directionChanges.length;
+    if (avgDirectionChange > 10) results.phenomena.push('wind veering (typically indicates warming)');
+    else if (avgDirectionChange < -10) results.phenomena.push('wind backing (typically indicates cooling)');
 
     const windVariability = maxSpeed24h - store.wind.avgSpeed6h;
     if (windVariability > 10) results.phenomena.push('highly variable wind speeds');
@@ -527,6 +611,20 @@ function interpretWindSpeed(results, situation, data, data_history, store) {
     if (hour >= 10 && hour <= 16 && windSpeed > store.wind.avgSpeed6h * 1.5) results.phenomena.push('daytime wind strengthening');
     else if ((hour >= 22 || hour <= 4) && windSpeed < store.wind.avgSpeed6h * 0.5) results.phenomena.push('nocturnal wind calming');
 
+    if (month >= 9 && month <= 3) {
+        // Fall through spring
+        if (windSpeed > 15) {
+            results.phenomena.push('autumn/winter storm conditions');
+            if (pressure < 990) results.phenomena.push('deep low pressure system');
+        }
+    } else if (month >= 6 && month <= 8) {
+        // Summer
+        if (windSpeed < 2 && hour >= 10 && hour <= 16) {
+            results.phenomena.push('calm summer conditions');
+            if (temp > 25) results.phenomena.push('still, hot conditions');
+        }
+    }
+
     if (location.elevation > 500) {
         if (windSpeed > 10) results.phenomena.push('exposed elevation - enhanced wind');
         if (hour >= 18 || hour <= 6) if (windSpeed < 2) results.phenomena.push('katabatic (downslope) flow possible');
@@ -540,7 +638,7 @@ function getCardinalDirection(degrees) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretCloudCover(results, situation, data, data_history, store) {
+function interpretCloudCover(results, situation, data, data_history, store, _options) {
     const { timestamp, cloudCover, temp, humidity, pressure, solarRad, rainRate } = data;
     const { month, hour, date, daylight, dewPoint } = situation;
 
@@ -570,25 +668,28 @@ function interpretCloudCover(results, situation, data, data_history, store) {
         sunshineHours = 0;
     const cloudChanges = [];
 
+    let previousTimestamp;
     Object.entries(data_history)
         .filter(([timestamp, entry]) => timestamp > twentyFourHoursAgo && entry.cloudCover !== undefined)
         .sort(([a], [b]) => a - b)
         .forEach(([timestamp, entry]) => {
+            let timeDiff = 1; // Default to 1 hour
+            if (previousTimestamp) timeDiff = Math.min((timestamp - previousTimestamp) / 3600000, 3); // Cap at 3 hours
             if (timestamp > sixHoursAgo && cloudCover6hAgo === undefined) cloudCover6hAgo = entry.cloudCover;
             const entryDate = new Date(timestamp),
-                entryHour = entryDate.getHours(), // XXX unused
                 entryDaylight = helpers.getDaylightHours(situation.location.latitude, situation.location.longitude, entryDate);
             if (entryDaylight.isDaytime) {
                 daytimeSum += entry.cloudCover;
                 daytimeCount++;
-                if (entry.cloudCover < 30 && entry.solarRad > 200) sunshineHours++;
+                if (entry.cloudCover < 30 && entry.solarRad > 200) sunshineHours += timeDiff;
             } else {
                 nighttimeSum += entry.cloudCover;
                 nighttimeCount++;
             }
-            if (entry.cloudCover < 20) clearHours++;
-            if (entry.cloudCover > 80) overcastHours++;
+            if (entry.cloudCover < 20) clearHours += timeDiff;
+            if (entry.cloudCover > 80) overcastHours += timeDiff;
             cloudChanges.push(entry.cloudCover);
+            previousTimestamp = timestamp;
         });
     store.clouds.clearHours = clearHours;
     store.clouds.overcastHours = overcastHours;
@@ -632,23 +733,6 @@ function interpretCloudCover(results, situation, data, data_history, store) {
         } else if (store.clouds.variability < 10) results.phenomena.push('stable cloud conditions');
     }
 
-    if (month >= 11 || month <= 2) {
-        // Winter
-        if (cloudCover > 80) {
-            results.phenomena.push('typical winter overcast');
-            if (temp > 0) results.phenomena.push('mild air mass');
-        } else if (cloudCover < 20 && temp < -10) {
-            results.phenomena.push('clear arctic conditions');
-            results.phenomena.push('strong radiational cooling');
-        }
-    } else if (month >= 6 && month <= 8) {
-        // Summer
-        if (cloudCover > 30 && cloudCover < 70 && hour >= 12 && hour <= 18) {
-            results.phenomena.push('fair weather cumulus likely');
-            if (humidity > 70 && temp > 20) results.phenomena.push('building cumulus - showers possible');
-        }
-    }
-
     if (cloudCover > 70 && rainRate === 0 && humidity < 80) results.phenomena.push('high cloud layer likely');
     else if (cloudCover > 90 && humidity > 90) {
         results.phenomena.push('low stratus cloud');
@@ -664,7 +748,6 @@ function interpretCloudCover(results, situation, data, data_history, store) {
             if (month >= 11 || month <= 1) results.phenomena.push('typical winter gloom');
         }
     }
-
     if (!daylight.isDaytime) {
         if (cloudCover < 20) {
             const moonPhase = helpers.getMoonPhase(date);
@@ -684,6 +767,23 @@ function interpretCloudCover(results, situation, data, data_history, store) {
         results.phenomena.push(`prolonged overcast: ${Math.round(store.clouds.overcastHours / 24)} days`);
         if (month >= 11 || month <= 2) results.phenomena.push('persistent winter gloom');
     } else if (store.clouds.clearHours > 48) results.phenomena.push(`extended clear period: ${Math.round(store.clouds.clearHours / 24)} days`);
+
+    if (month >= 11 || month <= 2) {
+        // Winter
+        if (cloudCover > 80) {
+            results.phenomena.push('typical winter overcast');
+            if (temp > 0) results.phenomena.push('mild air mass');
+        } else if (cloudCover < 20 && temp < -10) {
+            results.phenomena.push('clear arctic conditions');
+            results.phenomena.push('strong radiational cooling');
+        }
+    } else if (month >= 6 && month <= 8) {
+        // Summer
+        if (cloudCover > 30 && cloudCover < 70 && hour >= 12 && hour <= 18) {
+            results.phenomena.push('fair weather cumulus likely');
+            if (humidity > 70 && temp > 20) results.phenomena.push('building cumulus - showers possible');
+        }
+    }
 }
 
 function calculateVariance(values) {
@@ -694,7 +794,7 @@ function calculateVariance(values) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretRainRate(results, situation, data, data_history, store) {
+function interpretRainRate(results, situation, data, data_history, store, _options) {
     const { timestamp, rainRate, temp, humidity, pressure, windSpeed, windDir, snowDepth } = data;
     const { month, hour, location } = situation;
 
@@ -720,7 +820,7 @@ function interpretRainRate(results, situation, data, data_history, store) {
         accumulation7d = 0;
     let maxRate24h = rainRate;
     let consecutiveWetHours = 0;
-    let lastDryTime = timestamp; // XXX unused
+    let lastDryTime = timestamp;
     let previousTimestamp;
     Object.entries(data_history)
         .filter(([timestamp, entry]) => timestamp > sevenDaysAgo && entry.rainRate !== undefined)
@@ -736,16 +836,18 @@ function interpretRainRate(results, situation, data, data_history, store) {
             }
             if (timestamp > sevenDaysAgo) accumulation7d += accumulation;
             if (entry.rainRate > 0) {
-                consecutiveWetHours += timeDiff;
                 if (!store.precipitation.currentEvent)
                     store.precipitation.currentEvent = {
                         start: timestamp,
                         accumulation: 0,
                         maxRate: entry.rainRate,
+                        consecutiveWetHours: 0,
                     };
+                store.precipitation.currentEvent.consecutiveWetHours += timeDiff;
             } else {
                 if (consecutiveWetHours > 0) lastDryTime = timestamp;
                 consecutiveWetHours = 0;
+                if (entry.rainRate === 0 && consecutiveWetHours > 0) lastDryTime = timestamp;
             }
             previousTimestamp = timestamp;
         });
@@ -754,6 +856,13 @@ function interpretRainRate(results, situation, data, data_history, store) {
     store.precipitation.accumulation7d = accumulation7d;
     store.precipitation.maxRate24h = maxRate24h;
     store.precipitation.consecutiveWetHours = consecutiveWetHours;
+
+    if (rainRate === 0 && consecutiveWetHours === 0) {
+        const hoursSinceLastRain = (timestamp - lastDryTime) / 3600000;
+        if (hoursSinceLastRain > 24) results.phenomena.push(`dry for ${Math.round(hoursSinceLastRain)} hours`);
+    }
+    if (rainRate === 0 && accumulation24h < 0.5) store.precipitation.consecutiveDryDays++;
+    else store.precipitation.consecutiveDryDays = 0;
 
     if (rainRate > 0) {
         if (rainRate < 0.5) {
@@ -776,6 +885,8 @@ function interpretRainRate(results, situation, data, data_history, store) {
         if (store.precipitation.currentEvent) {
             store.precipitation.currentEvent.accumulation += rainRate / 60; // mm per minute
             store.precipitation.currentEvent.maxRate = Math.max(store.precipitation.currentEvent.maxRate, rainRate);
+            const duration = (timestamp - store.precipitation.currentEvent.start) / 3600000;
+            if (duration > 0.5) results.phenomena.push(`ongoing rain event: ${duration.toFixed(1)} hours`);
         }
     } else {
         if (store.precipitation.currentEvent && store.precipitation.currentEvent.accumulation > 1) {
@@ -858,15 +969,12 @@ function interpretRainRate(results, situation, data, data_history, store) {
         if (rainRate < 0.5) results.phenomena.push('canopy interception reducing ground rainfall');
         else if (consecutiveWetHours > 3) results.phenomena.push('canopy drip enhancing ground moisture');
     }
-
-    if (rainRate === 0 && accumulation24h < 0.5) store.precipitation.consecutiveDryDays++;
-    else store.precipitation.consecutiveDryDays = 0;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretSolarUV(results, _situation, data, data_history, _store) {
+function interpretSolarUV(results, _situation, data, data_history, _store, _options) {
     const { timestamp, solarRad: rad, solarUvi: uvi } = data;
     const fiveMinutesAgo = timestamp - 5 * 60 * 1000;
 
@@ -912,7 +1020,7 @@ function interpretSolarUV(results, _situation, data, data_history, _store) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretSnowDepth(results, situation, data, data_history, store) {
+function interpretSnowDepth(results, situation, data, data_history, store, _options) {
     const { timestamp, snowDepth, temp, windSpeed, rainRate } = data;
     const { month } = situation;
 
@@ -931,11 +1039,13 @@ function interpretSnowDepth(results, situation, data, data_history, store) {
     const oneDayAgo = timestamp - 24 * 60 * 60 * 1000;
     let depth24hAgo;
 
+    const accumulations = [];
     Object.entries(data_history)
         .filter(([timestamp, entry]) => timestamp > oneDayAgo && entry.snowDepth !== undefined)
         .sort(([a], [b]) => a - b)
         .forEach(([_timestamp, entry]) => {
             if (depth24hAgo === undefined) depth24hAgo = entry.snowDepth;
+            accumulations.push({ timestamp, depth: entry.snowDepth });
         });
 
     if (depth24hAgo !== undefined) {
@@ -974,10 +1084,6 @@ function interpretSnowDepth(results, situation, data, data_history, store) {
         results.phenomena.push('restricted mobility in forest');
     }
 
-    if (month === 10 && snowDepth > 0) results.phenomena.push('early season snow');
-    else if (month === 4 && snowDepth > 100) results.phenomena.push('late season persistent snow pack');
-    else if (month >= 5 && month <= 8 && snowDepth > 0) results.phenomena.push('unusual summer snow');
-
     if (snowDepth > 30) {
         if (temp < -15) results.phenomena.push('powder snow conditions');
         else if (temp < -5) results.phenomena.push('dry snow conditions');
@@ -994,6 +1100,13 @@ function interpretSnowDepth(results, situation, data, data_history, store) {
     } else if (store.snow.accumulation24h > 50) results.phenomena.push(`moderate snowfall: ${store.snow.accumulation24h}mm in 24h`);
     else if (store.snow.accumulation24h > 10) results.phenomena.push(`light snowfall: ${store.snow.accumulation24h}mm in 24h`);
 
+    for (let i = 1; i < accumulations.length; i++) {
+        const rate = (accumulations[i].depth - accumulations[i - 1].depth) / ((accumulations[i].time - accumulations[i - 1].time) / 3600000);
+        if (rate > 10)
+            // 10mm/hour
+            results.alerts.push('rapid snow accumulation detected');
+    }
+
     if (store.snow.meltRate24h > 50) {
         results.phenomena.push(`rapid snowmelt: ${store.snow.meltRate24h}mm in 24h`);
         if (temp > 5 && rainRate > 0) results.alerts.push('rain-on-snow event - flood risk');
@@ -1006,17 +1119,21 @@ function interpretSnowDepth(results, situation, data, data_history, store) {
         if (month >= 12 || month <= 2) results.phenomena.push('deep snow provides insulation for small mammals');
     }
 
-    if (snowDepth > 100) {
+    if (snowDepth > 30) {
         if (temp >= -15 && temp <= -5) results.phenomena.push('excellent cross-country skiing conditions');
         else if (temp > -5 && temp < 0) results.phenomena.push('good skiing conditions');
         else if (temp >= 0) results.phenomena.push('wet/slow skiing conditions');
     }
+
+    if (month === 10 && snowDepth > 0) results.phenomena.push('early season snow');
+    else if (month === 4 && snowDepth > 100) results.phenomena.push('late season persistent snow pack');
+    else if (month >= 5 && month <= 8 && snowDepth > 0) results.phenomena.push('unusual summer snow');
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretIceDepth(results, situation, data, data_history, store) {
+function interpretIceDepth(results, situation, data, data_history, store, _options) {
     const { timestamp, iceDepth, temp, snowDepth } = data;
     const { hour, month } = situation;
 
@@ -1077,10 +1194,6 @@ function interpretIceDepth(results, situation, data, data_history, store) {
         results.phenomena.push('exceptional ice thickness');
     }
 
-    if (month === 10 && iceDepth > 0) results.phenomena.push('early lake ice formation');
-    else if (month === 4 && iceDepth > 100) results.phenomena.push('late season persistent ice');
-    else if (month >= 5 && month <= 9 && iceDepth > 0) results.phenomena.push('unusual season ice');
-
     if (iceDepth > 0) {
         if (temp > 0 && iceDepth < 150) results.alerts.push('weakening ice conditions');
         if (iceDepth < 50) results.alerts.push('thin ice hazard - stay off ice');
@@ -1106,6 +1219,9 @@ function interpretIceDepth(results, situation, data, data_history, store) {
 
     if (snowDepth > 100 && iceDepth > 100) results.phenomena.push('typical Nordic winter conditions');
 
+    if (iceDepth >= 100) results.phenomena.push('ice skating safe (Swedish standard)');
+    if (iceDepth >= 200) results.phenomena.push('snowmobile safe');
+
     if (iceDepth > 150) {
         if (snowDepth < 50) results.phenomena.push('excellent ice skating conditions');
         if (month >= 1 && month <= 3) results.phenomena.push('ice road conditions possible');
@@ -1115,12 +1231,16 @@ function interpretIceDepth(results, situation, data, data_history, store) {
         results.phenomena.push('spring ice - extra caution needed');
         if (temp > 5 || (temp > 0 && hour >= 10 && hour <= 16)) results.alerts.push('daytime ice deterioration');
     }
+
+    if (month === 10 && iceDepth > 0) results.phenomena.push('early lake ice formation');
+    else if (month === 4 && iceDepth > 100) results.phenomena.push('late season persistent ice');
+    else if (month >= 5 && month <= 9 && iceDepth > 0) results.phenomena.push('unusual season ice');
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretRadiation(results, situation, data, data_history, store) {
+function interpretRadiation(results, situation, data, data_history, store, _options) {
     const { timestamp, radiationCpm, radiationAcpm, radationUsvh, rainRate, solarUvi, windSpeed, pressure } = data;
     const { month, hour } = situation;
 
@@ -1141,7 +1261,6 @@ function interpretRadiation(results, situation, data, data_history, store) {
 
     const oneDayAgo = timestamp - 24 * 60 * 60 * 1000;
     const historicalReadings = [];
-
     Object.entries(data_history)
         .filter(([timestamp, entry]) => timestamp > oneDayAgo && (entry.radiationAcpm !== undefined || entry.radiationCpm !== undefined))
         .sort(([a], [b]) => a - b)
@@ -1226,9 +1345,32 @@ function interpretRadiation(results, situation, data, data_history, store) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretComplexPhenomena(results, situation, data, data_history, store) {
+function getAuroraPotential(latitude, month, solarActivity = undefined) {
+    const isDarkSeason = month <= 2 || month >= 9;
+    if (latitude >= 65)
+        return {
+            potential: isDarkSeason ? 'very high' : 'moderate',
+            visible: isDarkSeason,
+            bestTime: '22:00-02:00',
+        };
+    else if (latitude >= 60)
+        return {
+            potential: isDarkSeason ? 'high' : 'low',
+            visible: isDarkSeason && solarActivity === 'high',
+            bestTime: '23:00-01:00',
+        };
+    else if (latitude >= 55)
+        return {
+            potential: isDarkSeason ? 'moderate' : 'very low',
+            visible: isDarkSeason && solarActivity === 'very high',
+            bestTime: '00:00-01:00',
+        };
+    return { potential: 'very low', visible: false };
+}
+
+function interpretComplexPhenomena(results, situation, data, data_history, store, _options) {
     const { timestamp, temp, humidity, pressure, windSpeed, rainRate, snowDepth, cloudCover } = data;
-    const { month, hour, location, dewPoint, windChill, heatIndex, daylight } = situation;
+    const { month, hour, date, location, dewPoint, windChill, heatIndex, daylight } = situation;
 
     // Snow and ice phenomena (requires temp + humidity + other factors)
     if (temp !== undefined && humidity !== undefined) {
@@ -1365,23 +1507,42 @@ function interpretComplexPhenomena(results, situation, data, data_history, store
             if (location.forestCoverage === 'high') results.phenomena.push('dense fog in forest clearings');
         }
     }
+
+    // Summer white nights (June)
+    if (month === 6 && daylight.daylightHours > 18) results.phenomena.push('white nights period - twilight all night');
+
+    // Winter darkness (December)
+    if (month === 12 && daylight.daylightHours < 6) results.phenomena.push('minimal daylight period - ~5.5 hours');
+
+    const auroraPotential = getAuroraPotential(location.latitude, month);
+    if (auroraPotential.potential !== 'very low') {
+        const moonPhase = helpers.getMoonPhase(date);
+        if (auroraPotential.visible)
+            results.phenomena.push(
+                `aurora borealis likely visible (best time: ${auroraPotential.bestTime}${cloudCover !== undefined && cloudCover < 30 && moonPhase < 0.3 ? ', with good visbility' : ''})`
+            );
+        else if (auroraPotential.potential === 'high' || auroraPotential.potential === 'very high')
+            results.phenomena.push('potential for aurora activity (if dark enough)');
+    }
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-module.exports = {
-    interpretPressure,
-    interpretTemperature,
-    interpretHumidity,
-    interpretWindSpeed,
-    interpretCloudCover,
-    interpretRainRate,
-    interpretSolarUV,
-    interpretSnowDepth,
-    interpretIceDepth,
-    interpretRadiation,
-    interpretComplexPhenomena,
+module.exports = function (_options) {
+    return {
+        interpretTemperature,
+        interpretPressure,
+        interpretHumidity,
+        interpretWindSpeed,
+        interpretCloudCover,
+        interpretRainRate,
+        interpretSolarUV,
+        interpretIceDepth,
+        interpretSnowDepth,
+        interpretRadiation,
+        interpretComplexPhenomena,
+    };
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

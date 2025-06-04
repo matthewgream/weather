@@ -1,6 +1,11 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+const msPerDay = 1000 * 60 * 60 * 24;
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 function getDST(date = new Date()) {
     if (date.getMonth() > 10 || date.getMonth() < 2) return false; // November to February
     if (date.getMonth() > 3 && date.getMonth() < 9) return true; // April to September
@@ -63,13 +68,24 @@ function getDaylightHours(latitude, longitude, date = new Date()) {
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
 
-function getMoonPhase(date = new Date()) {
-    const knownNewMoon = new Date(2000, 0, 6),
-        lunarCycle = 29.53059;
-    const days = (date.getTime() - knownNewMoon.getTime()) / (1000 * 60 * 60 * 24);
-    return (days % lunarCycle) / lunarCycle;
+function getDaylightPhase(currentHourDecimal, daylight) {
+    if (daylight.isDaytime) return 'day';
+
+    // Calculate nautical and astronomical twilight times
+    const nauticalDawnDecimal = daylight.civilDawnDecimal - 1, // Approximate
+        nauticalDuskDecimal = daylight.civilDuskDecimal + 1, // Approximate
+        astronomicalDawnDecimal = nauticalDawnDecimal - 1, // Approximate
+        astronomicalDuskDecimal = nauticalDuskDecimal + 1; // Approximate
+
+    if (currentHourDecimal >= daylight.civilDawnDecimal && currentHourDecimal < daylight.sunriseDecimal) return 'civil_dawn';
+    else if (currentHourDecimal >= daylight.sunsetDecimal && currentHourDecimal <= daylight.civilDuskDecimal) return 'civil_twilight';
+    else if (currentHourDecimal >= nauticalDawnDecimal && currentHourDecimal < daylight.civilDawnDecimal) return 'nautical_dawn';
+    else if (currentHourDecimal > daylight.civilDuskDecimal && currentHourDecimal <= nauticalDuskDecimal) return 'nautical_twilight';
+    else if (currentHourDecimal >= astronomicalDawnDecimal && currentHourDecimal < nauticalDawnDecimal) return 'astronomical_dawn';
+    else if (currentHourDecimal > nauticalDuskDecimal && currentHourDecimal <= astronomicalDuskDecimal) return 'astronomical_twilight';
+
+    return 'night';
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -77,8 +93,8 @@ function getMoonPhase(date = new Date()) {
 
 function calculateDewPoint(temp, humidity) {
     // Magnus-Tetens formula
-    const a = 17.27;
-    const b = 237.7;
+    const a = 17.27,
+        b = 237.7;
     const alpha = (a * temp) / (b + temp) + Math.log(humidity / 100);
     return (b * alpha) / (a - alpha);
 }
@@ -119,7 +135,8 @@ function calculateFeelsLike(temp, humidity, windSpeed) {
         return calculateWindChill(temp, windSpeed);
     else if (temp >= 20)
         // For warm conditions, use heat index
-        return calculateHeatIndex(temp, humidity); // For moderate conditions, just use the actual temperature
+        return calculateHeatIndex(temp, humidity);
+    // For moderate conditions, just use the actual temperature
     else return temp;
 }
 
@@ -149,16 +166,176 @@ function getSeason(hemisphere = 'northern') {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+function isNearSolstice(date = new Date(), hemisphere = 'northern', daysWindow = 7) {
+    const year = date.getFullYear(),
+        isNorthern = hemisphere === 'northern';
+    const currentYearSummerSolstice = new Date(year, 5, 21),
+        currentYearWinterSolstice = new Date(year, 11, 21); // June 21 / December 21
+    const prevYearWinterSolstice = new Date(year - 1, 11, 21),
+        nextYearSummerSolstice = new Date(year + 1, 5, 21); // Dec 21 / June 21
+    const currentYearLongestDay = isNorthern ? currentYearSummerSolstice : currentYearWinterSolstice;
+    const currentYearShortestDay = isNorthern ? currentYearWinterSolstice : currentYearSummerSolstice;
+    const otherYearRelevantSolstice = isNorthern
+        ? date.getMonth() < 6
+            ? prevYearWinterSolstice
+            : nextYearSummerSolstice
+        : date.getMonth() < 6
+          ? new Date(year - 1, 5, 21)
+          : new Date(year + 1, 11, 21);
+    const daysToCurrYearLongest = (currentYearLongestDay.getTime() - date.getTime()) / msPerDay,
+        daysToCurrYearShortest = (currentYearShortestDay.getTime() - date.getTime()) / msPerDay,
+        daysToOtherYearSolstice = (otherYearRelevantSolstice.getTime() - date.getTime()) / msPerDay;
+    if (Math.abs(daysToCurrYearLongest) <= daysWindow)
+        return {
+            near: true,
+            type: 'longest day',
+            exact: Math.abs(daysToCurrYearLongest) < 1,
+            days: daysToCurrYearLongest,
+        };
+    else if (Math.abs(daysToCurrYearShortest) <= daysWindow)
+        return {
+            near: true,
+            type: 'shortest day',
+            exact: Math.abs(daysToCurrYearShortest) < 1,
+            days: daysToCurrYearShortest,
+        };
+    else if (Math.abs(daysToOtherYearSolstice) <= daysWindow)
+        return {
+            near: true,
+            type: (isNorthern && date.getMonth() < 6) || (!isNorthern && date.getMonth() >= 6) ? 'shortest day' : 'longest day',
+            exact: Math.abs(daysToOtherYearSolstice) < 1,
+            days: daysToOtherYearSolstice,
+        };
+    return { near: false };
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+function isNearEquinox(date = new Date(), hemisphere = 'northern', daysWindow = 7) {
+    const year = date.getFullYear(),
+        isNorthern = hemisphere === 'northern';
+    const springEquinox = new Date(year, 2, 20),
+        autumnEquinox = new Date(year, 8, 22); // March 20 / September 22
+    const firstEquinox = isNorthern ? springEquinox : autumnEquinox,
+        secondEquinox = isNorthern ? autumnEquinox : springEquinox;
+    const daysToFirst = (firstEquinox.getTime() - date.getTime()) / msPerDay,
+        daysToSecond = (secondEquinox.getTime() - date.getTime()) / msPerDay;
+    const prevYearSecondEquinox = new Date(year - 1, 8, 22),
+        daysToPrevYearSecond = (prevYearSecondEquinox.getTime() - date.getTime()) / msPerDay;
+    const nextYearFirstEquinox = new Date(year + 1, 2, 20),
+        daysToNextYearFirst = (nextYearFirstEquinox.getTime() - date.getTime()) / msPerDay;
+    if (Math.abs(daysToFirst) <= daysWindow)
+        return {
+            near: true,
+            type: isNorthern ? 'spring equinox' : 'autumn equinox',
+            exact: Math.abs(daysToFirst) < 1,
+            days: daysToFirst,
+        };
+    else if (Math.abs(daysToSecond) <= daysWindow)
+        return {
+            near: true,
+            type: isNorthern ? 'autumn equinox' : 'spring equinox',
+            exact: Math.abs(daysToSecond) < 1,
+            days: daysToSecond,
+        };
+    else if (Math.abs(daysToPrevYearSecond) <= daysWindow)
+        return {
+            near: true,
+            type: isNorthern ? 'autumn equinox' : 'spring equinox',
+            exact: Math.abs(daysToPrevYearSecond) < 1,
+            days: daysToPrevYearSecond,
+        };
+    else if (Math.abs(daysToNextYearFirst) <= daysWindow)
+        return {
+            near: true,
+            type: isNorthern ? 'spring equinox' : 'autumn equinox',
+            exact: Math.abs(daysToNextYearFirst) < 1,
+            days: daysToNextYearFirst,
+        };
+    return { near: false };
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+function isNearCrossQuarter(date = new Date(), hemisphere = 'northern', daysWindow = 7) {
+    const year = date.getFullYear(),
+        isNorthern = hemisphere === 'northern';
+    const imbolc = new Date(year, 1, 1),
+        beltane = new Date(year, 4, 1),
+        lughnasadh = new Date(year, 7, 1),
+        samhain = new Date(year, 10, 1); // Feb 1 / May 1 / Aug 1 / Nov 1
+    const daysToImbolc = Math.abs(date.getTime() - imbolc.getTime()) / msPerDay,
+        daysToBeltane = Math.abs(date.getTime() - beltane.getTime()) / msPerDay,
+        daysToLughnasadh = Math.abs(date.getTime() - lughnasadh.getTime()) / msPerDay,
+        daysToSamhain = Math.abs(date.getTime() - samhain.getTime()) / msPerDay;
+    if (daysToImbolc <= daysWindow)
+        return {
+            isCrossQuarter: true,
+            name: isNorthern ? 'Imbolc (early spring)' : 'Lughnasadh (early autumn)',
+            days: daysToImbolc,
+        };
+    else if (daysToBeltane <= daysWindow)
+        return {
+            isCrossQuarter: true,
+            name: isNorthern ? 'Beltane (early summer)' : 'Samhain (early winter)',
+            days: daysToBeltane,
+        };
+    else if (daysToLughnasadh <= daysWindow)
+        return {
+            isCrossQuarter: true,
+            name: isNorthern ? 'Lughnasadh (early autumn)' : 'Imbolc (early spring)',
+            days: daysToLughnasadh,
+        };
+    else if (daysToSamhain <= daysWindow)
+        return {
+            isCrossQuarter: true,
+            name: isNorthern ? 'Samhain (early winter)' : 'Beltane (early summer)',
+            days: daysToSamhain,
+        };
+    return { isCrossQuarter: false };
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+function getMoonPhase(date = new Date()) {
+    const lunarNewBase = new Date(2000, 0, 6),
+        lunarCycle = 29.53059;
+    const days = (date.getTime() - lunarNewBase.getTime()) / msPerDay;
+    return (days % lunarCycle) / lunarCycle;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+function getMoonDistance(date = new Date()) {
+    const phase = getMoonPhase(date),
+        distance = 384400 * (1 - 0.0549 * Math.cos(phase * 2 * Math.PI));
+    return {
+        distance, // in km
+        isSupermoon: distance < 367000 && Math.abs(phase - 0.5) < 0.1, // Full moon at perigee
+        isMicromoon: distance > 400000 && Math.abs(phase - 0.5) < 0.1, // Full moon at apogee
+        isCloseApproach: distance < 370000, // Generally close approach
+    };
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 module.exports = {
-    getDaylightHours,
-    getMoonPhase,
     getDST,
+    getDaylightHours,
+    getDaylightPhase,
     calculateDewPoint,
     calculateHeatIndex,
     calculateWindChill,
     calculateFeelsLike,
     calculateComfortLevel,
     getSeason,
+    isNearSolstice,
+    isNearEquinox,
+    isNearCrossQuarter,
+    getMoonPhase,
+    getMoonDistance,
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
