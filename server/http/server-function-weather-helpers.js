@@ -272,29 +272,29 @@ function isNearCrossQuarter(date = new Date(), hemisphere = 'northern', daysWind
         daysToSamhain = Math.abs(date.getTime() - samhain.getTime()) / msPerDay;
     if (daysToImbolc <= daysWindow)
         return {
-            isCrossQuarter: true,
+            near: true,
             name: isNorthern ? 'Imbolc (early spring)' : 'Lughnasadh (early autumn)',
             days: daysToImbolc,
         };
     else if (daysToBeltane <= daysWindow)
         return {
-            isCrossQuarter: true,
+            near: true,
             name: isNorthern ? 'Beltane (early summer)' : 'Samhain (early winter)',
             days: daysToBeltane,
         };
     else if (daysToLughnasadh <= daysWindow)
         return {
-            isCrossQuarter: true,
+            near: true,
             name: isNorthern ? 'Lughnasadh (early autumn)' : 'Imbolc (early spring)',
             days: daysToLughnasadh,
         };
     else if (daysToSamhain <= daysWindow)
         return {
-            isCrossQuarter: true,
+            near: true,
             name: isNorthern ? 'Samhain (early winter)' : 'Beltane (early summer)',
             days: daysToSamhain,
         };
-    return { isCrossQuarter: false };
+    return { near: false };
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -323,6 +323,63 @@ function getLunarDistance(date = new Date()) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+function addEvent(store, category, eventId, message, durationHours = 24) {
+    if (!store.events) {
+        store.events = {};
+        store.eventsCleanedUp = Date.now();
+    }
+    if (!store.events[category]) store.events[category] = {};
+    const now = Date.now(),
+        event = store.events[category][eventId];
+    if (!event || now > event.expires) {
+        store.events[category][eventId] = {
+            message,
+            detected: now,
+            expires: now + durationHours * 60 * 60 * 1000,
+            shown: false,
+        };
+        return true;
+    }
+    return false;
+}
+
+function getEvents(store, category) {
+    if (!store.events || !store.events[category]) return [];
+    const now = Date.now(),
+        active = [];
+    for (const [eventId, event] of Object.entries(store.events[category]))
+        if (now <= event.expires) {
+            active.push({
+                id: eventId,
+                ...event,
+                isNew: !event.shown,
+            });
+            event.shown = true;
+        }
+    return active;
+}
+
+function checkEventCooldown(store, category, eventId, cooldownDays = 365) {
+    if (!store.events || !store.events[category] || !store.events[category][eventId]) return true;
+    const now = Date.now(),
+        event = store.events[category][eventId];
+    return now > event.detected + cooldownDays * 24 * 60 * 60 * 1000;
+}
+
+function pruneEvents(store, daysAgo = 30) {
+    if (!store.events || Date.now() - store.eventsCleanedUp < 24 * 60 * 60 * 1000) return;
+    const expiry = Date.now() - daysAgo * 24 * 60 * 60 * 1000;
+    Object.entries(store.events).forEach(([category, events]) => {
+        Object.entries(events)
+            .filter(([_, event]) => event.expires < expiry)
+            .forEach(([eventId]) => delete store.events[category][eventId]);
+    });
+    store.eventsCleanedUp = Date.now();
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 module.exports = {
     getDST,
     getDaylightHours,
@@ -338,6 +395,10 @@ module.exports = {
     isNearCrossQuarter,
     getLunarPhase,
     getLunarDistance,
+    addEvent,
+    getEvents,
+    checkEventCooldown,
+    pruneEvents,
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

@@ -73,19 +73,24 @@ let weatherOptions = {},
 const weatherCache = {},
     weatherStore = {};
 const CACHE_DURATION = (24 + 1) * 60 * 60 * 1000; // 25 hours, for now
-let lastPrunned = Date.now();
+let weatherCachePrunned = Date.now();
 const PRUNE_INTERVAL = 5 * 60 * 1000;
 
 function getWeatherInterpretation(location_data, data, options = {}) {
     // XXX should persist the cache and reload it ... maybe also the store ...
-    const expiration = data.timestamp - CACHE_DURATION;
-    if (lastPrunned + PRUNE_INTERVAL < Date.now()) {
+    if (weatherCachePrunned + PRUNE_INTERVAL < Date.now()) {
+        const expiration = data.timestamp - CACHE_DURATION;
         Object.keys(weatherCache)
             .filter((timestamp) => timestamp < expiration)
             .forEach((timestamp) => delete weatherCache[timestamp]);
-        lastPrunned = Date.now();
+        weatherCachePrunned = Date.now();
+        console.error(
+            `weather: cache: count=${Object.keys(weatherCache).length}, size~=${Math.floor(JSON.stringify(weatherCache).length / 1024)}Kb; ` +
+                `store: count=${Object.keys(weatherStore).length}, size~=${Math.floor(JSON.stringify(weatherStore).length / 1024)}Kb`
+        );
     }
     weatherCache[data.timestamp] = data;
+    helpers.pruneEvents(weatherStore);
     return getWeatherInterpretationImpl(weatherInterpreters, location_data, data, weatherCache, weatherStore, { ...weatherOptions, ...options });
 }
 

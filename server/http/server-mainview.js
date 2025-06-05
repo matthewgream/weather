@@ -146,20 +146,20 @@ console.log(`Loaded '/' using 'server-mainview' && data/vars`);
 const weather_module = require('./server-function-weather.js')({ debug: false });
 function getWeatherInterpretation(vars) {
     try {
-        const varsWeather = vars['weather/branna'] || {},
+        const varsConditions = vars['weather/branna'] || {},
             varsRadiation = vars['sensors/radiation'] || {};
         const results = weather_module.getWeatherInterpretation(
             configData.LOCATION,
             {
                 timestamp: Date.now(),
-                temp: varsWeather.temp,
-                humidity: varsWeather.humidity,
-                pressure: varsWeather.baromrel,
-                windSpeed: varsWeather.windspeed ? varsWeather.windspeed / 3.6 : undefined,
-                windGust: varsWeather.windgust ? varsWeather.windgust / 3.6 : undefined,
-                solarRad: varsWeather.solarradiation,
-                solarUvi: varsWeather.uv,
-                rainRate: varsWeather.rainrate,
+                temp: varsConditions.temp,
+                humidity: varsConditions.humidity,
+                pressure: varsConditions.baromrel,
+                windSpeed: varsConditions.windspeed ? varsConditions.windspeed / 3.6 : undefined,
+                windGust: varsConditions.windgust ? varsConditions.windgust / 3.6 : undefined,
+                solarRad: varsConditions.solarradiation,
+                solarUvi: varsConditions.uv,
+                rainRate: varsConditions.rainrate,
                 radiationCpm: varsRadiation.cpm,
                 radiationAcpm: varsRadiation.acpm,
                 radiationUsvh: varsRadiation.usvh,

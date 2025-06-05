@@ -1,29 +1,50 @@
-// XXX modularise, review
-
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const helpers = require('./server-function-weather-helpers.js');
 
+const EQUINOX_LOOKAHEAD_DAYS = 14;
+const SOLSTICE_LOOKAHEAD_DAYS = 14;
+const CROSSQUARTER_LOOKAHEAD_DAYS = 7;
+
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretAstronomy(results, situation, data, _data_previous, store, _options) {
-    const { cloudCover, snowDepth, humidity, temp, windSpeed } = data;
-    const { date, month, day, hour, location, daylight } = situation;
+function interpretEquinox(results, situation, data, _data_previous, _store, _options) {
+    const { windSpeed } = data;
+    const { date, location } = situation;
 
-    if (!store.astronomy)
-        store.astronomy = {
-            consecutiveFullMoonNights: 0, // XXX unused
-            consecutiveNewMoonNights: 0, // XXX unused
-        };
+    const equinoxInfo = helpers.isNearEquinox(date, location.hemisphere, EQUINOX_LOOKAHEAD_DAYS);
+    if (equinoxInfo.near) {
+        let equinoxText;
+        if (equinoxInfo.exact) equinoxText = 'today (equal day and night)';
+        else if (equinoxInfo.days > 0) equinoxText = `in ${Math.ceil(equinoxInfo.days)} day${Math.ceil(equinoxInfo.days) > 1 ? 's' : ''}`;
+        else equinoxText = `${Math.abs(Math.floor(equinoxInfo.days))} day${Math.abs(Math.floor(equinoxInfo.days)) > 1 ? 's' : ''} ago`;
+        results.phenomena.push(`${equinoxInfo.type} ${equinoxText}`);
 
-    const moonPhase = helpers.getLunarPhase(date),
-        moonDistance = helpers.getLunarDistance(date);
-    let moonPhaseReported = false;
+        // Daylight change rate
+        results.phenomena.push(`rapidly ${equinoxInfo.type.includes('spring') ? 'increasing' : 'decreasing'} daylight`);
 
-    // Solstice interpretation
-    const solsticeInfo = helpers.isNearSolstice(date, location.hemisphere, 28);
+        // Calculate approximate daylight change rate
+        if (location.latitude > 50)
+            results.phenomena.push(`daylight changing ~${Math.round(Math.abs(Math.sin((location.latitude * Math.PI) / 180)) * 4)} min/day`);
+
+        // Equinox storms
+        if (Math.abs(equinoxInfo.days) <= 3 && windSpeed > 10) results.phenomena.push('equinoctial gales');
+
+        // Aurora activity
+        if (location.latitude > 55 && Math.abs(equinoxInfo.days) <= 7) results.phenomena.push('enhanced aurora activity period');
+    }
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+function interpretSolstice(results, situation, data, _data_previous, store, _options) {
+    const { cloudCover, snowDepth, temp } = data;
+    const { date, hour, location, daylight } = situation;
+
+    const solsticeInfo = helpers.isNearSolstice(date, location.hemisphere, SOLSTICE_LOOKAHEAD_DAYS);
     if (solsticeInfo.near) {
         let solsticeText;
         if (solsticeInfo.exact) solsticeText = 'today';
@@ -53,10 +74,10 @@ function interpretAstronomy(results, situation, data, _data_previous, store, _op
             }
 
             // Full moon during summer solstice
-            if (moonPhase >= 0.48 && moonPhase <= 0.52) {
+        	const lunarPhase = helpers.getLunarPhase(date);
+            if (lunarPhase >= 0.48 && lunarPhase <= 0.52) {
                 results.phenomena.push('solstice full moon (rare astronomical event)');
                 if (cloudCover !== undefined && cloudCover < 40) results.phenomena.push('strawberry moon visible');
-                moonPhaseReported = true;
             }
 
             // Cultural phenomena
@@ -84,47 +105,29 @@ function interpretAstronomy(results, situation, data, _data_previous, store, _op
             }
 
             // Full moon during winter solstice
-            if (moonPhase >= 0.48 && moonPhase <= 0.52) {
+        	const lunarPhase = helpers.getLunarPhase(date);
+            if (lunarPhase >= 0.48 && lunarPhase <= 0.52) {
                 results.phenomena.push('winter solstice full moon');
                 if (cloudCover !== undefined && cloudCover < 40) {
                     results.phenomena.push('cold moon illuminating snow');
                     if (snowDepth > 50) results.phenomena.push('moonlight reflected by snow cover');
                 }
-                moonPhaseReported = true;
             }
 
             // Temperature-related solstice phenomena
             if (temp !== undefined && temp < -10 && Math.abs(solsticeInfo.days) <= 7) results.phenomena.push('deep winter cold near solstice');
         }
     }
+}
 
-    // Equinox interpretation
-    const equinoxInfo = helpers.isNearEquinox(date, location.hemisphere, 14);
-    if (equinoxInfo.near) {
-        let equinoxText;
-        if (equinoxInfo.exact) equinoxText = 'today (equal day and night)';
-        else if (equinoxInfo.days > 0) equinoxText = `in ${Math.ceil(equinoxInfo.days)} day${Math.ceil(equinoxInfo.days) > 1 ? 's' : ''}`;
-        else equinoxText = `${Math.abs(Math.floor(equinoxInfo.days))} day${Math.abs(Math.floor(equinoxInfo.days)) > 1 ? 's' : ''} ago`;
-        results.phenomena.push(`${equinoxInfo.type} ${equinoxText}`);
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
-        // Daylight change rate
-        const isDayIncreasing = equinoxInfo.type.includes('spring');
-        results.phenomena.push(`rapidly ${isDayIncreasing ? 'increasing' : 'decreasing'} daylight`);
+function interpretCrossQuarter(results, situation, _data, _data_previous, _store, _options) {
+    const { date, hour, location, daylight } = situation;
 
-        // Calculate approximate daylight change rate
-        if (location.latitude > 50)
-            results.phenomena.push(`daylight changing ~${Math.round(Math.abs(Math.sin((location.latitude * Math.PI) / 180)) * 4)} min/day`);
-
-        // Equinox storms
-        if (Math.abs(equinoxInfo.days) <= 3 && windSpeed > 10) results.phenomena.push('equinoctial gales');
-
-        // Aurora activity
-        if (location.latitude > 55 && Math.abs(equinoxInfo.days) <= 7) results.phenomena.push('enhanced aurora activity period');
-    }
-
-    // Cross-quarter day interpretation
-    const crossQuarterInfo = helpers.isNearCrossQuarter(date, location.hemisphere);
-    if (crossQuarterInfo.isCrossQuarter && crossQuarterInfo.days <= 3) {
+    const crossQuarterInfo = helpers.isNearCrossQuarter(date, location.hemisphere, CROSSQUARTER_LOOKAHEAD_DAYS);
+    if (crossQuarterInfo.near) {
         results.phenomena.push(`cross-quarter day: ${crossQuarterInfo.name}`);
 
         // Add cultural context for cross-quarter days
@@ -138,117 +141,124 @@ function interpretAstronomy(results, situation, data, _data_previous, store, _op
             if (hour >= 16 && !daylight.isDaytime) results.phenomena.push('early darkness of Samhain');
         }
     }
+}
 
-    // Moon phase interpretation (if not already reported for solstice)
-    if (!moonPhaseReported) {
-        if (moonPhase >= 0.48 && moonPhase <= 0.52) {
-            // Full moon
-            results.phenomena.push('full moon tonight');
-            moonPhaseReported = true;
-            store.astronomy.consecutiveFullMoonNights++;
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
-            // Moon visibility conditions
-            if (cloudCover !== undefined) {
-                if (cloudCover < 30) {
-                    results.phenomena.push('clear skies for moon viewing');
-                    if (temp !== undefined && temp < -5 && humidity < 50) results.phenomena.push('crisp moonlight conditions');
-                } else if (cloudCover < 70) results.phenomena.push('partial moon visibility through clouds');
-                else results.phenomena.push('moon obscured by clouds');
-            }
+function interpretMoonPhase(results, situation, data, _data_previous, store, _options) {
+    const { cloudCover, snowDepth, humidity, temp } = data;
+    const { date, month, day, hour, location } = situation;
 
-            // Snow and moon interaction
-            if (snowDepth > 50 && cloudCover !== undefined && cloudCover < 40) {
-                results.phenomena.push('bright moonlit snow landscape');
-                if (temp < -10) results.phenomena.push('sparkling snow crystals in moonlight');
-            }
+    if (!store.astronomy)
+        store.astronomy = {
+            consecutiveFullMoonNights: 0, // XXX unused
+            consecutiveNewMoonNights: 0, // XXX unused
+        };
 
-            // Special full moons
-            switch (month) {
-                case 0:
-                    results.phenomena.push('wolf moon');
-                    break;
-                case 1:
-                    results.phenomena.push('snow moon');
-                    break;
-                case 2:
-                    results.phenomena.push('worm moon');
-                    break;
-                case 3:
-                    results.phenomena.push('pink moon');
-                    break;
-                case 4:
-                    results.phenomena.push('flower moon');
-                    break;
-                case 5:
-                    results.phenomena.push('strawberry moon');
-                    break;
-                case 6:
-                    results.phenomena.push('buck moon');
-                    break;
-                case 7:
-                    results.phenomena.push('sturgeon moon');
-                    break;
-                case 8:
-                    results.phenomena.push('harvest moon');
-                    break;
-                case 9:
-                    results.phenomena.push("hunter's moon");
-                    break;
-                case 10:
-                    results.phenomena.push('beaver moon');
-                    break;
-                case 11:
-                    results.phenomena.push('cold moon');
-                    break;
-            }
-        } else if (moonPhase >= 0.98 || moonPhase <= 0.02) {
-            // New moon
-            results.phenomena.push('new moon tonight');
-            moonPhaseReported = true;
-            store.astronomy.consecutiveNewMoonNights++;
+    const lunarPhase = helpers.getLunarPhase(date);
+     const lunarDistance = helpers.getLunarDistance(date);
 
-            if (cloudCover !== undefined && cloudCover < 30) {
-                if (location.lightPollution === 'low') {
-                    results.phenomena.push('excellent stargazing conditions');
-                    if (month >= 6 && month <= 8 && hour >= 22) results.phenomena.push('Milky Way visible');
-                } else if (location.lightPollution === 'medium') results.phenomena.push('good conditions for bright stars');
-            }
 
-            // Meteor shower visibility
-            if (month === 7 && day >= 10 && day <= 15) results.phenomena.push('Perseid meteor shower viewing optimal');
-            else if (month === 11 && day >= 14 && day <= 18) results.phenomena.push('Leonid meteor shower viewing optimal');
-        } else if ((moonPhase >= 0.23 && moonPhase <= 0.27) || (moonPhase >= 0.73 && moonPhase <= 0.77)) {
-            // Quarter moons
+    if (lunarPhase >= 0.48 && lunarPhase <= 0.52) {
+        // Full moon
+        results.phenomena.push('full moon tonight');
+        store.astronomy.consecutiveFullMoonNights++;
 
-            const quarterType = moonPhase < 0.5 ? 'first' : 'last';
-            results.phenomena.push(`${quarterType} quarter moon tonight`);
-            moonPhaseReported = true;
-
-            if (quarterType === 'first' && hour >= 18 && hour <= 23) results.phenomena.push('moon visible in evening sky');
-            else if (quarterType === 'last' && hour >= 0 && hour <= 6) results.phenomena.push('moon visible in morning sky');
+        // Moon visibility conditions
+        if (cloudCover !== undefined) {
+            if (cloudCover < 30) {
+                results.phenomena.push('clear skies for moon viewing');
+                if (temp !== undefined && temp < -5 && humidity < 50) results.phenomena.push('crisp moonlight conditions');
+            } else if (cloudCover < 70) results.phenomena.push('partial moon visibility through clouds');
+            else results.phenomena.push('moon obscured by clouds');
         }
 
-        // Waxing/waning descriptions
-        if (!moonPhaseReported) {
-            if (moonPhase > 0.02 && moonPhase < 0.23) results.phenomena.push('waxing crescent moon');
-            else if (moonPhase > 0.27 && moonPhase < 0.48) results.phenomena.push('waxing gibbous moon');
-            else if (moonPhase > 0.52 && moonPhase < 0.73) results.phenomena.push('waning gibbous moon');
-            else if (moonPhase > 0.77 && moonPhase < 0.98) results.phenomena.push('waning crescent moon');
+        // Snow and moon interaction
+        if (snowDepth > 50 && cloudCover !== undefined && cloudCover < 40) {
+            results.phenomena.push('bright moonlit snow landscape');
+            if (temp < -10) results.phenomena.push('sparkling snow crystals in moonlight');
         }
-    }
+
+        // Special full moons
+        switch (month) {
+            case 0:
+                results.phenomena.push('wolf moon');
+                break;
+            case 1:
+                results.phenomena.push('snow moon');
+                break;
+            case 2:
+                results.phenomena.push('worm moon');
+                break;
+            case 3:
+                results.phenomena.push('pink moon');
+                break;
+            case 4:
+                results.phenomena.push('flower moon');
+                break;
+            case 5:
+                results.phenomena.push('strawberry moon');
+                break;
+            case 6:
+                results.phenomena.push('buck moon');
+                break;
+            case 7:
+                results.phenomena.push('sturgeon moon');
+                break;
+            case 8:
+                results.phenomena.push('harvest moon');
+                break;
+            case 9:
+                results.phenomena.push("hunter's moon");
+                break;
+            case 10:
+                results.phenomena.push('beaver moon');
+                break;
+            case 11:
+                results.phenomena.push('cold moon');
+                break;
+        }
+    } else if (lunarPhase >= 0.98 || lunarPhase <= 0.02) {
+        // New moon
+        results.phenomena.push('new moon tonight');
+        store.astronomy.consecutiveNewMoonNights++;
+
+        if (cloudCover !== undefined && cloudCover < 30) {
+            if (location.lightPollution === 'low') {
+                results.phenomena.push('excellent stargazing conditions');
+                if (month >= 6 && month <= 8 && hour >= 22) results.phenomena.push('Milky Way visible');
+            } else if (location.lightPollution === 'medium') results.phenomena.push('good conditions for bright stars');
+        }
+
+        // Meteor shower visibility
+        if (month === 7 && day >= 10 && day <= 15) results.phenomena.push('Perseid meteor shower viewing optimal');
+        else if (month === 11 && day >= 14 && day <= 18) results.phenomena.push('Leonid meteor shower viewing optimal');
+    } else if ((lunarPhase >= 0.23 && lunarPhase <= 0.27) || (lunarPhase >= 0.73 && lunarPhase <= 0.77)) {
+        // Quarter moons
+
+        const quarterType = lunarPhase < 0.5 ? 'first' : 'last';
+        results.phenomena.push(`${quarterType} quarter moon tonight`);
+
+        if (quarterType === 'first' && hour >= 18 && hour <= 23) results.phenomena.push('moon visible in evening sky');
+        else if (quarterType === 'last' && hour >= 0 && hour <= 6) results.phenomena.push('moon visible in morning sky');
+    } else if (lunarPhase > 0.02 && lunarPhase < 0.23) results.phenomena.push('waxing crescent moon');
+    else if (lunarPhase > 0.27 && lunarPhase < 0.48) results.phenomena.push('waxing gibbous moon');
+    else if (lunarPhase > 0.52 && lunarPhase < 0.73) results.phenomena.push('waning gibbous moon');
+    else if (lunarPhase > 0.77 && lunarPhase < 0.98) results.phenomena.push('waning crescent moon');
 
     // Supermoon and micromoon
-    if (moonDistance.isSupermoon && moonPhase >= 0.48 && moonPhase <= 0.52) {
+    if (lunarDistance.isSupermoon && lunarPhase >= 0.48 && lunarPhase <= 0.52) {
         results.phenomena.push('supermoon - appears larger and brighter');
-        results.phenomena.push(`moon ${Math.round(((384400 - moonDistance.distance) / 384400) * 100)}% closer than average`);
+        results.phenomena.push(`moon ${Math.round(((384400 - lunarDistance.distance) / 384400) * 100)}% closer than average`);
         if (cloudCover !== undefined && cloudCover < 50) results.phenomena.push('enhanced moonlight from supermoon');
-    } else if (moonDistance.isMicromoon && moonPhase >= 0.48 && moonPhase <= 0.52) {
+    } else if (lunarDistance.isMicromoon && lunarPhase >= 0.48 && lunarPhase <= 0.52) {
         results.phenomena.push('micromoon - appears smaller and dimmer');
-        results.phenomena.push(`moon ${Math.round(((moonDistance.distance - 384400) / 384400) * 100)}% farther than average`);
+        results.phenomena.push(`moon ${Math.round(((lunarDistance.distance - 384400) / 384400) * 100)}% farther than average`);
     }
 
     // Blue moon detection (simplified - second full moon in calendar month)
-    if (moonPhase >= 0.48 && moonPhase <= 0.52 && day >= 29) {
+    if (lunarPhase >= 0.48 && lunarPhase <= 0.52 && day >= 29) {
         // Check if there was a full moon earlier this month
         const earlierDate = new Date(date);
         earlierDate.setDate(1);
@@ -268,7 +278,7 @@ function interpretAstronomy(results, situation, data, _data_previous, store, _op
     }
 
     // Harvest moon specific phenomena
-    if (month === 8 && moonPhase >= 0.48 && moonPhase <= 0.52) {
+    if (month === 8 && lunarPhase >= 0.48 && lunarPhase <= 0.52) {
         const equinox = helpers.isNearEquinox(date, location.hemisphere, 7);
         if (equinox.near) {
             results.phenomena.push('harvest moon near autumn equinox');
@@ -278,10 +288,10 @@ function interpretAstronomy(results, situation, data, _data_previous, store, _op
 
     // Moon and tides (for coastal areas)
     if (location.elevation < 50 && location.forestCoverage !== 'high') {
-        if ((moonPhase >= 0.48 && moonPhase <= 0.52) || moonPhase >= 0.98 || moonPhase <= 0.02) {
+        if ((lunarPhase >= 0.48 && lunarPhase <= 0.52) || lunarPhase >= 0.98 || lunarPhase <= 0.02) {
             results.phenomena.push('spring tides (if near coast)');
-            if (moonDistance.isSupermoon) results.phenomena.push('king tides possible');
-        } else if ((moonPhase >= 0.23 && moonPhase <= 0.27) || (moonPhase >= 0.73 && moonPhase <= 0.77)) results.phenomena.push('neap tides (if near coast)');
+            if (lunarDistance.isSupermoon) results.phenomena.push('king tides possible');
+        } else if ((lunarPhase >= 0.23 && lunarPhase <= 0.27) || (lunarPhase >= 0.73 && lunarPhase <= 0.77)) results.phenomena.push('neap tides (if near coast)');
     }
 }
 
@@ -290,7 +300,10 @@ function interpretAstronomy(results, situation, data, _data_previous, store, _op
 
 module.exports = function (_options) {
     return {
-        interpretAstronomy,
+        interpretEquinox,
+        interpretSolstice,
+        interpretCrossQuarter,
+        interpretMoonPhase,
     };
 };
 
