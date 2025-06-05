@@ -96,13 +96,13 @@ function startWeatherProcessing() {
     weatherInterval = setInterval(weather_process, 15 * 1000);
     console.log(`weather: [${new Date().toISOString()}] process, started (15 seconds)`);
 }
-function stopWeatherProcessing() {
+/*function stopWeatherProcessing() {
     if (weatherInterval) {
         clearInterval(weatherInterval);
         weatherInterval = undefined;
         console.log(`weather: [${new Date().toISOString()}] process, stopped`);
     }
-}
+}*/
 
 startWeatherProcessing();
 

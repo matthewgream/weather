@@ -101,6 +101,7 @@ function initialise(options) {
     weatherOptions = options;
     weatherInterpreters = {
         ...require('./server-function-weather-conditions.js')(options),
+        ...require('./server-function-weather-combination.js')(options),
         ...require('./server-function-weather-phenology.js')(options),
         ...require('./server-function-weather-calendar.js')(options),
         ...require('./server-function-weather-astronomy.js')(options),

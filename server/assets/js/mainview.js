@@ -583,7 +583,7 @@ function schedule(vars) {
 // eslint-disable-next-line no-unused-vars
 function create(vars, data) {
     varsLast = vars;
-    timezone = conf.location_data.timezone;
+    timezone = conf.location_data.timezone; // eslint-disable-line prefer-destructuring
     const time = locate(vars, conf.var_timestamp);
     const links = conf.external_links;
     document.querySelector('#weather-dashboard').innerHTML = [

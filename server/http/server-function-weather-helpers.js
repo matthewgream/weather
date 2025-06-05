@@ -27,9 +27,14 @@ function getDST(date = new Date()) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const normalizeTime = (time) => (time < 0 ? time + 24 : time >= 24 ? time - 24 : time);
+function normalizeTime(time) {
+    if (time < 0) return time + 24;
+    return time >= 24 ? time - 24 : time;
+}
 
-const isLeapYear = (yr) => (yr % 4 === 0 && yr % 100 !== 0) || yr % 400 === 0;
+function isLeapYear(yr) {
+    return (yr % 4 === 0 && yr % 100 !== 0) || yr % 400 === 0;
+}
 
 function getDaylightHours(latitude, longitude, date = new Date()) {
     let dayOfYear = date.getDate();
@@ -175,8 +180,6 @@ function isNearSolstice(date = new Date(), hemisphere = 'northern', daysWindow =
         currentYearWinterSolstice = new Date(year, 11, 21); // June 21 / December 21
     const prevYearWinterSolstice = new Date(year - 1, 11, 21),
         nextYearSummerSolstice = new Date(year + 1, 5, 21); // Dec 21 / June 21
-    const currentYearLongestDay = isNorthern ? currentYearSummerSolstice : currentYearWinterSolstice;
-    const currentYearShortestDay = isNorthern ? currentYearWinterSolstice : currentYearSummerSolstice;
     const otherYearRelevantSolstice = isNorthern
         ? date.getMonth() < 6
             ? prevYearWinterSolstice
@@ -184,6 +187,8 @@ function isNearSolstice(date = new Date(), hemisphere = 'northern', daysWindow =
         : date.getMonth() < 6
           ? new Date(year - 1, 5, 21)
           : new Date(year + 1, 11, 21);
+    const currentYearLongestDay = isNorthern ? currentYearSummerSolstice : currentYearWinterSolstice;
+    const currentYearShortestDay = isNorthern ? currentYearWinterSolstice : currentYearSummerSolstice;
     const daysToCurrYearLongest = (currentYearLongestDay.getTime() - date.getTime()) / msPerDay,
         daysToCurrYearShortest = (currentYearShortestDay.getTime() - date.getTime()) / msPerDay,
         daysToOtherYearSolstice = (otherYearRelevantSolstice.getTime() - date.getTime()) / msPerDay;
@@ -274,24 +279,28 @@ function isNearCrossQuarter(date = new Date(), hemisphere = 'northern', daysWind
         return {
             near: true,
             name: isNorthern ? 'Imbolc (early spring)' : 'Lughnasadh (early autumn)',
+            exact: Math.abs(daysToImbolc) < 1,
             days: daysToImbolc,
         };
     else if (daysToBeltane <= daysWindow)
         return {
             near: true,
             name: isNorthern ? 'Beltane (early summer)' : 'Samhain (early winter)',
+            exact: Math.abs(daysToBeltane) < 1,
             days: daysToBeltane,
         };
     else if (daysToLughnasadh <= daysWindow)
         return {
             near: true,
             name: isNorthern ? 'Lughnasadh (early autumn)' : 'Imbolc (early spring)',
+            exact: Math.abs(daysToLughnasadh) < 1,
             days: daysToLughnasadh,
         };
     else if (daysToSamhain <= daysWindow)
         return {
             near: true,
             name: isNorthern ? 'Samhain (early winter)' : 'Beltane (early summer)',
+            exact: Math.abs(daysToSamhain) < 1,
             days: daysToSamhain,
         };
     return { near: false };

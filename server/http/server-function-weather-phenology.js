@@ -8,8 +8,7 @@ const helpers = require('./server-function-weather-helpers.js');
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function calculateGDD(temp, baseTemp = 5, maxTemp = 30) {
-    if (temp === undefined) return 0;
-    return Math.max(0, Math.max(baseTemp, Math.min(temp, maxTemp)) - baseTemp);
+    return temp === undefined ? 0 : Math.max(0, Math.max(baseTemp, Math.min(temp, maxTemp)) - baseTemp);
 }
 
 function isChillHour(temp) {
@@ -88,19 +87,17 @@ function interpretCultivation(results, situation, data, data_previous, store, _o
         }
 
         // Chill hours for fruit trees
-        if (month >= 9 || month <= 3) {
-            if (isChillHour(temp)) {
-                switch (++store.cultivation.chillHours) {
-                    case 400:
-                        helpers.addEvent(store, 'cultivation', 'chillHours400', 'early apple varieties reaching chill requirement', 24);
-                        break;
-                    case 800:
-                        helpers.addEvent(store, 'cultivation', 'chillHours800', 'most apple and pear varieties have met chill requirements', 24);
-                        break;
-                    case 1200: {
-                        helpers.addEvent(store, 'cultivation', 'chillHours1200', 'all fruit trees have sufficient chill hours', 24);
-                        break;
-                    }
+        if ((month >= 9 || month <= 3) && isChillHour(temp)) {
+            switch (++store.cultivation.chillHours) {
+                case 400:
+                    helpers.addEvent(store, 'cultivation', 'chillHours400', 'early apple varieties reaching chill requirement', 24);
+                    break;
+                case 800:
+                    helpers.addEvent(store, 'cultivation', 'chillHours800', 'most apple and pear varieties have met chill requirements', 24);
+                    break;
+                case 1200: {
+                    helpers.addEvent(store, 'cultivation', 'chillHours1200', 'all fruit trees have sufficient chill hours', 24);
+                    break;
                 }
             }
         } else if (month === 4)
@@ -144,14 +141,9 @@ function interpretCultivation(results, situation, data, data_previous, store, _o
             helpers.addEvent(store, 'cultivation', 'raspberryHarvest', 'raspberries ripening - begin harvest', 168);
         if (month === 8) helpers.addEvent(store, 'cultivation', 'blackcurrantHarvest', 'blackcurrants ready for harvest', 168);
 
-        if (temp > 25 && month >= 6 && month <= 8 && humidity < 40) {
-            results.alerts.push('irrigation needed for vegetable gardens');
-            results.phenomena.push('water stress likely in shallow-rooted crops');
-        }
-        if (temp < 3 && temp > -2 && month >= 4 && month <= 5 && cloudCover < 50) {
-            results.alerts.push('radiation frost risk tonight');
-            results.phenomena.push('cover sensitive plants or run irrigation');
-        }
+        if (temp > 25 && month >= 6 && month <= 8 && humidity < 40) results.phenomena.push('water stress likely in shallow-rooted crops (irrigation needed)');
+        if (temp < 3 && temp > -2 && month >= 4 && month <= 5 && cloudCover < 50)
+            results.phenomena.push('radiation frost risk tonight (cover sensitive plants or run irrigation)');
 
         // Pollination conditions
         if (month === 5 && temp > 15 && temp < 25 && windSpeed < 5 && rainRate === 0 && daylight.isDaytime)
@@ -164,14 +156,8 @@ function interpretCultivation(results, situation, data, data_previous, store, _o
     // Farm animal considerations
     if (temp !== undefined) {
         // Dairy cattle (major in Värmland)
-        if (temp < -15 && windSpeed > 5) {
-            results.alerts.push('severe cold stress for outdoor livestock');
-            results.phenomena.push('ensure adequate shelter and unfrozen water');
-        }
-        if (temp > 25 && humidity > 70) {
-            results.alerts.push('heat stress risk for dairy cattle');
-            results.phenomena.push('ensure shade and water access');
-        }
+        if (temp < -15 && windSpeed > 5) results.phenomena.push('severe cold stress for outdoor livestock (ensure adequate shelter and unfrozen water');
+        if (temp > 25 && humidity > 70) results.phenomena.push('heat stress risk for dairy cattle (ensure shade and water access');
 
         // Sheep (common in Värmland)
         if (month === 4 && temp > 10 && rainRate === 0)
@@ -184,7 +170,7 @@ function interpretCultivation(results, situation, data, data_previous, store, _o
 
         // Poultry
         if (daylight.daylightHours < 10 && month >= 10 && month <= 2) results.phenomena.push('supplemental lighting needed for egg production');
-        if (temp < -20) results.alerts.push('check poultry water - prevent freezing');
+        if (temp < -20) results.phenomena.push('check poultry water - prevent freezing');
     }
 
     helpers
@@ -264,11 +250,7 @@ function interpretWildNature(results, situation, data, data_previous, store, _op
 
         // Special forest conditions
         if (humidity > 90 && temp > 10 && temp < 20 && month >= 7 && month <= 9) results.phenomena.push('perfect mushroom growing conditions');
-
-        if (month >= 6 && month <= 8 && recentRain < 5 && humidity < 30) {
-            results.alerts.push('extreme forest fire risk');
-            results.phenomena.push('avoid open fires - forest floor very dry');
-        }
+        if (month >= 6 && month <= 8 && recentRain < 5 && humidity < 30) results.phenomena.push('avoid open fires - forest floor very dry');
 
         // Traditional foraging wisdom
         if (month === 8 && humidity > 70 && !daylight.isDaytime) results.phenomena.push('morning dew good for mushroom spotting');
@@ -311,32 +293,24 @@ function interpretWildlife(results, situation, data, data_previous, store, _opti
     }
 
     if (temp !== undefined) {
-        // Värmland-specific wildlife
-
+        // Wildlife - Värmland specifics
         // Moose (älg) - iconic Swedish animal
         const isDawnDusk = Math.abs(hour + minutes / 60 - daylight.sunriseDecimal) < 1 || Math.abs(hour + minutes / 60 - daylight.sunsetDecimal) < 1;
-
         if (isDawnDusk && temp > -10 && temp < 20 && windSpeed < 5) results.phenomena.push('moose most active - drive carefully');
         if (month >= 8 && month <= 10) helpers.addEvent(store, 'wildlife', 'mooseRut', 'moose rutting season - bulls aggressive and unpredictable', 720); // 30 days
-
         // Roe deer (rådjur)
         if ((hour >= 4 && hour <= 7) || (hour >= 17 && hour <= 20)) if (temp > -5 && windSpeed < 5) results.phenomena.push('roe deer grazing in forest edges');
         if (month === 7 || month === 8) helpers.addEvent(store, 'wildlife', 'roeDeerRut', 'roe deer rutting season - increased activity', 720);
-
         // Wild boar (vildsvin) - increasing in Värmland
         if (!daylight.isDaytime && temp > 0 && month >= 4 && month <= 10) results.phenomena.push('wild boar may be active in forests');
-
         // Brown bear (björn)
         if (month === 3 && temp > 5) helpers.addEvent(store, 'wildlife', 'bearEmerge', 'bears emerging from hibernation - be alert in forests', 168);
         if (month >= 7 && month <= 9) helpers.addEvent(store, 'wildlife', 'bearBerry', 'bears feeding heavily on berries - make noise when foraging', 720);
         if (month === 10 && temp < 5) helpers.addEvent(store, 'wildlife', 'bearDenning', 'bears preparing for hibernation - very active feeding', 168);
-
         // Wolves (varg) - present in Värmland
         if (snowDepth > 100 && temp < -5) results.phenomena.push('wolf pack hunting patterns change - following prey in deep snow');
-
         // Lynx (lodjur)
         if (month >= 2 && month <= 3) helpers.addEvent(store, 'wildlife', 'lynxMating', 'lynx mating season - vocal in forests', 168);
-
         // Beavers (bäver)
         if (month === 9 || month === 10) helpers.addEvent(store, 'wildlife', 'beaverActive', 'beavers preparing for winter - dam building activity high', 336);
 
@@ -365,9 +339,8 @@ function interpretWildlife(results, situation, data, data_previous, store, _opti
         if (month === 5 && temp > 10) helpers.addEvent(store, 'wildlife', 'graylingActive', 'grayling actively feeding - good fly fishing', 168);
 
         // Insects
-        if (temp < 10) {
-            store.wildlife.insectActivityLevel = 'dormant';
-        } else if (temp >= 10 && temp < 15) {
+        if (temp < 10) store.wildlife.insectActivityLevel = 'dormant';
+        else if (temp >= 10 && temp < 15) {
             store.wildlife.insectActivityLevel = 'low';
             if (month === 3) helpers.addEvent(store, 'wildlife', 'bumblebeeQueens', 'bumblebee queens emerging - first pollinators active', 72);
         } else if (temp >= 15) {

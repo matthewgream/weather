@@ -39,7 +39,7 @@ function interpretCalendar(results, situation, data, data_previous, store, _opti
             if (daylight.sunsetDecimal > 21) {
                 if (hour > Math.floor(daylight.sunsetDecimal) && daylightPhase === 'civil_twilight') {
                     results.phenomena.push('lingering twilight');
-                    if (month === 6 && situation.location.latitude > 60) results.phenomena.push('near-white night conditions');
+                    if (month === 6 && situation.location.latitude > 60) results.phenomena.push('near-white night conditions'); // eslint-disable-line max-depth
                 }
             }
             if (situation.location.latitude > 63) {

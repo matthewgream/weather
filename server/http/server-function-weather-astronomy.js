@@ -16,6 +16,7 @@ function interpretEquinox(results, situation, data, _data_previous, _store, _opt
 
     const equinoxInfo = helpers.isNearEquinox(date, location.hemisphere, EQUINOX_LOOKAHEAD_DAYS);
     if (equinoxInfo.near) {
+        // Basic info if near
         let equinoxText;
         if (equinoxInfo.exact) equinoxText = 'today (equal day and night)';
         else if (equinoxInfo.days > 0) equinoxText = `in ${Math.ceil(equinoxInfo.days)} day${Math.ceil(equinoxInfo.days) > 1 ? 's' : ''}`;
@@ -46,6 +47,7 @@ function interpretSolstice(results, situation, data, _data_previous, _store, _op
 
     const solsticeInfo = helpers.isNearSolstice(date, location.hemisphere, SOLSTICE_LOOKAHEAD_DAYS);
     if (solsticeInfo.near) {
+        // Basic info if near
         let solsticeText;
         if (solsticeInfo.exact) solsticeText = 'today';
         else if (solsticeInfo.days > 0) solsticeText = `in ${Math.ceil(solsticeInfo.days)} day${Math.ceil(solsticeInfo.days) > 1 ? 's' : ''}`;
@@ -126,18 +128,22 @@ function interpretCrossQuarter(results, situation, _data, _data_previous, _store
 
     const crossQuarterInfo = helpers.isNearCrossQuarter(date, location.hemisphere, CROSSQUARTER_LOOKAHEAD_DAYS);
     if (crossQuarterInfo.near) {
-        results.phenomena.push(`cross-quarter day: ${crossQuarterInfo.name}`);
+        // Basic info if near
+        let crossQuarterText;
+        if (crossQuarterInfo.exact) crossQuarterText = 'today';
+        else if (crossQuarterInfo.days > 0) crossQuarterText = `in ${Math.ceil(crossQuarterInfo.days)} day${Math.ceil(crossQuarterInfo.days) > 1 ? 's' : ''}`;
+        else crossQuarterText = `${Math.abs(Math.floor(crossQuarterInfo.days))} day${Math.abs(Math.floor(crossQuarterInfo.days)) > 1 ? 's' : ''} ago`;
 
-        // Add cultural context for cross-quarter days
-        if (crossQuarterInfo.name.includes('Imbolc')) results.phenomena.push('traditional start of spring');
-        else if (crossQuarterInfo.name.includes('Beltane')) {
-            results.phenomena.push('traditional start of summer');
-            if (location.latitude > 58 && hour >= 21 && daylight.isDaytime) results.phenomena.push('Beltane white nights');
-        } else if (crossQuarterInfo.name.includes('Lughnasadh')) results.phenomena.push('traditional harvest festival');
-        else if (crossQuarterInfo.name.includes('Samhain')) {
-            results.phenomena.push('traditional start of winter');
-            if (hour >= 16 && !daylight.isDaytime) results.phenomena.push('early darkness of Samhain');
-        }
+        // Add cultural concontext for cross-quarter days
+        let context;
+        if (crossQuarterInfo.name.includes('Imbolc')) context = 'traditional start of spring';
+        else if (crossQuarterInfo.name.includes('Beltane'))
+            context = 'traditional start of summer' + (location.latitude > 58 && hour >= 21 && daylight.isDaytime ? ': Beltane white nights' : '');
+        else if (crossQuarterInfo.name.includes('Lughnasadh')) context = 'traditional harvest festival';
+        else if (crossQuarterInfo.name.includes('Samhain'))
+            context = 'traditional start of winter' + (hour >= 16 && !daylight.isDaytime ? ': Samhain early darkness' : '');
+
+        results.phenomena.push(`cross-quater ${crossQuarterInfo.name} ${crossQuarterText}${context ? ' (' + context + ')' : ''}`);
     }
 }
 
@@ -148,30 +154,28 @@ function interpretMoonPhase(results, situation, data, _data_previous, store, _op
     const { cloudCover, snowDepth, humidity, temp } = data;
     const { date, month, day, hour, location } = situation;
 
-    if (!store.astronomy)
-        store.astronomy = {
-            currentMonth: month,
-        };
-    if (store.astronomy.currentMonth !== month) {
+    if (!store.astronomy) store.astronomy = {};
+    if (store.astronomy?.currentMonth !== month) {
         store.astronomy.firstFullMoonDay = undefined;
         store.astronomy.currentMonth = month;
     }
 
-    const lunarPhase = helpers.getLunarPhase(date);
-    const lunarDistance = helpers.getLunarDistance(date);
+    const lunarPhase = helpers.getLunarPhase(date),
+        lunarDistance = helpers.getLunarDistance(date);
 
     // Show moon distance info for all phases (not just full moon)
     if (lunarDistance.isSupermoon) {
         results.phenomena.push('supermoon - moon at closest approach');
-        if (lunarPhase >= 0.48 && lunarPhase <= 0.52) {
-            results.phenomena.push('supermoon appears larger and brighter');
-            results.phenomena.push(`moon ${Math.round(((384400 - lunarDistance.distance) / 384400) * 100)}% closer than average`);
-        } else if (lunarPhase >= 0.98 || lunarPhase <= 0.02) results.phenomena.push('super new moon - extra high tides expected');
+        if (lunarPhase >= 0.48 && lunarPhase <= 0.52)
+            results.phenomena.push(
+                `supermoon appears larger and brighter: ${Math.round(((384400 - lunarDistance.distance) / 384400) * 100)}% closer than average`
+            );
+        else if (lunarPhase >= 0.98 || lunarPhase <= 0.02) results.phenomena.push('super new moon - extra high tides expected');
     } else if (lunarDistance.isMicromoon) {
-        if (lunarPhase >= 0.48 && lunarPhase <= 0.52) {
-            results.phenomena.push('micromoon - appears smaller and dimmer');
-            results.phenomena.push(`moon ${Math.round(((lunarDistance.distance - 384400) / 384400) * 100)}% farther than average`);
-        }
+        if (lunarPhase >= 0.48 && lunarPhase <= 0.52)
+            results.phenomena.push(
+                `micromoon - appears smaller and dimmer: ${Math.round(((lunarDistance.distance - 384400) / 384400) * 100)}% farther than average`
+            );
     }
 
     const zodiac = helpers.getLunarZodiacSign(date);
@@ -243,8 +247,8 @@ function interpretMoonPhase(results, situation, data, _data_previous, store, _op
             } else if (location.lightPollution === 'medium') results.phenomena.push('good conditions for bright stars');
         }
 
-        // Meteor showers - expanded list
-        const meteorShowers = [
+        // Meteor showers
+        [
             { month: 0, start: 1, end: 5, name: 'Quadrantids meteor shower' },
             { month: 3, start: 16, end: 25, name: 'Lyrids meteor shower' },
             { month: 3, start: 22, end: 23, name: 'April Lyrids peak' }, // Peak night
@@ -258,9 +262,7 @@ function interpretMoonPhase(results, situation, data, _data_previous, store, _op
             { month: 10, start: 17, end: 25, name: 'Leonids meteor shower viewing optimal' },
             { month: 11, start: 7, end: 17, name: 'Geminids meteor shower - best of the year' },
             { month: 11, start: 17, end: 24, name: 'Ursids meteor shower' },
-        ];
-
-        meteorShowers
+        ]
             .filter((shower) => month === shower.month && day >= shower.start && day <= shower.end)
             .forEach((shower) => results.phenomena.push(shower.name));
 
@@ -270,7 +272,7 @@ function interpretMoonPhase(results, situation, data, _data_previous, store, _op
             else if (month >= 8 && month <= 10 && hour >= 4 && hour <= 6) results.phenomena.push('zodiacal light may be visible in eastern sky before dawn');
         }
 
-        const newMoonMeanings = {
+        const neuMoonMeanings = {
             Aries: 'good for new beginnings and initiatives',
             Taurus: 'good for financial planning and material goals',
             Gemini: 'good for communication and learning projects',
@@ -284,7 +286,7 @@ function interpretMoonPhase(results, situation, data, _data_previous, store, _op
             Aquarius: 'good for community and humanitarian projects',
             Pisces: 'good for spiritual and artistic endeavors',
         };
-        if (newMoonMeanings[zodiac.sign]) results.phenomena.push(`new moon in ${zodiac.sign} ${zodiac.symbol}: ${newMoonMeanings[zodiac.sign]}`);
+        if (neuMoonMeanings[zodiac.sign]) results.phenomena.push(`new moon in ${zodiac.sign} ${zodiac.symbol}: ${neuMoonMeanings[zodiac.sign]}`);
     } else if ((lunarPhase >= 0.23 && lunarPhase <= 0.27) || (lunarPhase >= 0.73 && lunarPhase <= 0.77)) {
         // Quarter moons
         const quarterType = lunarPhase < 0.5 ? 'first' : 'last';
@@ -303,8 +305,7 @@ function interpretMoonPhase(results, situation, data, _data_previous, store, _op
     }
 
     // Moon Illumination Percentage
-    const illumination = Math.round(((1 - Math.cos(lunarPhase * 2 * Math.PI)) / 2) * 100);
-    results.phenomena.push(`moon ${illumination}% illuminated`);
+    results.phenomena.push(`moon ${Math.round(((1 - Math.cos(lunarPhase * 2 * Math.PI)) / 2) * 100)}% illuminated`);
 
     // Noctilucent Clouds (Important for latitude 59.66°N)
     if (month >= 5 && month <= 7 && location.latitude > 50) if (hour >= 21 || hour <= 4) results.phenomena.push('noctilucent clouds possible in northern sky');
@@ -312,10 +313,9 @@ function interpretMoonPhase(results, situation, data, _data_previous, store, _op
     // Moon and tides (for coastal areas)
     if (location.elevation < 50 && location.forestCoverage !== 'high') {
         if ((lunarPhase >= 0.48 && lunarPhase <= 0.52) || lunarPhase >= 0.98 || lunarPhase <= 0.02) {
-            results.phenomena.push('spring tides (if near coast)');
+            results.phenomena.push('spring tides (at coast)');
             if (lunarDistance.isSupermoon) results.phenomena.push('king tides possible');
-        } else if ((lunarPhase >= 0.23 && lunarPhase <= 0.27) || (lunarPhase >= 0.73 && lunarPhase <= 0.77))
-            results.phenomena.push('neap tides (if near coast)');
+        } else if ((lunarPhase >= 0.23 && lunarPhase <= 0.27) || (lunarPhase >= 0.73 && lunarPhase <= 0.77)) results.phenomena.push('neap tides (at coast)');
     }
 
     // Aurora predictions
