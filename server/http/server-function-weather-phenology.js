@@ -152,13 +152,20 @@ function interpretCultivation(results, situation, data, data_previous, store, _o
         // Chill hours for fruit trees
         if (month >= 9 || month <= 3) {
             if (isChillHour(temp)) {
-                store.cultivation.chillHours++;
-                if (store.cultivation.chillHours === 400)
-                    addEvent(store, 'cultivation', 'chillHours400', 'early apple varieties reaching chill requirement', 24);
-                else if (store.cultivation.chillHours === 800)
-                    addEvent(store, 'cultivation', 'chillHours800', 'most apple and pear varieties have met chill requirements', 24);
-                else if (store.cultivation.chillHours === 1200)
-                    addEvent(store, 'cultivation', 'chillHours1200', 'all fruit trees have sufficient chill hours', 24);
+                switch (++store.cultivation.chillHours) {
+                    case 400: {
+                        addEvent(store, 'cultivation', 'chillHours400', 'early apple varieties reaching chill requirement', 24);
+                        break;
+                    }
+                    case 800: {
+                        addEvent(store, 'cultivation', 'chillHours800', 'most apple and pear varieties have met chill requirements', 24);
+                        break;
+                    }
+                    case 1200: {
+                        addEvent(store, 'cultivation', 'chillHours1200', 'all fruit trees have sufficient chill hours', 24);
+                        break;
+                    }
+                }
             }
         } else if (month === 4)
             // Reset chill hours in April

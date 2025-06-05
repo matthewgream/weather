@@ -161,18 +161,44 @@ function interpretAstronomy(results, situation, data, _data_previous, store, _op
             }
 
             // Special full moons
-            if (month === 0) results.phenomena.push('wolf moon');
-            else if (month === 1) results.phenomena.push('snow moon');
-            else if (month === 2) results.phenomena.push('worm moon');
-            else if (month === 3) results.phenomena.push('pink moon');
-            else if (month === 4) results.phenomena.push('flower moon');
-            else if (month === 5) results.phenomena.push('strawberry moon');
-            else if (month === 6) results.phenomena.push('buck moon');
-            else if (month === 7) results.phenomena.push('sturgeon moon');
-            else if (month === 8) results.phenomena.push('harvest moon');
-            else if (month === 9) results.phenomena.push("hunter's moon");
-            else if (month === 10) results.phenomena.push('beaver moon');
-            else if (month === 11) results.phenomena.push('cold moon');
+            switch (month) {
+                case 0:
+                    results.phenomena.push('wolf moon');
+                    break;
+                case 1:
+                    results.phenomena.push('snow moon');
+                    break;
+                case 2:
+                    results.phenomena.push('worm moon');
+                    break;
+                case 3:
+                    results.phenomena.push('pink moon');
+                    break;
+                case 4:
+                    results.phenomena.push('flower moon');
+                    break;
+                case 5:
+                    results.phenomena.push('strawberry moon');
+                    break;
+                case 6:
+                    results.phenomena.push('buck moon');
+                    break;
+                case 7:
+                    results.phenomena.push('sturgeon moon');
+                    break;
+                case 8:
+                    results.phenomena.push('harvest moon');
+                    break;
+                case 9:
+                    results.phenomena.push("hunter's moon");
+                    break;
+                case 10:
+                    results.phenomena.push('beaver moon');
+                    break;
+                case 11:
+                    results.phenomena.push('cold moon');
+                    break;
+            }
         } else if (moonPhase >= 0.98 || moonPhase <= 0.02) {
             // New moon
             results.phenomena.push('new moon tonight');

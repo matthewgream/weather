@@ -111,29 +111,13 @@ export default [
             'prefer-exponentiation-operator': 'error',
 
             // Plugin rules
-            'regexp/use-ignore-case': 'off',
-            'regexp/no-unused-capturing-group': 'off',
-            'regexp/no-useless-non-capturing-group': 'off',
+            // 'regexp/use-ignore-case': 'off',
+            // 'regexp/no-unused-capturing-group': 'off',
+            // 'regexp/no-useless-non-capturing-group': 'off',
 
             '@brettz9/prefer-for-of': 'off',
 
-            'unicorn/consistent-function-scoping': 'off',
-            'unicorn/no-static-only-class': 'off',
-            'unicorn/prefer-set-has': 'off',
-            'unicorn/number-literal-case': 'off',
-            'unicorn/prefer-switch': 'off',
-            'unicorn/throw-new-error': 'off',
-            'unicorn/custom-error-definition': 'off',
-            'unicorn/prefer-blob-reading-methods': 'off',
-            'unicorn/no-typeof-undefined': 'off',
             'unicorn/switch-case-braces': 'off',
-            'unicorn/new-for-builtins': 'off',
-            'unicorn/prefer-math-trunc': 'off',
-            'unicorn/prefer-string-replace-all': 'off',
-            'unicorn/prefer-code-point': 'off',
-            'unicorn/prefer-string-slice': 'off',
-            'unicorn/no-array-callback-reference': 'off',
-            'unicorn/no-useless-fallback-in-spread': 'off',
 
             'security-node/non-literal-reg-expr': 'off',
             'security-node/detect-eval-with-expr': 'off',

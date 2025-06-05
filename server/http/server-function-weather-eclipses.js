@@ -608,40 +608,47 @@ function generateLunarEclipseCurrentInterpretation(eclipse, location, cloudCover
 
     interpretation.phenomena.push(`${type} lunar eclipse today`);
 
-    if (type === 'total') {
-        interpretation.phenomena.push(`total eclipse magnitude: ${magnitude.toFixed(2)}`);
+    switch (type) {
+        case 'total': {
+            interpretation.phenomena.push(`total eclipse magnitude: ${magnitude.toFixed(2)}`);
 
-        if (magnitude > 1.7) {
-            interpretation.alerts.push('very deep total lunar eclipse');
-            interpretation.phenomena.push('Moon will appear very dark red');
-        } else if (magnitude > 1.4) interpretation.phenomena.push('deep total eclipse - dark red Moon');
-        else if (magnitude > 1.2) interpretation.phenomena.push('Moon will appear copper-red');
-        else interpretation.phenomena.push('Moon will appear bright red-orange');
+            if (magnitude > 1.7) {
+                interpretation.alerts.push('very deep total lunar eclipse');
+                interpretation.phenomena.push('Moon will appear very dark red');
+            } else if (magnitude > 1.4) interpretation.phenomena.push('deep total eclipse - dark red Moon');
+            else if (magnitude > 1.2) interpretation.phenomena.push('Moon will appear copper-red');
+            else interpretation.phenomena.push('Moon will appear bright red-orange');
 
-        if (danjonScale !== undefined) {
-            const danjonDescriptions = [
-                'very dark eclipse - Moon almost invisible',
-                'dark eclipse - gray or brownish coloration',
-                'deep red or rust-colored eclipse',
-                'brick-red eclipse with dark central shadow',
-                'bright copper-red or orange eclipse',
-            ];
-            interpretation.phenomena.push(danjonDescriptions[danjonScale]);
+            if (danjonScale !== undefined) {
+                const danjonDescriptions = [
+                    'very dark eclipse - Moon almost invisible',
+                    'dark eclipse - gray or brownish coloration',
+                    'deep red or rust-colored eclipse',
+                    'brick-red eclipse with dark central shadow',
+                    'bright copper-red or orange eclipse',
+                ];
+                interpretation.phenomena.push(danjonDescriptions[danjonScale]);
+            }
+
+            if (duration.totality > 0) {
+                const hours = Math.floor(duration.totality / 60),
+                    minutes = Math.round(duration.totality % 60);
+                interpretation.phenomena.push(`totality duration: ${hours}h ${minutes}m`);
+                if (duration.totality > 100) interpretation.phenomena.push('unusually long total phase');
+            }
+            break;
         }
-
-        if (duration.totality > 0) {
-            const hours = Math.floor(duration.totality / 60),
-                minutes = Math.round(duration.totality % 60);
-            interpretation.phenomena.push(`totality duration: ${hours}h ${minutes}m`);
-            if (duration.totality > 100) interpretation.phenomena.push('unusually long total phase');
+        case 'partial': {
+            interpretation.phenomena.push(`partial eclipse magnitude: ${magnitude.toFixed(2)}`);
+            interpretation.phenomena.push(`${Math.round(magnitude * 100)}% of Moon's diameter in umbra`);
+            break;
         }
-    } else if (type === 'partial') {
-        interpretation.phenomena.push(`partial eclipse magnitude: ${magnitude.toFixed(2)}`);
-        interpretation.phenomena.push(`${Math.round(magnitude * 100)}% of Moon's diameter in umbra`);
-    } else if (type === 'penumbral') {
-        interpretation.phenomena.push('subtle penumbral eclipse');
-        if (penumbralMagnitude > 0.9) interpretation.phenomena.push('deep penumbral eclipse - shading may be visible');
-        else interpretation.phenomena.push('difficult to observe without equipment');
+        case 'penumbral': {
+            interpretation.phenomena.push('subtle penumbral eclipse');
+            if (penumbralMagnitude > 0.9) interpretation.phenomena.push('deep penumbral eclipse - shading may be visible');
+            else interpretation.phenomena.push('difficult to observe without equipment');
+            break;
+        }
     }
 
     if (location.latitude !== undefined && location.longitude !== undefined) {
@@ -1086,20 +1093,27 @@ function generateSolarEclipseCurrentInterpretation(eclipse, location, cloudCover
 
     if (eclipse.obscuration < 1) interpretation.phenomena.push(`${Math.round(eclipse.obscuration * 100)}% of Sun's disk covered`);
 
-    if (eclipse.type === 'total') {
-        interpretation.alerts.push('rare total solar eclipse');
-        if (eclipse.duration > 6) interpretation.phenomena.push(`exceptionally long totality: ${eclipse.duration.toFixed(1)} minutes`);
-        else if (eclipse.duration > 4) interpretation.phenomena.push(`long totality duration: ${eclipse.duration.toFixed(1)} minutes`);
-        else interpretation.phenomena.push(`totality duration: ${eclipse.duration.toFixed(1)} minutes`);
-        if (eclipse.path.width > 250) interpretation.phenomena.push(`wide path of totality: ${Math.round(eclipse.path.width)} km`);
-    } else if (eclipse.type === 'annular') {
-        interpretation.alerts.push('annular "ring of fire" solar eclipse');
-        if (eclipse.duration > 10) interpretation.phenomena.push(`very long annular phase: ${eclipse.duration.toFixed(1)} minutes`);
-        else interpretation.phenomena.push(`annular phase duration: ${eclipse.duration.toFixed(1)} minutes`);
-        interpretation.phenomena.push(`ring thickness: ${((1 - eclipse.diameterRatio) * 100).toFixed(1)}% of Sun's diameter`);
-    } else if (eclipse.type === 'partial') {
-        if (eclipse.magnitude > 0.8) interpretation.phenomena.push('deep partial eclipse');
-        else if (eclipse.magnitude > 0.5) interpretation.phenomena.push('significant partial eclipse');
+    switch (eclipse.type) {
+        case 'total': {
+            interpretation.alerts.push('rare total solar eclipse');
+            if (eclipse.duration > 6) interpretation.phenomena.push(`exceptionally long totality: ${eclipse.duration.toFixed(1)} minutes`);
+            else if (eclipse.duration > 4) interpretation.phenomena.push(`long totality duration: ${eclipse.duration.toFixed(1)} minutes`);
+            else interpretation.phenomena.push(`totality duration: ${eclipse.duration.toFixed(1)} minutes`);
+            if (eclipse.path.width > 250) interpretation.phenomena.push(`wide path of totality: ${Math.round(eclipse.path.width)} km`);
+            break;
+        }
+        case 'annular': {
+            interpretation.alerts.push('annular "ring of fire" solar eclipse');
+            if (eclipse.duration > 10) interpretation.phenomena.push(`very long annular phase: ${eclipse.duration.toFixed(1)} minutes`);
+            else interpretation.phenomena.push(`annular phase duration: ${eclipse.duration.toFixed(1)} minutes`);
+            interpretation.phenomena.push(`ring thickness: ${((1 - eclipse.diameterRatio) * 100).toFixed(1)}% of Sun's diameter`);
+            break;
+        }
+        case 'partial': {
+            if (eclipse.magnitude > 0.8) interpretation.phenomena.push('deep partial eclipse');
+            else if (eclipse.magnitude > 0.5) interpretation.phenomena.push('significant partial eclipse');
+            break;
+        }
     }
 
     if (location.latitude !== undefined && location.longitude !== undefined) {

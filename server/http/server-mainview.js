@@ -228,11 +228,11 @@ function __weatherAlerts_update(alerts) {
         .forEach(([alert, _]) => delete __weatherAlerts[alert]);
 }
 function receive_variables(topic, message) {
+    // XXX should gate the variables here at min 15/30 seconds ...
     if (topic.startsWith('alert/')) notifications.notify(message.toString());
     try {
         server_vars.update(topic, JSON.parse(message.toString()));
         if (topic == 'weather/branna' || topic == 'sensors/radiation') {
-            // XXX should not call such heavy calculation on just radiation update ... or something
             const interpretation = getWeatherInterpretation(server_vars.variables());
             server_vars.update('interpretation', interpretation);
             __weatherAlerts_update(interpretation.alerts);

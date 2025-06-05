@@ -6,7 +6,7 @@
 let timezone;
 
 function encodehtml(s) {
-    return s.replaceAll(/&/g, '&amp;').replaceAll(/>/g, '&gt;').replaceAll(/</g, '&lt;').replaceAll(/"/g, '&quot;');
+    return s.replaceAll('&', '&amp;').replaceAll('>', '&gt;').replaceAll('<', '&lt;').replaceAll('"', '&quot;');
 }
 function joinand(items) {
     if (!items || items.length === 0) return '';

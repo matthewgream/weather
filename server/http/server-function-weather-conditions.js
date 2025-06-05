@@ -1369,7 +1369,7 @@ function getAuroraPotential(latitude, month, solarActivity = undefined) {
     return { potential: 'very low', visible: false };
 }
 
-function interpretComplexPhenomena(results, situation, data, data_previous, store, _options) {
+function interpretCombination(results, situation, data, data_previous, store, _options) {
     const { timestamp, temp, humidity, pressure, windSpeed, rainRate, snowDepth, cloudCover } = data;
     const { month, hour, date, location, dewPoint, windChill, heatIndex, daylight } = situation;
 
@@ -1542,7 +1542,7 @@ module.exports = function (_options) {
         interpretSnow,
         interpretIce,
         interpretRadiation,
-        interpretComplexPhenomena,
+        interpretCombination,
     };
 };
 
