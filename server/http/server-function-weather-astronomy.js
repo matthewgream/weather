@@ -229,6 +229,8 @@ function interpretMoonPhase(results, situation, data, _data_previous, store, _op
         } else results.phenomena.push(moonNames[month]);
 
         // Special full moon combinations
+        if (zodiac.position === 'late') results.phenomena.push(`moon in late ${zodiac.sign}, entering ${helpers.getNextSign(zodiac.sign)} soon`);
+        else results.phenomena.push(`moon in ${zodiac.sign} ${zodiac.symbol}`);
         if (zodiac.sign === 'Cancer' || zodiac.sign === 'Pisces' || zodiac.sign === 'Scorpio') results.phenomena.push('emotional full moon in water sign');
     } else if (lunarPhase >= 0.98 || lunarPhase <= 0.02) {
         // New moon
@@ -245,10 +247,14 @@ function interpretMoonPhase(results, situation, data, _data_previous, store, _op
         const meteorShowers = [
             { month: 0, start: 1, end: 5, name: 'Quadrantids meteor shower' },
             { month: 3, start: 16, end: 25, name: 'Lyrids meteor shower' },
-            { month: 4, start: 19, end: 28, name: 'Eta Aquarids meteor shower' },
+            { month: 3, start: 22, end: 23, name: 'April Lyrids peak' }, // Peak night
+            { month: 4, start: 5, end: 7, name: 'Eta Aquarids meteor shower' },
             { month: 7, start: 17, end: 24, name: 'Perseids meteor shower viewing optimal' },
+            { month: 7, start: 28, end: 30, name: 'Delta Aquarids meteor shower' },
             { month: 9, start: 2, end: 7, name: 'Draconids meteor shower' },
             { month: 9, start: 21, end: 22, name: 'Orionids meteor shower' },
+            { month: 10, start: 5, end: 10, name: 'Southern Taurids meteor shower' },
+            { month: 10, start: 12, end: 23, name: 'Northern Taurids meteor shower' },
             { month: 10, start: 17, end: 25, name: 'Leonids meteor shower viewing optimal' },
             { month: 11, start: 7, end: 17, name: 'Geminids meteor shower - best of the year' },
             { month: 11, start: 17, end: 24, name: 'Ursids meteor shower' },
@@ -285,6 +291,8 @@ function interpretMoonPhase(results, situation, data, _data_previous, store, _op
         results.phenomena.push(`${quarterType} quarter moon tonight`);
         if (quarterType === 'first' && hour >= 18 && hour <= 23) results.phenomena.push('moon visible in evening sky');
         else if (quarterType === 'last' && hour >= 0 && hour <= 6) results.phenomena.push('moon visible in morning sky');
+        if (zodiac.position === 'late') results.phenomena.push(`moon in late ${zodiac.sign}, entering ${helpers.getNextSign(zodiac.sign)} soon`);
+        else results.phenomena.push(`moon in ${zodiac.sign} ${zodiac.symbol}`);
     } else {
         if (lunarPhase > 0.02 && lunarPhase < 0.23) results.phenomena.push('waxing crescent moon');
         else if (lunarPhase > 0.27 && lunarPhase < 0.48) results.phenomena.push('waxing gibbous moon');
@@ -295,11 +303,11 @@ function interpretMoonPhase(results, situation, data, _data_previous, store, _op
     }
 
     // Moon Illumination Percentage
-    const illumination = lunarPhase < 0.5 ? Math.round(lunarPhase * 2 * 100) : Math.round((1 - (lunarPhase - 0.5) * 2) * 100);
+    const illumination = Math.round(((1 - Math.cos(lunarPhase * 2 * Math.PI)) / 2) * 100);
     results.phenomena.push(`moon ${illumination}% illuminated`);
 
     // Noctilucent Clouds (Important for latitude 59.66°N)
-    if (month >= 5 && month <= 7 && location.latitude > 50) if (hour >= 22 || hour <= 2) results.phenomena.push('noctilucent clouds possible in northern sky');
+    if (month >= 5 && month <= 7 && location.latitude > 50) if (hour >= 21 || hour <= 4) results.phenomena.push('noctilucent clouds possible in northern sky');
 
     // Moon and tides (for coastal areas)
     if (location.elevation < 50 && location.forestCoverage !== 'high') {
@@ -313,12 +321,10 @@ function interpretMoonPhase(results, situation, data, _data_previous, store, _op
     // Aurora predictions
     if (location.latitude > 55 && cloudCover < 50)
         if ((month >= 8 && month <= 10) || (month >= 2 && month <= 4))
-            if ((hour >= 22 || hour <= 2) && (lunarPhase <= 0.3 || lunarPhase >= 0.7))
-                // Equinox months have higher aurora activity
-                results.phenomena.push('dark skies favorable for aurora viewing - check forecasts');
-    if (location.latitude > 59 && location.latitude < 60)
-        if ((month >= 8 && month <= 10) || (month >= 2 && month <= 4))
-            if ((hour >= 21 || hour <= 3) && cloudCover < 50) results.phenomena.push('aurora possible with moderate solar activity (Kp 4+)');
+            if (hour >= 21 || hour <= 3) {
+                if (lunarPhase <= 0.3 || lunarPhase >= 0.7) results.phenomena.push('dark skies favorable for aurora viewing');
+                if (location.latitude > 59) results.phenomena.push('aurora possible with moderate solar activity (Kp 4+)');
+            }
 
     // Basic planetary visibility
     if (cloudCover < 50) {
@@ -330,6 +336,9 @@ function interpretMoonPhase(results, situation, data, _data_previous, store, _op
             if (month === 11 || month === 0) results.phenomena.push('Mars approaching opposition - bright and visible all night');
         }
     }
+
+    if ((lunarPhase > 0.05 && lunarPhase < 0.15) || (lunarPhase > 0.85 && lunarPhase < 0.95))
+        if (cloudCover < 30) results.phenomena.push('earthshine visible on dark portion of moon');
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
