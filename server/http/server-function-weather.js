@@ -2,7 +2,6 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const helpers = require('./server-function-weather-helpers.js');
-let interpreters = {};
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -50,7 +49,7 @@ function __weatherSituation(location, data) {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function getWeatherInterpretationImpl(location, data, data_previous, store, options) {
+function getWeatherInterpretationImpl(interpreters, location, data, data_previous, store, options) {
     const situation = __weatherSituation(location, data);
     const results = { conditions: [], phenomena: [], alerts: [] };
     Object.entries(interpreters).forEach(([name, func]) => {
@@ -69,7 +68,8 @@ function getWeatherInterpretationImpl(location, data, data_previous, store, opti
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-let weatherOptions = {};
+let weatherOptions = {},
+    weatherInterpreters = {};
 const weatherCache = {},
     weatherStore = {};
 const CACHE_DURATION = (24 + 1) * 60 * 60 * 1000; // 25 hours, for now
@@ -88,7 +88,7 @@ function getWeatherInterpretation(location_data, data, options = {}) {
         lastPrunned = Date.now();
     }
     weatherCache[data.timestamp] = data;
-    return getWeatherInterpretationImpl(location_data, data, weatherCache, weatherStore, { ...weatherOptions, ...options });
+    return getWeatherInterpretationImpl(weatherInterpreters, location_data, data, weatherCache, weatherStore, { ...weatherOptions, ...options });
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -96,14 +96,15 @@ function getWeatherInterpretation(location_data, data, options = {}) {
 
 function initialise(options) {
     weatherOptions = options;
-    interpreters = {
+    weatherInterpreters = {
         ...require('./server-function-weather-conditions.js')(options),
         ...require('./server-function-weather-calendar.js')(options),
+        ...require('./server-function-weather-phenology.js')(options),
         ...require('./server-function-weather-astronomy.js')(options),
         ...require('./server-function-weather-eclipses.js')(options),
     };
     console.error(
-        `weather: loaded ${Object.keys(interpreters).length} interpreters: '${Object.keys(interpreters)
+        `weather: loaded ${Object.keys(weatherInterpreters).length} interpreters: '${Object.keys(weatherInterpreters)
             .map((name) => name.replaceAll('interpret', ''))
             .join(', ')}', with options: '${JSON.stringify(options)}'`
     );
