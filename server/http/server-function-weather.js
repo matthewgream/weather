@@ -77,8 +77,6 @@ let lastPrunned = Date.now();
 const PRUNE_INTERVAL = 5 * 60 * 1000;
 
 function getWeatherInterpretation(location_data, data, options = {}) {
-    // XXX should suppress minor updates to singular variables, or something like that
-    // XXX ants pants solution is that each interpret specifies which variables it works from and is only called when that variable changes
     // XXX should persist the cache and reload it ... maybe also the store ...
     const expiration = data.timestamp - CACHE_DURATION;
     if (lastPrunned + PRUNE_INTERVAL < Date.now()) {
@@ -98,8 +96,8 @@ function initialise(options) {
     weatherOptions = options;
     weatherInterpreters = {
         ...require('./server-function-weather-conditions.js')(options),
-        ...require('./server-function-weather-calendar.js')(options),
         ...require('./server-function-weather-phenology.js')(options),
+        ...require('./server-function-weather-calendar.js')(options),
         ...require('./server-function-weather-astronomy.js')(options),
         ...require('./server-function-weather-eclipses.js')(options),
     };

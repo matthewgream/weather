@@ -163,6 +163,7 @@ function getWeatherInterpretation(vars) {
                 radiationCpm: varsRadiation.cpm,
                 radiationAcpm: varsRadiation.acpm,
                 radiationUsvh: varsRadiation.usvh,
+                cloudCover: undefined,
                 snowDepth: undefined,
                 iceDepth: undefined,
             },
@@ -185,6 +186,7 @@ const notifications = require('./server-function-push.js')(app, '/push', {
     vapidKeyFile: 'push-vapid-keys.json',
     subscriptionsFile: 'push-subscriptions.json',
     maxHistoryLength: 30,
+    expiration: 5 * 60,
 });
 diagnostics.registerDiagnosticsSource('Notifications', () => notifications.getDiagnostics());
 console.log(`Loaded 'push-notifications' on '/push'`);
@@ -227,20 +229,27 @@ function __weatherAlerts_update(alerts) {
         .filter(([alert, timestamp]) => !alerts.includes(alert) && timestamp < now - __weatherExpiry)
         .forEach(([alert, _]) => delete __weatherAlerts[alert]);
 }
+
+const pending_variables = [];
 function receive_variables(topic, message) {
-    // XXX should gate the variables here at min 15/30 seconds ...
     if (topic.startsWith('alert/')) notifications.notify(message.toString());
+    else pending_variables.push({ topic, vars: JSON.parse(message.toString()) });
+}
+function process_variables() {
+    if (pending_variables.length === 0) return;
     try {
-        server_vars.update(topic, JSON.parse(message.toString()));
-        if (topic == 'weather/branna' || topic == 'sensors/radiation') {
-            const interpretation = getWeatherInterpretation(server_vars.variables());
-            server_vars.update('interpretation', interpretation);
-            __weatherAlerts_update(interpretation.alerts);
+        while (pending_variables.length > 0) {
+            const { topic, vars } = pending_variables.shift();
+            server_vars.update(topic, vars);
         }
+        const interpretation = getWeatherInterpretation(server_vars.variables());
+        server_vars.update('interpretation', interpretation);
+        __weatherAlerts_update(interpretation.alerts);
     } catch (e) {
-        console.error(`Error processing mqtt message (topic='${topic}':`, e);
+        console.error(`process_variables: error:`, e);
     }
 }
+setInterval(process_variables, 15 * 1000);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -251,8 +260,12 @@ mqtt_client.on('connect', () =>
     mqtt_client.subscribe(configData.CONTENT_DATA_SUBS, () => console.log(`mqtt connected & subscribed for '${configData.CONTENT_DATA_SUBS}'`))
 );
 mqtt_client.on('message', (topic, message) => {
-    if (topic.startsWith('snapshots')) receive_snapshots(topic, message);
-    else receive_variables(topic, message);
+    try {
+        if (topic.startsWith('snapshots')) receive_snapshots(topic, message);
+        else receive_variables(topic, message);
+    } catch (e) {
+        console.error(`mqtt: delivery failed with topic='${topic}', error:`, e);
+    }
 });
 console.log(`Loaded 'mqtt:subscriber' using 'server=${configData.MQTT}, topics=[${configData.CONTENT_DATA_SUBS.join(', ')}]'`);
 
@@ -313,10 +326,10 @@ app.use((req, res) => {
 });
 
 const httpServer = require('http').createServer(app);
-const httpsServer = require('https').createServer(credentials, app);
 httpServer.listen(80, () => {
     console.log(`Loaded 'http' using 'port=${httpServer.address().port}'`);
 });
+const httpsServer = require('https').createServer(credentials, app);
 httpsServer.listen(443, () => {
     console.log(`Loaded 'https' using 'port=${httpsServer.address().port}'`);
 });

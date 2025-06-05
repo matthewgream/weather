@@ -26,14 +26,35 @@ const weather_location = {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const weather_cache = {};
+const weatherCache = {};
+let weatherCacheUpdated, weatherCacheProcessed;
 
-function weather_process(topic, data) {
-    console.log(`weather: [${new Date().toISOString()}] received '${topic}':`, JSON.stringify(data, undefined, 2));
-    weather_cache[topic] = data;
-    if (weather_cache['weather/branna'] && weather_cache['sensors/radiation']) {
-        const weatherData = weather_cache['weather/branna'],
-            radiationData = weather_cache['sensors/radiation'];
+function weather_receive(topic, data) {
+    console.log(`weather: [${new Date().toISOString()}] receive, '${topic}'`);
+    weatherCache[topic] = data;
+    weatherCacheUpdated = Date.now();
+}
+
+function weather_process() {
+    try {
+        const snapshot = {
+            'weather/branna': weatherCache['weather/branna'] ? { ...weatherCache['weather/branna'] } : undefined,
+            'sensors/radiation': weatherCache['sensors/radiation'] ? { ...weatherCache['sensors/radiation'] } : undefined,
+        };
+
+        if (!snapshot['weather/branna'] || !snapshot['sensors/radiation']) {
+            console.log(`weather: [${new Date().toISOString()}] process, skipping - missing required data`);
+            return;
+        }
+        if (weatherCacheUpdated && weatherCacheProcessed && weatherCacheUpdated === weatherCacheProcessed) {
+            console.log(`weather: [${new Date().toISOString()}] process, skipping - no updates received`);
+            return;
+        }
+        weatherCacheProcessed = weatherCacheUpdated;
+
+        const weatherData = snapshot['weather/branna'],
+            radiationData = snapshot['sensors/radiation'];
+        console.log(`weather: [${new Date().toISOString()}] process, snapshot:`, JSON.stringify(snapshot, undefined, 2));
         const interpretation = weather_module.getWeatherInterpretation(weather_location, {
             timestamp: Date.now(),
             temp: weatherData.temp,
@@ -52,9 +73,28 @@ function weather_process(topic, data) {
             snowDepth: undefined,
             iceDepth: undefined,
         });
-        console.log(`weather: [${new Date().toISOString()}] returned:`, JSON.stringify(interpretation, undefined, 2));
+        console.log(`weather: [${new Date().toISOString()}] process, response:`, JSON.stringify(interpretation, undefined, 2));
+    } catch (e) {
+        console.error(`weather: [${new Date().toISOString()}] process, error:`, e);
     }
 }
+
+let weatherInterval;
+function startWeatherProcessing() {
+    if (weatherInterval) clearInterval(weatherInterval);
+    weatherInterval = setInterval(weather_process, 15 * 1000);
+    weatherCacheProcessed = undefined;
+    console.log(`weather: [${new Date().toISOString()}] process, started (15 seconds)`);
+}
+function stopWeatherProcessing() {
+    if (weatherInterval) {
+        clearInterval(weatherInterval);
+        weatherInterval = undefined;
+        console.log(`weather: [${new Date().toISOString()}] process, stopped`);
+    }
+}
+
+startWeatherProcessing();
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -79,7 +119,7 @@ client.on('error', (error) => {
 });
 client.on('message', (topic, message) => {
     try {
-        weather_process(topic, JSON.parse(message.toString()));
+        weather_receive(topic, JSON.parse(message.toString()));
     } catch (e) {
         console.error(`mqtt: weather_process '${topic}' error:`, e);
         console.error('message:', message.toString());

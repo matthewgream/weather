@@ -1,3 +1,5 @@
+// XXX review
+
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -73,23 +75,19 @@ function interpretCalendar(results, situation, data, data_previous, store, _opti
 
         // Twilight phenomena (all seasons)
         switch (daylightPhase) {
-            case 'civil_twilight': {
+            case 'civil_twilight':
                 results.phenomena.push('civil twilight');
                 if (cloudCover !== undefined && cloudCover < 30) results.phenomena.push('clear twilight sky');
                 break;
-            }
-            case 'nautical_twilight': {
+            case 'nautical_twilight':
                 results.phenomena.push('nautical twilight - stars becoming visible');
                 break;
-            }
-            case 'astronomical_twilight': {
+            case 'astronomical_twilight':
                 results.phenomena.push('astronomical twilight - deep dusk');
                 break;
-            }
-            case 'civil_dawn': {
+            case 'civil_dawn':
                 results.phenomena.push('civil dawn - morning twilight');
                 break;
-            }
         }
 
         // Temperature-related time patterns
@@ -123,22 +121,18 @@ function interpretCalendar(results, situation, data, data_previous, store, _opti
     // Seasonal interpretations with Nordic specifics
     if (temp !== undefined && season)
         switch (season) {
-            case 'winter': {
+            case 'winter':
                 handleWinterPhenomena(results, situation, data, store);
                 break;
-            }
-            case 'summer': {
+            case 'summer':
                 handleSummerPhenomena(results, situation, data, store);
                 break;
-            }
-            case 'spring': {
+            case 'spring':
                 handleSpringPhenomena(results, situation, data, store);
                 break;
-            }
-            case 'autumn': {
+            case 'autumn':
                 handleAutumnPhenomena(results, situation, data, store);
                 break;
-            }
         }
 
     // Special date-based phenomena
@@ -217,21 +211,18 @@ function handleSpringPhenomena(results, situation, data, store) {
     const { month, hour, daylight } = situation;
 
     switch (month) {
-        case 3: {
+        case 3:
             if (temp > 10) results.phenomena.push('early spring warmth');
             if (snowDepth > 0 && temp > 5) results.phenomena.push('spring snowmelt conditions');
             break;
-        }
-        case 4: {
+        case 4:
             if (rainRate > 0 && temp > 5) results.phenomena.push('spring forest rain');
             if (temp > 15) results.phenomena.push('warm spring day');
             break;
-        }
-        case 5: {
+        case 5:
             if (temp > 20) results.phenomena.push('early summer warmth arriving');
             if (hour >= 4 && hour <= 6 && daylight.isDaytime) results.phenomena.push('spring dawn chorus time');
             break;
-        }
     }
 
     // Spring daylight changes
@@ -246,22 +237,19 @@ function handleAutumnPhenomena(results, situation, data, store) {
     const { month, hour, daylight } = situation;
 
     switch (month) {
-        case 9: {
+        case 9:
             if (temp < 5) results.phenomena.push('early autumn chill');
             if (hour >= 6 && hour <= 8 && temp < 10 && humidity > 80) results.phenomena.push('autumn morning mist likely');
             break;
-        }
-        case 10: {
+        case 10:
             if (rainRate > 0 && temp < 10) results.phenomena.push('cold autumn rain');
             if (windSpeed > 10) results.phenomena.push('autumn storm conditions');
             if (temp < 0) results.phenomena.push('first frost conditions');
             break;
-        }
-        case 11: {
+        case 11:
             if (temp > 8) results.phenomena.push('mild late autumn day');
             if (!daylight.isDaytime && hour === 16) results.phenomena.push('early darkness of late autumn');
             break;
-        }
     }
 
     // Autumn daylight changes

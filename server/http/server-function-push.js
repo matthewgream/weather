@@ -134,7 +134,7 @@ class PushNotificationManager {
             timestamp: new Date().toISOString(),
         };
         const options = {
-            TTL: 5 * 60, // seconds
+            TTL: this.options.expiration || 5 * 60, // seconds
             // topic: 32 chars
             // urgency: very-low,low,normal,high
         };

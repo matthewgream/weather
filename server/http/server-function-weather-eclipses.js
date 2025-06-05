@@ -1,3 +1,5 @@
+// XXX not functioning properly, review
+
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -475,7 +477,7 @@ function calculateLunarEclipseVisibility(eclipse, latitude, longitude) {
     for (const point of checkPoints) {
         if (point.time) {
             const altitude = getLunarAltitude(point.time, latitude, longitude),
-                visible = altitude > 0;
+                visible = altitude > -0.5;
             visibility.phases[point.name] = {
                 time: point.time,
                 altitude,
@@ -1012,7 +1014,7 @@ function calculateSolarEclipseVisibility(eclipse, latitude, longitude) {
     } else if (eclipse.type === 'partial') {
         // Partial eclipses visible over large area: Simplified visibility check
         const solarAltitude = getSolarAltitude(eclipse.date, latitude, longitude);
-        if (solarAltitude > 0) {
+        if (solarAltitude > -0.5) {
             visibility.visible = true;
             visibility.type = 'partial';
             visibility.magnitude = eclipse.magnitude * 0.5; // Simplified
