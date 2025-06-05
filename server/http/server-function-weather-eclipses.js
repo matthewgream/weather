@@ -35,25 +35,25 @@ function createLookupMap(eclipses) {
     return map;
 }
 
-function updateLookupMap(currentMap, precomputeFunc, currentDate, previousDate) {
+function updateLookupMap(currentMap, precomputeFunc, currentDate, previousDate, daysAhead = 60, daysBefore = 5) {
     const now = new Date(currentDate);
     now.setUTCHours(0, 0, 0, 0);
     if (!previousDate) {
         const startDate = new Date(now);
-        startDate.setDate(startDate.getDate() - 5);
+        startDate.setDate(startDate.getDate() - daysBefore);
         const endDate = new Date(now);
-        endDate.setDate(endDate.getDate() + 60);
+        endDate.setDate(endDate.getDate() + daysAhead);
         currentMap = createLookupMap(precomputeFunc(startDate, endDate));
         return [now, currentMap];
     }
-    if (Math.floor((now - previousDate) / (1000 * 60 * 60 * 24)) > 5) {
+    if (Math.floor((now - previousDate) / (1000 * 60 * 60 * 24)) > daysBefore) {
         const startDateNew = new Date(now);
-        startDateNew.setDate(startDateNew.getDate() + 50);
+        startDateNew.setDate(startDateNew.getDate() + (daysAhead - 2 * daysBefore));
         const endDateNew = new Date(now);
-        endDateNew.setDate(endDateNew.getDate() + 60);
+        endDateNew.setDate(endDateNew.getDate() + daysAhead);
         for (const [key, value] of createLookupMap(precomputeFunc(startDateNew, endDateNew))) currentMap.set(key, value);
         const cutoffDate = new Date(now);
-        cutoffDate.setDate(cutoffDate.getDate() - 5);
+        cutoffDate.setDate(cutoffDate.getDate() - daysBefore);
         const [cutoffKey] = cutoffDate.toISOString().split('T');
         for (const [key] of currentMap) if (key < cutoffKey) currentMap.delete(key);
         return [now, currentMap];
@@ -726,7 +726,9 @@ function generateLunarEclipseUpcomingInterpretation(date, location, lookupCache,
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 let lunarEclipseLookupCache = new Map();
-const lunarEclipseLookupAheadDays = 14;
+let lunarEclipseLookupAheadDays = 14,
+    lunarEclipseLookupCacheDaysBefore = 5,
+    lunarEclipseLookupCacheDaysAhead = 60;
 
 function interpretLunarEclipses(results, situation, data, _data_previous, store, _options) {
     const { date, location } = situation;
@@ -749,7 +751,9 @@ function interpretLunarEclipses(results, situation, data, _data_previous, store,
             lunarEclipseLookupCache,
             precomputeLunarEclipses,
             date,
-            store.lunarEclipse.cacheUpdated
+            store.lunarEclipse.cacheUpdated,
+            lunarEclipseLookupCacheDaysAhead,
+            lunarEclipseLookupCacheDaysBefore
         );
         const eclipse = lunarEclipseLookupCache.get(todayKeyStr);
         interpretation = eclipse
@@ -1192,7 +1196,9 @@ function generateSolarEclipseUpcomingInterpretation(date, location, lookupCache,
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 let solarEclipseLookupCache = new Map();
-const solarEclipseLookupAheadDays = 14;
+let solarEclipseLookupAheadDays = 14,
+    solarEclipseLookupCacheDaysBefore = 5,
+    solarEclipseLookupCacheDaysAhead = 60;
 
 function interpretSolarEclipses(results, situation, data, _data_previous, store, _options) {
     const { date, location } = situation;
@@ -1215,7 +1221,9 @@ function interpretSolarEclipses(results, situation, data, _data_previous, store,
             solarEclipseLookupCache,
             precomputeSolarEclipses,
             date,
-            store.solarEclipse.cacheUpdated
+            store.solarEclipse.cacheUpdated,
+            solarEclipseLookupCacheDaysAhead,
+            solarEclipseLookupCacheDaysBefore
         );
         const eclipse = solarEclipseLookupCache.get(todayKeyStr);
         interpretation = eclipse
@@ -1237,7 +1245,11 @@ function interpretSolarEclipses(results, situation, data, _data_previous, store,
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-module.exports = function (_options) {
+module.exports = function (options) {
+    if (options?.lunarEclipse?.daysBefore) lunarEclipseLookupCacheDaysBefore = options.lunarEclipse.daysBefore;
+    if (options?.lunarEclipse?.daysAhead) lunarEclipseLookupCacheDaysAhead = options.lunarEclipse.daysAhead;
+    if (options?.solarEclipse?.daysBefore) solarEclipseLookupCacheDaysBefore = options.solarEclipse.daysBefore;
+    if (options?.solarEclipse?.daysAhead) solarEclipseLookupCacheDaysAhead = options.solarEclipse.daysAhead;
     return {
         interpretLunarEclipses,
         interpretSolarEclipses,

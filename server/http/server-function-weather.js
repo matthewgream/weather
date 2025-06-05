@@ -1,14 +1,8 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const options = {};
 const helpers = require('./server-function-weather-helpers.js');
-const interpreters = {
-    ...require('./server-function-weather-conditions.js')(options),
-    ...require('./server-function-weather-calendar.js')(options),
-    ...require('./server-function-weather-astronomy.js')(options),
-    ...require('./server-function-weather-eclipses.js')(options),
-};
+let interpreters = {};
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -100,9 +94,27 @@ function getWeatherInterpretation(location_data, data, options = {}) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-module.exports = function (options = {}) {
+function initialise(options) {
     weatherOptions = options;
+    interpreters = {
+        ...require('./server-function-weather-conditions.js')(options),
+        ...require('./server-function-weather-calendar.js')(options),
+        ...require('./server-function-weather-astronomy.js')(options),
+        ...require('./server-function-weather-eclipses.js')(options),
+    };
+    console.error(
+        `weather: loaded ${Object.keys(interpreters).length} interpreters: '${Object.keys(interpreters)
+            .map((name) => name.replaceAll('interpret', ''))
+            .join(', ')}', with options: '${JSON.stringify(options)}'`
+    );
     return { getWeatherInterpretation };
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+module.exports = function (options = {}) {
+    return initialise(options);
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
