@@ -17,6 +17,7 @@ const weather_location = {
     annualSnowfall: 150,
     forestCoverage: 'high',
     nearbyLakes: true,
+    lightPollution: 'low',
     climateType: 'humid continental',
     location: 'Central Sweden',
     hemisphere: 'northern',

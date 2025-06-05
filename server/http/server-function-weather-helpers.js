@@ -323,6 +323,82 @@ function getLunarDistance(date = new Date()) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+function getLunarZodiacSign(date = new Date()) {
+    // Calculate days since J2000.0 epoch
+    const msPerDay = 86400000,
+        j2000 = new Date('2000-01-01T12:00:00Z'),
+        daysSinceJ2000 = (date - j2000) / msPerDay;
+
+    // Mean lunar longitude (simplified)
+    const L = (218.316 + 13.176396 * daysSinceJ2000) % 360;
+    // Mean lunar anomaly
+    const M = (134.963 + 13.064993 * daysSinceJ2000) % 360;
+    // Mean elongation
+    const D = (297.85 + 12.190749 * daysSinceJ2000) % 360;
+
+    // Convert to radians for calculation
+    const toRad = Math.PI / 180,
+        Mrad = M * toRad,
+        Drad = D * toRad;
+
+    // Apply main corrections for true longitude, and normalize to 0-360
+    let longitude = L;
+    longitude += 6.289 * Math.sin(Mrad);
+    longitude += 1.274 * Math.sin(2 * Drad - Mrad);
+    longitude += 0.658 * Math.sin(2 * Drad);
+    longitude += 0.214 * Math.sin(2 * Mrad);
+    longitude -= 0.186 * Math.sin(Mrad);
+    longitude -= 0.114 * Math.sin(2 * Drad);
+    longitude = ((longitude % 360) + 360) % 360;
+
+    // Zodiac signs start at these ecliptic longitudes
+    const zodiacSigns = [
+        { sign: 'Aries', symbol: '♈', start: 0 },
+        { sign: 'Taurus', symbol: '♉', start: 30 },
+        { sign: 'Gemini', symbol: '♊', start: 60 },
+        { sign: 'Cancer', symbol: '♋', start: 90 },
+        { sign: 'Leo', symbol: '♌', start: 120 },
+        { sign: 'Virgo', symbol: '♍', start: 150 },
+        { sign: 'Libra', symbol: '♎', start: 180 },
+        { sign: 'Scorpio', symbol: '♏', start: 210 },
+        { sign: 'Sagittarius', symbol: '♐', start: 240 },
+        { sign: 'Capricorn', symbol: '♑', start: 270 },
+        { sign: 'Aquarius', symbol: '♒', start: 300 },
+        { sign: 'Pisces', symbol: '♓', start: 330 },
+    ];
+
+    // Find which sign the Moon is in
+    const { sign, symbol } = zodiacSigns[Math.floor(longitude / 30)];
+
+    // Calculate how far through the sign (0-30 degrees)
+    const degreesInSign = longitude % 30;
+
+    // Determine if early, middle, or late in sign
+    let position;
+    if (degreesInSign < 10) position = 'early';
+    else if (degreesInSign < 20) position = 'middle';
+    else position = 'late';
+
+    return {
+        sign,
+        symbol,
+        longitude,
+        degreesInSign,
+        position,
+        // The Moon spends about 2.5 days in each sign
+        approximateDaysInSign: 2.5,
+    };
+}
+
+function getNextSign(currentSign) {
+    const signs = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces'];
+    const currentIndex = signs.indexOf(currentSign);
+    return signs[(currentIndex + 1) % 12];
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 function addEvent(store, category, eventId, message, durationHours = 24) {
     if (!store.events) {
         store.events = {};
@@ -395,6 +471,8 @@ module.exports = {
     isNearCrossQuarter,
     getLunarPhase,
     getLunarDistance,
+    getLunarZodiacSign,
+    getNextSign,
     addEvent,
     getEvents,
     checkEventCooldown,

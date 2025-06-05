@@ -34,6 +34,7 @@ configData.LOCATION = {
     annualSnowfall: 150, // cm
     forestCoverage: 'high',
     nearbyLakes: true,
+    lightPollution: 'low',
     climateType: 'humid continental',
     location: 'Central Sweden',
     hemisphere: 'northern',
