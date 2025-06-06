@@ -6,27 +6,21 @@
 const msPerDay = 1000 * 60 * 60 * 24;
 
 function dateToJulianDateUTC(date) {
-    const year = date.getUTCFullYear(),
-        month = date.getUTCMonth() + 1,
-        day = date.getUTCDate(),
-        hour = date.getUTCHours(),
-        minute = date.getUTCMinutes(),
-        second = date.getUTCSeconds();
-    const a = Math.floor((14 - month) / 12),
-        y = year + 4800 - a,
-        m = month + 12 * a - 3;
-    return (
-        day +
-        Math.floor((153 * m + 2) / 5) +
-        365 * y +
-        Math.floor(y / 4) -
-        Math.floor(y / 100) +
-        Math.floor(y / 400) -
-        32045 +
-        (hour - 12) / 24 +
-        minute / 1440 +
-        second / 86400
-    );
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth() + 1;
+    const day = date.getUTCDate();
+    const hour = date.getUTCHours();
+    const minute = date.getUTCMinutes();
+    const second = date.getUTCSeconds();
+    let y = year,
+        m = month;
+    if (month <= 2) {
+        y = year - 1;
+        m = month + 12;
+    }
+    const a = Math.floor(y / 100),
+        b = 2 - a + Math.floor(a / 4);
+    return Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (m + 1)) + day + b - 1524.5 + (hour + minute / 60 + second / 3600) / 24;
 }
 
 function localSiderealTime(jd, longitude) {
@@ -92,43 +86,82 @@ function getDaylightHours(latitude, longitude, date = new Date()) {
     const solarNoon = 12 - eqTime / 60 - longitude / 15;
     const cosHourAngle =
         (Math.cos((90.8333 * Math.PI) / 180) - Math.sin(latitudeRad) * Math.sin(declination)) / (Math.cos(latitudeRad) * Math.cos(declination));
-    const hourAngle = cosHourAngle >= -1 && cosHourAngle <= 1 ? (Math.acos(cosHourAngle) * 180) / Math.PI / 15 : 0;
-    const cosCivilHourAngle =
-        (Math.cos((96 * Math.PI) / 180) - Math.sin(latitudeRad) * Math.sin(declination)) / (Math.cos(latitudeRad) * Math.cos(declination)); // 90 + 6 degrees
-    const civilHourAngle =
-        cosCivilHourAngle >= -1 && cosCivilHourAngle <= 1 ? (Math.acos(cosCivilHourAngle) * 180) / Math.PI / 15 : cosCivilHourAngle < -1 ? 12 : 0;
     const utcOffset = -date.getTimezoneOffset() / 60;
+
+    // Twilight angle calculations
+    const angles = {
+        daylight: -0.833, // Standard sunrise/sunset with refraction
+        civil: -6,
+        nautical: -12,
+        astronomical: -18,
+    };
+    const times = {};
+    for (const [type, angle] of Object.entries(angles)) {
+        const cosHourAngle =
+            (Math.cos(((90 - angle) * Math.PI) / 180) - Math.sin(latitudeRad) * Math.sin(declination)) / (Math.cos(latitudeRad) * Math.cos(declination));
+        if (cosHourAngle >= -1 && cosHourAngle <= 1) {
+            const hourAngle = (Math.acos(cosHourAngle) * 180) / Math.PI / 15;
+            times[type + 'Dawn'] = normalizeTime(solarNoon - hourAngle + utcOffset);
+            times[type + 'Dusk'] = normalizeTime(solarNoon + hourAngle + utcOffset);
+        } else if (cosHourAngle < -1) {
+            // Sun never goes below this angle (midnight sun period)
+            times[type + 'Dawn'] = undefined;
+            times[type + 'Dusk'] = undefined;
+        } else {
+            // Sun never rises above this angle (polar night)
+            times[type + 'Dawn'] = undefined;
+            times[type + 'Dusk'] = undefined;
+        }
+    }
+
     return {
-        sunriseDecimal: normalizeTime(solarNoon - hourAngle + utcOffset),
-        sunsetDecimal: normalizeTime(solarNoon + hourAngle + utcOffset),
-        civilDawnDecimal: normalizeTime(solarNoon - civilHourAngle + utcOffset),
-        civilDuskDecimal: normalizeTime(solarNoon + civilHourAngle + utcOffset),
-        daylightHours: cosHourAngle < -1 ? 24 : cosHourAngle > 1 ? 0 : 2 * hourAngle,
+        sunriseDecimal: times.daylightDawn,
+        sunsetDecimal: times.daylightDusk,
+        civilDawnDecimal: times.civilDawn,
+        civilDuskDecimal: times.civilDusk,
+        nauticalDawnDecimal: times.nauticalDawn,
+        nauticalDuskDecimal: times.nauticalDusk,
+        astronomicalDawnDecimal: times.astronomicalDawn,
+        astronomicalDuskDecimal: times.astronomicalDusk,
+        daylightHours:
+            times.daylightDawn && times.daylightDusk
+                ? times.daylightDusk - times.daylightDawn + (times.daylightDusk < times.daylightDawn ? 24 : 0)
+                : cosHourAngle < -1
+                  ? 24
+                  : 0,
         isDaytime:
-            date.getHours() + date.getMinutes() / 60 > normalizeTime(solarNoon - hourAngle + utcOffset) &&
-            date.getHours() + date.getMinutes() / 60 < normalizeTime(solarNoon + hourAngle + utcOffset),
+            times.daylightDawn &&
+            times.daylightDusk &&
+            date.getHours() + date.getMinutes() / 60 > times.daylightDawn &&
+            date.getHours() + date.getMinutes() / 60 < times.daylightDusk,
         isDST: getDST(date),
+        isMidnightSun: times.daylightDawn === null,
+        isPolarNight: times.daylightDawn === undefined,
     };
 }
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
 
 function getDaylightPhase(currentHourDecimal, daylight) {
     if (daylight.isDaytime) return 'day';
 
-    // Calculate nautical and astronomical twilight times
-    const nauticalDawnDecimal = daylight.civilDawnDecimal - 1, // Approximate
-        nauticalDuskDecimal = daylight.civilDuskDecimal + 1, // Approximate
-        astronomicalDawnDecimal = nauticalDawnDecimal - 1, // Approximate
-        astronomicalDuskDecimal = nauticalDuskDecimal + 1; // Approximate
+    // Handle special cases first
+    if (daylight.isMidnightSun) return 'midnight_sun';
+    if (daylight.isPolarNight) return 'polar_night';
 
-    if (currentHourDecimal >= daylight.civilDawnDecimal && currentHourDecimal < daylight.sunriseDecimal) return 'civil_dawn';
-    else if (currentHourDecimal >= daylight.sunsetDecimal && currentHourDecimal <= daylight.civilDuskDecimal) return 'civil_twilight';
-    else if (currentHourDecimal >= nauticalDawnDecimal && currentHourDecimal < daylight.civilDawnDecimal) return 'nautical_dawn';
-    else if (currentHourDecimal > daylight.civilDuskDecimal && currentHourDecimal <= nauticalDuskDecimal) return 'nautical_twilight';
-    else if (currentHourDecimal >= astronomicalDawnDecimal && currentHourDecimal < nauticalDawnDecimal) return 'astronomical_dawn';
-    else if (currentHourDecimal > nauticalDuskDecimal && currentHourDecimal <= astronomicalDuskDecimal) return 'astronomical_twilight';
+    // Check each twilight phase
+    if (daylight.astronomicalDawn === undefined || daylight.astronomicalDusk === undefined) {
+        // No astronomical twilight (continuous twilight in summer)
+        if (daylight.nauticalDawn && currentHourDecimal >= daylight.nauticalDawn && currentHourDecimal < daylight.sunriseDecimal) return 'nautical_dawn';
+        else if (daylight.sunsetDecimal && currentHourDecimal >= daylight.sunsetDecimal && currentHourDecimal <= daylight.nauticalDusk) return 'nautical_dusk';
+        else return 'white_night'; // Special case for high latitudes
+    }
 
+    // Normal twilight progression
+    if (currentHourDecimal >= daylight.astronomicalDawn && currentHourDecimal < daylight.nauticalDawn) return 'astronomical_dawn';
+    else if (currentHourDecimal >= daylight.nauticalDawn && currentHourDecimal < daylight.civilDawn) return 'nautical_dawn';
+    else if (currentHourDecimal >= daylight.civilDawn && currentHourDecimal < daylight.sunriseDecimal) return 'civil_dawn';
+    else if (currentHourDecimal >= daylight.sunsetDecimal && currentHourDecimal < daylight.civilDusk) return 'civil_dusk';
+    else if (currentHourDecimal >= daylight.civilDusk && currentHourDecimal < daylight.nauticalDusk) return 'nautical_dusk';
+    else if (currentHourDecimal >= daylight.nauticalDusk && currentHourDecimal < daylight.astronomicalDusk) return 'astronomical_dusk';
     return 'night';
 }
 
@@ -346,6 +379,49 @@ function isNearCrossQuarter(date = new Date(), hemisphere = 'northern', daysWind
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+function getSolarPosition(date, latitude, longitude) {
+    const jd = dateToJulianDateUTC(date),
+        T = (jd - 2451545) / 36525;
+
+    // Mean longitude of sun
+    const L0 = (280.46646 + 36000.76983 * T + 0.0003032 * T * T) % 360;
+    // Mean anomaly of sun
+    const M = (357.52911 + 35999.05029 * T - 0.0001537 * T * T) % 360;
+    const Mrad = (M * Math.PI) / 180;
+    // Equation of center
+    const C = (1.914602 - 0.004817 * T - 0.000014 * T * T) * Math.sin(Mrad) + (0.019993 - 0.000101 * T) * Math.sin(2 * Mrad) + 0.000289 * Math.sin(3 * Mrad);
+    // True longitude
+    const trueLongitude = (L0 + C) % 360;
+    // Obliquity of ecliptic
+    const epsilon = 23.439291 - 0.0130042 * T - 0.00000016 * T * T;
+    const epsilonRad = (epsilon * Math.PI) / 180;
+    // Right ascension and declination
+    const alpha = (Math.atan2(Math.cos(epsilonRad) * Math.sin((trueLongitude * Math.PI) / 180), Math.cos((trueLongitude * Math.PI) / 180)) * 180) / Math.PI;
+    const delta = (Math.asin(Math.sin(epsilonRad) * Math.sin((trueLongitude * Math.PI) / 180)) * 180) / Math.PI;
+    // Hour angle
+    const lst = localSiderealTime(jd, longitude);
+    const H = lst - alpha;
+    // Convert to altitude/azimuth
+    const latRad = (latitude * Math.PI) / 180;
+    const deltaRad = (delta * Math.PI) / 180;
+    const Hrad = (H * Math.PI) / 180;
+    const altitude = (Math.asin(Math.sin(latRad) * Math.sin(deltaRad) + Math.cos(latRad) * Math.cos(deltaRad) * Math.cos(Hrad)) * 180) / Math.PI;
+    let azimuth = (Math.atan2(Math.sin(Hrad), Math.cos(Hrad) * Math.sin(latRad) - Math.tan(deltaRad) * Math.cos(latRad)) * 180) / Math.PI;
+    azimuth = (azimuth + 180) % 360; // Convert to 0-360 from North
+    return {
+        altitude,
+        azimuth,
+        declination: delta,
+        rightAscension: alpha,
+        hourAngle: H,
+        trueLongitude,
+        equationOfTime: 4 * (L0 - alpha), // in minutes
+    };
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 function getLunarPhase(date = new Date()) {
     const lunarNewBase = new Date(2000, 0, 6),
         lunarCycle = 29.53059;
@@ -356,13 +432,21 @@ function getLunarPhase(date = new Date()) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function getLunarDistance(date = new Date()) {
-    const phase = getLunarPhase(date),
-        distance = 384400 * (1 - 0.0549 * Math.cos(phase * 2 * Math.PI));
+    const jd = dateToJulianDateUTC(date),
+        T = (jd - 2451545) / 36525;
+    // Mean anomaly of moon
+    const M = (134.963 + 13.064993 * T * 36525) % 360,
+        Mrad = (M * Math.PI) / 180;
+    const distance = 385000.56 - 20905.355 * Math.cos(Mrad) - 3699.111 * Math.cos(2 * Mrad) - 2955.968 * Math.cos(3 * Mrad);
+    const phase = getLunarPhase(date);
     return {
-        distance, // in km
-        isSupermoon: distance < 367000 && Math.abs(phase - 0.5) < 0.1, // Full moon at perigee
-        isMicromoon: distance > 400000 && Math.abs(phase - 0.5) < 0.1, // Full moon at apogee
-        isCloseApproach: distance < 370000, // Generally close approach
+        distance,
+        isSupermoon: distance < 360000 && (Math.abs(phase - 0.5) < 0.02 || phase < 0.02 || phase > 0.98),
+        isMicromoon: distance > 405000 && Math.abs(phase - 0.5) < 0.02,
+        isPerigee: distance < 363000,
+        isApogee: distance > 405000,
+        percentCloser: distance < 384400 ? Math.round(((384400 - distance) / 384400) * 100) : 0,
+        percentFarther: distance > 384400 ? Math.round(((distance - 384400) / 384400) * 100) : 0,
     };
 }
 
@@ -597,6 +681,9 @@ module.exports = {
     isNearSolstice,
     isNearEquinox,
     isNearCrossQuarter,
+    //
+    getSolarPosition,
+    //
     getLunarPhase,
     getLunarDistance,
     getLunarPosition,
