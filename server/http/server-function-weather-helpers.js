@@ -1,45 +1,45 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const msPerDay = 1000 * 60 * 60 * 24;
-
 function dateToJulianDateUTC(date) {
-    const year = date.getUTCFullYear(),
+    let year = date.getUTCFullYear(),
         month = date.getUTCMonth() + 1,
         day = date.getUTCDate(),
         hour = date.getUTCHours(),
         minute = date.getUTCMinutes(),
         second = date.getUTCSeconds();
-    let y = year,
-        m = month;
     if (month <= 2) {
-        y = year - 1;
-        m = month + 12;
+        year = year - 1;
+        month = month + 12;
     }
-    const a = Math.floor(y / 100),
+    const a = Math.floor(year / 100),
         b = 2 - a + Math.floor(a / 4);
-    return Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (m + 1)) + day + b - 1524.5 + (hour + minute / 60 + second / 3600) / 24;
+    return Math.floor(365.25 * (year + 4716)) + Math.floor(30.6001 * (month + 1)) + day + b - 1524.5 + (hour + minute / 60 + second / 3600) / 24;
 }
 
-function localSiderealTime(jd, longitude) {
-    const T = (jd - 2451545) / 36525,
-        st = 280.46061837 + 360.98564736629 * (jd - 2451545) + 0.000387933 * T * T;
-    return (st + longitude) % 360;
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+const msPerDay = 1000 * 60 * 60 * 24;
+
+function normalizeTime(time) {
+    if (time < 0) return time + 24;
+    return time >= 24 ? time - 24 : time;
 }
 
-function getSolarLongitude(jd) {
-    const n = jd - 2451545,
-        L = (280.46 + 0.9856474 * n) % 360,
-        g = (((357.528 + 0.9856003 * n) % 360) * Math.PI) / 180;
-    return (L + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) % 360;
+function isLeapYear(year) {
+    return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+}
+
+function daysIntoYear(date = new Date()) {
+    return (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - Date.UTC(date.getFullYear(), 0, 0)) / msPerDay;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function getDST(date = new Date()) {
-    const month = date.getMonth(),
-        year = date.getFullYear();
+    const year = date.getFullYear(), month = date.getMonth();
     if (month > 10 || month < 2) return false; // November to February
     if (month > 3 && month < 9) return true; // April to September
     const lastDayOfMarch = new Date(year, 2, 31);
@@ -58,23 +58,10 @@ function getDST(date = new Date()) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function normalizeTime(time) {
-    if (time < 0) return time + 24;
-    return time >= 24 ? time - 24 : time;
-}
-
-function isLeapYear(yr) {
-    return (yr % 4 === 0 && yr % 100 !== 0) || yr % 400 === 0;
-}
-
-function daysIntoYear(date = new Date()) {
-    return (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - Date.UTC(date.getFullYear(), 0, 0)) / 24 / 60 / 60 / 1000;
-}
-
 function getDaylightHours(latitude, longitude, date = new Date()) {
-    const dayOfYear = daysIntoYear(date);
+    const year = date.getFullYear (), hours = date.getHours (), minutes = date.getMinutes(), tzoffset = date.getTimezoneOffset();
     const latitudeRad = (latitude * Math.PI) / 180;
-    const fracYear = ((2 * Math.PI) / (isLeapYear(date.getFullYear()) ? 366 : 365)) * (dayOfYear - 1 + (date.getHours() - 12) / 24);
+    const fracYear = ((2 * Math.PI) / (isLeapYear(year) ? 366 : 365)) * (daysIntoYear(date) - 1 + (hours - 12) / 24);
     const declination =
         0.006918 -
         0.399912 * Math.cos(fracYear) +
@@ -87,7 +74,7 @@ function getDaylightHours(latitude, longitude, date = new Date()) {
         229.18 *
         (0.000075 + 0.001868 * Math.cos(fracYear) - 0.032077 * Math.sin(fracYear) - 0.014615 * Math.cos(2 * fracYear) - 0.040849 * Math.sin(2 * fracYear));
     const solarNoon = 12 - eqTime / 60 - longitude / 15;
-    const utcOffset = -date.getTimezoneOffset() / 60;
+    const utcOffset = -tzoffset / 60;
     const angles = {
         daylight: -0.8333, // Standard sunrise/sunset with refraction
         civil: -6,
@@ -123,8 +110,8 @@ function getDaylightHours(latitude, longitude, date = new Date()) {
     const isDaytime =
         times.daylightDawn &&
         times.daylightDusk &&
-        date.getHours() + date.getMinutes() / 60 > times.daylightDawn &&
-        date.getHours() + date.getMinutes() / 60 < times.daylightDusk;
+        hours + minutes / 60 > times.daylightDawn &&
+        hours + minutes / 60 < times.daylightDusk;
 
     return {
         sunriseDecimal: times.daylightDawn,
@@ -179,7 +166,7 @@ function calculateDewPoint(temp, humidity) {
 }
 
 function calculateHeatIndex(temp, humidity) {
-    if (temp === undefined || temp < 20) return temp; // Only applicable for temps > 20°C
+    if (temp < 20) return temp; // Only applicable for temps > 20°C
     const tempF = (temp * 9) / 5 + 32; // Convert to Fahrenheit for the standard formula
     let heatIndexF = 0.5 * (tempF + 61 + (tempF - 68) * 1.2 + humidity * 0.094); // Simplified heat index formula
     if (tempF >= 80) {
@@ -203,13 +190,12 @@ function calculateHeatIndex(temp, humidity) {
 }
 
 function calculateWindChill(temp, windSpeed) {
-    if (temp === undefined || temp > 10 || windSpeed <= 1.3) return temp; // Only applicable for temps <= 10°C and wind > 1.3 m/s
+    if (temp > 10 || windSpeed <= 1.3) return temp; // Only applicable for temps <= 10°C and wind > 1.3 m/s
     const windSpeedKmh = windSpeed * 3.6; // Convert wind speed to km/h
     return 13.12 + 0.6215 * temp - 11.37 * windSpeedKmh ** 0.16 + 0.3965 * temp * windSpeedKmh ** 0.16; // Calculate wind chill using Environment Canada formula
 }
 
 function calculateFeelsLike(temp, humidity, windSpeed) {
-    if (temp === undefined) return temp;
     if (temp <= 10)
         // For cold conditions, use wind chill
         return calculateWindChill(temp, windSpeed);
@@ -221,7 +207,6 @@ function calculateFeelsLike(temp, humidity, windSpeed) {
 }
 
 function calculateComfortLevel(temp, humidity, windSpeed, solarRad) {
-    if (temp === undefined) return 'undefined';
     const feelsLike = calculateFeelsLike(temp, humidity, windSpeed);
     if (feelsLike < -10 || feelsLike > 35) return 'very uncomfortable';
     if (feelsLike < 0 || feelsLike > 30) return 'uncomfortable';
@@ -247,24 +232,24 @@ function getSeason(date = new Date(), hemisphere = 'northern') {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function isNearSolstice(date = new Date(), hemisphere = 'northern', daysWindow = 7) {
-    const year = date.getFullYear(),
+    const year = date.getFullYear(), month = date.getMonth (), time = date.getTime (),
         isNorthern = hemisphere === 'northern';
     const currentYearSummerSolstice = new Date(year, 5, 21),
         currentYearWinterSolstice = new Date(year, 11, 21); // June 21 / December 21
     const prevYearWinterSolstice = new Date(year - 1, 11, 21),
         nextYearSummerSolstice = new Date(year + 1, 5, 21); // Dec 21 / June 21
     const otherYearRelevantSolstice = isNorthern
-        ? date.getMonth() < 6
+        ? month < 6
             ? prevYearWinterSolstice
             : nextYearSummerSolstice
-        : date.getMonth() < 6
+        : month < 6
           ? new Date(year - 1, 5, 21)
           : new Date(year + 1, 11, 21);
     const currentYearLongestDay = isNorthern ? currentYearSummerSolstice : currentYearWinterSolstice;
     const currentYearShortestDay = isNorthern ? currentYearWinterSolstice : currentYearSummerSolstice;
-    const daysToCurrYearLongest = (currentYearLongestDay.getTime() - date.getTime()) / msPerDay,
-        daysToCurrYearShortest = (currentYearShortestDay.getTime() - date.getTime()) / msPerDay,
-        daysToOtherYearSolstice = (otherYearRelevantSolstice.getTime() - date.getTime()) / msPerDay;
+    const daysToCurrYearLongest = (currentYearLongestDay.getTime() - time) / msPerDay,
+        daysToCurrYearShortest = (currentYearShortestDay.getTime() - time) / msPerDay,
+        daysToOtherYearSolstice = (otherYearRelevantSolstice.getTime() - time) / msPerDay;
     if (Math.abs(daysToCurrYearLongest) <= daysWindow)
         return {
             near: true,
@@ -282,7 +267,7 @@ function isNearSolstice(date = new Date(), hemisphere = 'northern', daysWindow =
     else if (Math.abs(daysToOtherYearSolstice) <= daysWindow)
         return {
             near: true,
-            type: (isNorthern && date.getMonth() < 6) || (!isNorthern && date.getMonth() >= 6) ? 'shortest day' : 'longest day',
+            type: (isNorthern && month < 6) || (!isNorthern && month >= 6) ? 'shortest day' : 'longest day',
             exact: Math.abs(daysToOtherYearSolstice) < 1,
             days: daysToOtherYearSolstice,
         };
@@ -292,18 +277,18 @@ function isNearSolstice(date = new Date(), hemisphere = 'northern', daysWindow =
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function isNearEquinox(date = new Date(), hemisphere = 'northern', daysWindow = 7) {
-    const year = date.getFullYear(),
+    const year = date.getFullYear(), time = date.getTime (),
         isNorthern = hemisphere === 'northern';
     const springEquinox = new Date(year, 2, 20),
         autumnEquinox = new Date(year, 8, 22); // March 20 / September 22
     const firstEquinox = isNorthern ? springEquinox : autumnEquinox,
         secondEquinox = isNorthern ? autumnEquinox : springEquinox;
-    const daysToFirst = (firstEquinox.getTime() - date.getTime()) / msPerDay,
-        daysToSecond = (secondEquinox.getTime() - date.getTime()) / msPerDay;
+    const daysToFirst = (firstEquinox.getTime() - time) / msPerDay,
+        daysToSecond = (secondEquinox.getTime() - time) / msPerDay;
     const prevYearSecondEquinox = new Date(year - 1, 8, 22),
-        daysToPrevYearSecond = (prevYearSecondEquinox.getTime() - date.getTime()) / msPerDay;
+        daysToPrevYearSecond = (prevYearSecondEquinox.getTime() - time) / msPerDay;
     const nextYearFirstEquinox = new Date(year + 1, 2, 20),
-        daysToNextYearFirst = (nextYearFirstEquinox.getTime() - date.getTime()) / msPerDay;
+        daysToNextYearFirst = (nextYearFirstEquinox.getTime() - time) / msPerDay;
     if (Math.abs(daysToFirst) <= daysWindow)
         return {
             near: true,
@@ -338,8 +323,7 @@ function isNearEquinox(date = new Date(), hemisphere = 'northern', daysWindow = 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function isNearCrossQuarter(date = new Date(), hemisphere = 'northern', daysWindow = 7) {
-    const year = date.getFullYear();
-    const month = date.getMonth();
+    const year = date.getFullYear(), month = date.getMonth();
     const dates = [
         { date: new Date(year, 1, 1), name: 'Imbolc', northern: 'Imbolc (early spring)', southern: 'Lughnasadh (early autumn)' },
         { date: new Date(year, 4, 1), name: 'Beltane', northern: 'Beltane (early summer)', southern: 'Samhain (early winter)' },
@@ -358,8 +342,16 @@ function isNearCrossQuarter(date = new Date(), hemisphere = 'northern', daysWind
                 days,
             };
     }
-
     return { near: false };
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+function localSiderealTime(jd, longitude) {
+    const T = (jd - 2451545) / 36525,
+        st = 280.46061837 + 360.98564736629 * (jd - 2451545) + 0.000387933 * T * T;
+    return (st + longitude) % 360;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -368,7 +360,6 @@ function isNearCrossQuarter(date = new Date(), hemisphere = 'northern', daysWind
 function getSolarPosition(date, latitude, longitude) {
     const jd = dateToJulianDateUTC(date),
         T = (jd - 2451545) / 36525;
-
     // Mean longitude of sun
     const L0 = (280.46646 + 36000.76983 * T + 0.0003032 * T * T) % 360;
     // Mean anomaly of sun
@@ -407,14 +398,20 @@ function getSolarPosition(date, latitude, longitude) {
     };
 }
 
+function getSolarLongitude(jd) {
+    const n = jd - 2451545,
+        L = (280.46 + 0.9856474 * n) % 360,
+        g = (((357.528 + 0.9856003 * n) % 360) * Math.PI) / 180;
+    return (L + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) % 360;
+}
+
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+const lunarNewBase = new Date(2000, 0, 6);
 function getLunarPhase(date = new Date()) {
-    const lunarNewBase = new Date(2000, 0, 6),
-        lunarCycle = 29.53059;
-    const days = (date.getTime() - lunarNewBase.getTime()) / msPerDay;
-    return (days % lunarCycle) / lunarCycle;
+    const lunarCycle = 29.53059;
+    return (((date.getTime() - lunarNewBase.getTime()) / msPerDay) % lunarCycle) / lunarCycle;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -443,17 +440,13 @@ function getLunarDistance(date = new Date()) {
 function getLunarPosition(date, latitude, longitude) {
     const jd = dateToJulianDateUTC(date),
         T = (jd - 2451545) / 36525;
-
     const L = (218.316 + 13.176396 * T * 36525) % 360,
         M = (134.963 + 13.064993 * T * 36525) % 360,
         F = (93.272 + 13.22935 * T * 36525) % 360;
-
     const lon = (L + 6.289 * Math.sin((M * Math.PI) / 180) + 1.274 * Math.sin(((2 * F - M) * Math.PI) / 180)) % 360,
         lat = 5.128 * Math.sin((F * Math.PI) / 180);
-
     const lst = localSiderealTime(jd, longitude),
         ha = lst - lon;
-
     const altitude =
         (Math.asin(
             Math.sin((lat * Math.PI) / 180) * Math.sin((latitude * Math.PI) / 180) +
@@ -462,16 +455,16 @@ function getLunarPosition(date, latitude, longitude) {
             180) /
         Math.PI;
     const azimuth =
-        (Math.atan2(
+        (((Math.atan2(
             Math.sin((ha * Math.PI) / 180),
             Math.cos((ha * Math.PI) / 180) * Math.sin((latitude * Math.PI) / 180) - Math.tan((lat * Math.PI) / 180) * Math.cos((latitude * Math.PI) / 180)
         ) *
             180) /
-        Math.PI;
-
+        Math.PI) + 360) % 360;
     return {
         altitude,
-        azimuth: (azimuth + 360) % 360,
+        azimuth,
+        direction: ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'] [Math.round(azimuth / 45) % 8],
         illuminatedFraction: (1 - Math.cos(((L - getSolarLongitude(jd)) * Math.PI) / 180)) / 2,
     };
 }
@@ -480,10 +473,8 @@ function getLunarPosition(date, latitude, longitude) {
 
 function getLunarTimes(date, latitude, longitude) {
     const times = { rise: undefined, set: undefined };
-
     const startOfDay = new Date(date);
     startOfDay.setHours(0, 0, 0, 0);
-
     let previousAltitude = getLunarPosition(startOfDay, latitude, longitude).altitude;
     for (let minutes = 0; minutes < 1440; minutes += 10) {
         const checkTime = new Date(startOfDay.getTime() + minutes * 60000),
@@ -524,68 +515,46 @@ function getLunarBrightness(phase) {
 
 function getLunarZodiac(date = new Date()) {
     const daysSinceJ2000 = (date - new Date('2000-01-01T12:00:00Z')) / msPerDay;
-
     const L = (218.316 + 13.176396 * daysSinceJ2000) % 360,
         M = (134.963 + 13.064993 * daysSinceJ2000) % 360,
         D = (297.85 + 12.190749 * daysSinceJ2000) % 360;
     const toRad = Math.PI / 180,
         Mrad = M * toRad,
         Drad = D * toRad;
-
     // Apply main corrections for true longitude, and normalize to 0-360
-    let longitude = L;
-    longitude += 6.289 * Math.sin(Mrad);
-    longitude += 1.274 * Math.sin(2 * Drad - Mrad);
-    longitude += 0.658 * Math.sin(2 * Drad);
-    longitude += 0.214 * Math.sin(2 * Mrad);
-    longitude -= 0.186 * Math.sin(Mrad);
-    longitude -= 0.114 * Math.sin(2 * Drad);
-    longitude = ((longitude % 360) + 360) % 360;
-
+    const longitude = (((L 
+    + 6.289 * Math.sin(Mrad)
+    + 1.274 * Math.sin(2 * Drad - Mrad)
+    + 0.658 * Math.sin(2 * Drad)
+    + 0.214 * Math.sin(2 * Mrad)
+    - 0.186 * Math.sin(Mrad)
+    - 0.114 * Math.sin(2 * Drad)) % 360) + 360) % 360;
     // Zodiac signs start at these ecliptic longitudes
     const zodiacSigns = [
-        { sign: 'Aries', symbol: '♈', start: 0 },
-        { sign: 'Taurus', symbol: '♉', start: 30 },
-        { sign: 'Gemini', symbol: '♊', start: 60 },
-        { sign: 'Cancer', symbol: '♋', start: 90 },
-        { sign: 'Leo', symbol: '♌', start: 120 },
-        { sign: 'Virgo', symbol: '♍', start: 150 },
-        { sign: 'Libra', symbol: '♎', start: 180 },
-        { sign: 'Scorpio', symbol: '♏', start: 210 },
-        { sign: 'Sagittarius', symbol: '♐', start: 240 },
-        { sign: 'Capricorn', symbol: '♑', start: 270 },
-        { sign: 'Aquarius', symbol: '♒', start: 300 },
-        { sign: 'Pisces', symbol: '♓', start: 330 },
+        { sign: 'Aries', symbol: '♈', start: 0, meaning:'good for new beginnings and initiatives'},
+        { sign: 'Taurus', symbol: '♉', start: 30, meaning: 'good for financial planning and material goals'},
+        { sign: 'Gemini', symbol: '♊', start: 60, meaning: 'good for communication and learning projects'},
+        { sign: 'Cancer', symbol: '♋', start: 90, meaning: 'good for home and family matters'},
+        { sign: 'Leo', symbol: '♌', start: 120 , meaning: 'good for creative projects and self-expression'},
+        { sign: 'Virgo', symbol: '♍', start: 150 , meaning: 'good for health and organization goals'},
+        { sign: 'Libra', symbol: '♎', start: 180, meaning: 'good for relationships and partnerships'},
+        { sign: 'Scorpio', symbol: '♏', start: 210 , meaning:  'good for transformation and deep changes'},
+        { sign: 'Sagittarius', symbol: '♐', start: 240 , meaning:  'good for travel and educational pursuits'},
+        { sign: 'Capricorn', symbol: '♑', start: 270, meaning: 'good for career and long-term goals'},
+        { sign: 'Aquarius', symbol: '♒', start: 300 , meaning: 'good for community and humanitarian projects'},
+        { sign: 'Pisces', symbol: '♓', start: 330 , meaning:  'good for spiritual and artistic endeavors' },
     ];
-    const zodiacMeanings = {
-        Aries: 'good for new beginnings and initiatives',
-        Taurus: 'good for financial planning and material goals',
-        Gemini: 'good for communication and learning projects',
-        Cancer: 'good for home and family matters',
-        Leo: 'good for creative projects and self-expression',
-        Virgo: 'good for health and organization goals',
-        Libra: 'good for relationships and partnerships',
-        Scorpio: 'good for transformation and deep changes',
-        Sagittarius: 'good for travel and educational pursuits',
-        Capricorn: 'good for career and long-term goals',
-        Aquarius: 'good for community and humanitarian projects',
-        Pisces: 'good for spiritual and artistic endeavors',
-    };
-    const signs = zodiacSigns.map((signs) => signs.sign);
-
     // Find which sign the Moon is in
-    const { sign, symbol } = zodiacSigns[Math.floor(longitude / 30)];
-    const meaning = zodiacMeanings[sign];
-
+    const index = Math.floor(longitude / 30);
+    const { sign, symbol, meaning } = zodiacSigns[index];
+    const { sign: next } = zodiacSigns [(index + 1) % 12];
     // Calculate how far through the sign (0-30 degrees)
     const degreesInSign = longitude % 30;
-
     // Determine if early, middle, or late in sign
     let position;
     if (degreesInSign < 10) position = 'early';
     else if (degreesInSign < 20) position = 'middle';
     else position = 'late';
-
     return {
         sign,
         symbol,
@@ -593,7 +562,7 @@ function getLunarZodiac(date = new Date()) {
         degreesInSign,
         position,
         meaning,
-        next: signs[(signs.indexOf(sign) + 1) % 12],
+        next,
         // The Moon spends about 2.5 days in each sign
         approximateDaysInSign: 2.5,
     };
@@ -642,18 +611,19 @@ function isEventCooldown(store, category, eventId, cooldownDays = 365) {
     if (!store.events || !store.events[category] || !store.events[category][eventId]) return true;
     const now = Date.now(),
         event = store.events[category][eventId];
-    return now > event.detected + cooldownDays * 24 * 60 * 60 * 1000;
+    return now > event.detected + cooldownDays * msPerDay;
 }
 
 function pruneEvents(store, daysAgo = 30) {
-    if (!store.events || Date.now() - store.eventsCleanedUp < 24 * 60 * 60 * 1000) return;
-    const expiry = Date.now() - daysAgo * 24 * 60 * 60 * 1000;
+    const now = Date.now ();
+    if (!store.events || (store.eventsCleanedUp > now - msPerDay)) return;
+    const expiry = now - daysAgo * msPerDay;
     Object.entries(store.events).forEach(([category, events]) => {
         Object.entries(events)
             .filter(([_, event]) => event.expires < expiry)
             .forEach(([eventId]) => delete store.events[category][eventId]);
     });
-    store.eventsCleanedUp = Date.now();
+    store.eventsCleanedUp = now;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -664,6 +634,7 @@ module.exports = {
     getDaylightHours,
     getDaylightPhase,
     getSeason,
+    daysIntoYear,
     //
     calculateDewPoint,
     calculateHeatIndex,
