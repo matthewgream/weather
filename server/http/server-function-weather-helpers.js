@@ -1,17 +1,15 @@
-// XXX review
-
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const msPerDay = 1000 * 60 * 60 * 24;
 
 function dateToJulianDateUTC(date) {
-    const year = date.getUTCFullYear();
-    const month = date.getUTCMonth() + 1;
-    const day = date.getUTCDate();
-    const hour = date.getUTCHours();
-    const minute = date.getUTCMinutes();
-    const second = date.getUTCSeconds();
+    const year = date.getUTCFullYear(),
+        month = date.getUTCMonth() + 1,
+        day = date.getUTCDate(),
+        hour = date.getUTCHours(),
+        minute = date.getUTCMinutes(),
+        second = date.getUTCSeconds();
     let y = year,
         m = month;
     if (month <= 2) {
@@ -40,14 +38,16 @@ function getSolarLongitude(jd) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function getDST(date = new Date()) {
-    if (date.getMonth() > 10 || date.getMonth() < 2) return false; // November to February
-    if (date.getMonth() > 3 && date.getMonth() < 9) return true; // April to September
-    const lastDayOfMarch = new Date(date.getFullYear(), 2, 31);
+    const month = date.getMonth(),
+        year = date.getFullYear();
+    if (month > 10 || month < 2) return false; // November to February
+    if (month > 3 && month < 9) return true; // April to September
+    const lastDayOfMarch = new Date(year, 2, 31);
     while (lastDayOfMarch.getMonth() > 2) lastDayOfMarch.setDate(lastDayOfMarch.getDate() - 1);
     const lastSundayOfMarch = new Date(lastDayOfMarch);
     while (lastSundayOfMarch.getDay() !== 0) lastSundayOfMarch.setDate(lastSundayOfMarch.getDate() - 1);
     lastSundayOfMarch.setHours(2, 0, 0, 0); // 02:00 CET
-    const lastDayOfOctober = new Date(date.getFullYear(), 9, 31);
+    const lastDayOfOctober = new Date(year, 9, 31);
     while (lastDayOfOctober.getMonth() > 9) lastDayOfOctober.setDate(lastDayOfOctober.getDate() - 1);
     const lastSundayOfOctober = new Date(lastDayOfOctober);
     while (lastSundayOfOctober.getDay() !== 0) lastSundayOfOctober.setDate(lastSundayOfOctober.getDate() - 1);
@@ -84,13 +84,9 @@ function getDaylightHours(latitude, longitude, date = new Date()) {
         229.18 *
         (0.000075 + 0.001868 * Math.cos(fracYear) - 0.032077 * Math.sin(fracYear) - 0.014615 * Math.cos(2 * fracYear) - 0.040849 * Math.sin(2 * fracYear));
     const solarNoon = 12 - eqTime / 60 - longitude / 15;
-    const cosHourAngle =
-        (Math.cos((90.8333 * Math.PI) / 180) - Math.sin(latitudeRad) * Math.sin(declination)) / (Math.cos(latitudeRad) * Math.cos(declination));
     const utcOffset = -date.getTimezoneOffset() / 60;
-
-    // Twilight angle calculations
     const angles = {
-        daylight: -0.833, // Standard sunrise/sunset with refraction
+        daylight: -0.8333, // Standard sunrise/sunset with refraction
         civil: -6,
         nautical: -12,
         astronomical: -18,
@@ -114,6 +110,20 @@ function getDaylightHours(latitude, longitude, date = new Date()) {
         }
     }
 
+    const daylightAngle =
+        (Math.cos((90.8333 * Math.PI) / 180) - Math.sin(latitudeRad) * Math.sin(declination)) / (Math.cos(latitudeRad) * Math.cos(declination));
+    const daylightHours =
+        times.daylightDawn && times.daylightDusk
+            ? times.daylightDusk - times.daylightDawn + (times.daylightDusk < times.daylightDawn ? 24 : 0)
+            : daylightAngle < -1
+              ? 24
+              : 0;
+    const isDaytime =
+        times.daylightDawn &&
+        times.daylightDusk &&
+        date.getHours() + date.getMinutes() / 60 > times.daylightDawn &&
+        date.getHours() + date.getMinutes() / 60 < times.daylightDusk;
+
     return {
         sunriseDecimal: times.daylightDawn,
         sunsetDecimal: times.daylightDusk,
@@ -123,17 +133,8 @@ function getDaylightHours(latitude, longitude, date = new Date()) {
         nauticalDuskDecimal: times.nauticalDusk,
         astronomicalDawnDecimal: times.astronomicalDawn,
         astronomicalDuskDecimal: times.astronomicalDusk,
-        daylightHours:
-            times.daylightDawn && times.daylightDusk
-                ? times.daylightDusk - times.daylightDawn + (times.daylightDusk < times.daylightDawn ? 24 : 0)
-                : cosHourAngle < -1
-                  ? 24
-                  : 0,
-        isDaytime:
-            times.daylightDawn &&
-            times.daylightDusk &&
-            date.getHours() + date.getMinutes() / 60 > times.daylightDawn &&
-            date.getHours() + date.getMinutes() / 60 < times.daylightDusk,
+        daylightHours,
+        isDaytime,
         isDST: getDST(date),
         isMidnightSun: times.daylightDawn === null,
         isPolarNight: times.daylightDawn === undefined,
@@ -335,44 +336,27 @@ function isNearEquinox(date = new Date(), hemisphere = 'northern', daysWindow = 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function isNearCrossQuarter(date = new Date(), hemisphere = 'northern', daysWindow = 7) {
-    const year = date.getFullYear(),
-        isNorthern = hemisphere === 'northern';
-    const imbolc = new Date(year, 1, 1),
-        beltane = new Date(year, 4, 1),
-        lughnasadh = new Date(year, 7, 1),
-        samhain = new Date(year, 10, 1); // Feb 1 / May 1 / Aug 1 / Nov 1
-    const daysToImbolc = Math.abs(date.getTime() - imbolc.getTime()) / msPerDay,
-        daysToBeltane = Math.abs(date.getTime() - beltane.getTime()) / msPerDay,
-        daysToLughnasadh = Math.abs(date.getTime() - lughnasadh.getTime()) / msPerDay,
-        daysToSamhain = Math.abs(date.getTime() - samhain.getTime()) / msPerDay;
-    if (daysToImbolc <= daysWindow)
-        return {
-            near: true,
-            name: isNorthern ? 'Imbolc (early spring)' : 'Lughnasadh (early autumn)',
-            exact: Math.abs(daysToImbolc) < 1,
-            days: daysToImbolc,
-        };
-    else if (daysToBeltane <= daysWindow)
-        return {
-            near: true,
-            name: isNorthern ? 'Beltane (early summer)' : 'Samhain (early winter)',
-            exact: Math.abs(daysToBeltane) < 1,
-            days: daysToBeltane,
-        };
-    else if (daysToLughnasadh <= daysWindow)
-        return {
-            near: true,
-            name: isNorthern ? 'Lughnasadh (early autumn)' : 'Imbolc (early spring)',
-            exact: Math.abs(daysToLughnasadh) < 1,
-            days: daysToLughnasadh,
-        };
-    else if (daysToSamhain <= daysWindow)
-        return {
-            near: true,
-            name: isNorthern ? 'Samhain (early winter)' : 'Beltane (early summer)',
-            exact: Math.abs(daysToSamhain) < 1,
-            days: daysToSamhain,
-        };
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const dates = [
+        { date: new Date(year, 1, 1), name: 'Imbolc', northern: 'Imbolc (early spring)', southern: 'Lughnasadh (early autumn)' },
+        { date: new Date(year, 4, 1), name: 'Beltane', northern: 'Beltane (early summer)', southern: 'Samhain (early winter)' },
+        { date: new Date(year, 7, 1), name: 'Lughnasadh', northern: 'Lughnasadh (early autumn)', southern: 'Imbolc (early spring)' },
+        { date: new Date(year, 10, 1), name: 'Samhain', northern: 'Samhain (early winter)', southern: 'Beltane (early summer)' },
+    ];
+    if (month === 0) dates.push({ date: new Date(year - 1, 10, 1), name: 'Samhain', northern: 'Samhain (early winter)', southern: 'Beltane (early summer)' });
+    if (month === 11) dates.push({ date: new Date(year + 1, 1, 1), name: 'Imbolc', northern: 'Imbolc (early spring)', southern: 'Lughnasadh (early autumn)' });
+    for (const item of dates) {
+        const days = (item.date - date) / msPerDay;
+        if (Math.abs(days) <= daysWindow)
+            return {
+                near: true,
+                name: hemisphere === 'northern' ? item.northern : item.southern,
+                exact: Math.abs(days) < 1,
+                days,
+            };
+    }
+
     return { near: false };
 }
 

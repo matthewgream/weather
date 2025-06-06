@@ -54,6 +54,7 @@ function getWeatherInterpretationImpl(interpreters, location, data, data_previou
     const results = { conditions: [], phenomena: [], alerts: [] };
     Object.entries(interpreters).forEach(([name, func]) => {
         try {
+            if (options?.debug) console.error('--> ' + name);
             func(results, situation, data, data_previous, store, options);
         } catch (e) {
             console.error(`weather: interpreter '${name}' error:`, e);
@@ -109,7 +110,7 @@ function initialise(options) {
     };
     console.error(
         `weather: loaded ${Object.keys(weatherInterpreters).length} interpreters: '${Object.keys(weatherInterpreters)
-            .map((name) => name.replaceAll('interpret', ''))
+            .map((name) => name.replaceAll('interpret', '').replaceAll('check', '').replaceAll('predict', '').replaceAll('process', ''))
             .join(', ')}', with options: '${JSON.stringify(options)}'`
     );
     return { getWeatherInterpretation };
