@@ -81,6 +81,7 @@ export default [
             'sonarjs/hashing': 'off',
             'sonarjs/content-length': 'off',
             'sonarjs/slow-regex': 'off',
+	    'sonarjs/cognitive-complexity': ['error', 50],
 
             'n/hashbang': 'off',
             'n/no-unsupported-features/node-builtins': 'off',

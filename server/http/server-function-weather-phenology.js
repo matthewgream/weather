@@ -68,13 +68,13 @@ function interpretCultivation(results, situation, data, data_previous, store, _o
             hadFrost = true;
             store.cultivation.lastFrostDate = timestamp;
             store.cultivation.consecutiveFrostFreeDays = 0;
-            if ((month >= 8 || month <= 2) && helpers.checkEventCooldown(store, 'cultivation', 'firstFrost', 180))
+            if ((month >= 8 || month <= 2) && helpers.isEventCooldown(store, 'cultivation', 'firstFrost', 180))
                 helpers.addEvent(store, 'cultivation', 'firstFrost', 'first frost of the season - protect tender plants', 48);
         } else if (!hadFrost) store.cultivation.consecutiveFrostFreeDays++;
 
         // Last spring frost (shows for 7 days as it's very important)
         if (month >= 3 && month <= 5 && store.cultivation.consecutiveFrostFreeDays > 14)
-            if (helpers.checkEventCooldown(store, 'cultivation', 'lastSpringFrost', 300))
+            if (helpers.isEventCooldown(store, 'cultivation', 'lastSpringFrost', 300))
                 helpers.addEvent(store, 'cultivation', 'lastSpringFrost', 'probable last spring frost has passed - safe for tender plants', 168);
 
         // Growing season
@@ -404,25 +404,25 @@ function interpretSeasonalMarkers(results, situation, data, data_previous, store
     // Natural phenological markers
     if (temp !== undefined) {
         // Ice breakup
-        if (month === 3 && temp > 5 && helpers.checkEventCooldown(store, 'seasonal', 'iceBreakup', 300))
+        if (month === 3 && temp > 5 && helpers.isEventCooldown(store, 'seasonal', 'iceBreakup', 300))
             helpers.addEvent(store, 'seasonal', 'iceBreakup', 'lake ice beginning to break up - spring truly arriving', 168);
         // First flowers
-        if (month === 3 && temp > 5 && snowDepth < 50 && helpers.checkEventCooldown(store, 'seasonal', 'coltsfoot', 300))
+        if (month === 3 && temp > 5 && snowDepth < 50 && helpers.isEventCooldown(store, 'seasonal', 'coltsfoot', 300))
             helpers.addEvent(store, 'seasonal', 'coltsfoot', 'tussilago (coltsfoot) blooming - first flower of spring', 72);
         // Birch leaf
-        if (month === 4 && temp > 10 && helpers.checkEventCooldown(store, 'seasonal', 'birchLeaf', 300))
+        if (month === 4 && temp > 10 && helpers.isEventCooldown(store, 'seasonal', 'birchLeaf', 300))
             helpers.addEvent(store, 'seasonal', 'birchLeaf', 'birch leaves size of mouse ears - phenological spring', 72);
         // Lilac bloom
-        if (month === 5 && temp > 15 && helpers.checkEventCooldown(store, 'seasonal', 'lilacBloom', 300))
+        if (month === 5 && temp > 15 && helpers.isEventCooldown(store, 'seasonal', 'lilacBloom', 300))
             helpers.addEvent(store, 'seasonal', 'lilacBloom', 'lilacs blooming - phenological summer begins', 168);
         // Rowan berries
-        if (month === 8 && day >= 15 && helpers.checkEventCooldown(store, 'seasonal', 'rowanBerries', 300))
+        if (month === 8 && day >= 15 && helpers.isEventCooldown(store, 'seasonal', 'rowanBerries', 300))
             helpers.addEvent(store, 'seasonal', 'rowanBerries', 'rowan berries turning red - sign of approaching autumn', 168);
         // First snow
-        if (month >= 9 && month <= 11 && snowDepth > 0 && helpers.checkEventCooldown(store, 'seasonal', 'firstSnow', 200))
+        if (month >= 9 && month <= 11 && snowDepth > 0 && helpers.isEventCooldown(store, 'seasonal', 'firstSnow', 200))
             helpers.addEvent(store, 'seasonal', 'firstSnow', 'first snow of the season - winter approaching', 48);
         // Lake freeze
-        if (month >= 11 && temp < -5 && helpers.checkEventCooldown(store, 'seasonal', 'lakeFreeze', 300))
+        if (month >= 11 && temp < -5 && helpers.isEventCooldown(store, 'seasonal', 'lakeFreeze', 300))
             helpers.addEvent(store, 'seasonal', 'lakeFreeze', 'lakes beginning to freeze - winter taking hold', 168);
     }
 

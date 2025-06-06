@@ -210,7 +210,6 @@ function createBanner(timestamp) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-// eslint-disable-next-line sonarjs/cognitive-complexity
 function createSectionDataSummary(data_location, vars) {
     const outside = formatList[0].elems;
     const lake = formatList[1].elems;

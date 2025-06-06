@@ -5,34 +5,40 @@
 
 const msPerDay = 1000 * 60 * 60 * 24;
 
-function dateToJulianDate(date) {
+function dateToJulianDateUTC(date) {
     const year = date.getUTCFullYear(),
         month = date.getUTCMonth() + 1,
         day = date.getUTCDate(),
         hour = date.getUTCHours(),
         minute = date.getUTCMinutes(),
         second = date.getUTCSeconds();
-
     const a = Math.floor((14 - month) / 12),
         y = year + 4800 - a,
         m = month + 12 * a - 3;
-
-    let jd = day + Math.floor((153 * m + 2) / 5) + 365 * y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) - 32045;
-    jd += (hour - 12) / 24 + minute / 1440 + second / 86400;
-
-    return jd;
+    return (
+        day +
+        Math.floor((153 * m + 2) / 5) +
+        365 * y +
+        Math.floor(y / 4) -
+        Math.floor(y / 100) +
+        Math.floor(y / 400) -
+        32045 +
+        (hour - 12) / 24 +
+        minute / 1440 +
+        second / 86400
+    );
 }
 
 function localSiderealTime(jd, longitude) {
-    const T = (jd - 2451545) / 36525;
-    const st = 280.46061837 + 360.98564736629 * (jd - 2451545) + 0.000387933 * T * T;
+    const T = (jd - 2451545) / 36525,
+        st = 280.46061837 + 360.98564736629 * (jd - 2451545) + 0.000387933 * T * T;
     return (st + longitude) % 360;
 }
 
 function getSolarLongitude(jd) {
-    const n = jd - 2451545.0;
-    const L = (280.46 + 0.9856474 * n) % 360;
-    const g = (((357.528 + 0.9856003 * n) % 360) * Math.PI) / 180;
+    const n = jd - 2451545,
+        L = (280.46 + 0.9856474 * n) % 360,
+        g = (((357.528 + 0.9856003 * n) % 360) * Math.PI) / 180;
     return (L + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) % 360;
 }
 
@@ -363,7 +369,7 @@ function getLunarDistance(date = new Date()) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function getLunarPosition(date, latitude, longitude) {
-    const jd = dateToJulianDate(date),
+    const jd = dateToJulianDateUTC(date),
         T = (jd - 2451545) / 36525;
 
     const L = (218.316 + 13.176396 * T * 36525) % 360,
@@ -418,22 +424,33 @@ function getLunarTimes(date, latitude, longitude) {
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
+
+function getLunarName(month) {
+    return [
+        'wolf moon',
+        'snow moon',
+        'worm moon',
+        'pink moon',
+        'flower moon',
+        'strawberry moon',
+        'buck moon',
+        'sturgeon moon',
+        'harvest moon',
+        "hunter's moon",
+        'beaver moon',
+        'cold moon',
+    ][month];
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function getLunarZodiacSign(date = new Date()) {
-    // Calculate days since J2000.0 epoch
-    const msPerDay = 86400000,
-        j2000 = new Date('2000-01-01T12:00:00Z'),
-        daysSinceJ2000 = (date - j2000) / msPerDay;
+function getLunarZodiac(date = new Date()) {
+    const daysSinceJ2000 = (date - new Date('2000-01-01T12:00:00Z')) / msPerDay;
 
-    // Mean lunar longitude (simplified)
-    const L = (218.316 + 13.176396 * daysSinceJ2000) % 360;
-    // Mean lunar anomaly
-    const M = (134.963 + 13.064993 * daysSinceJ2000) % 360;
-    // Mean elongation
-    const D = (297.85 + 12.190749 * daysSinceJ2000) % 360;
-
-    // Convert to radians for calculation
+    const L = (218.316 + 13.176396 * daysSinceJ2000) % 360,
+        M = (134.963 + 13.064993 * daysSinceJ2000) % 360,
+        D = (297.85 + 12.190749 * daysSinceJ2000) % 360;
     const toRad = Math.PI / 180,
         Mrad = M * toRad,
         Drad = D * toRad;
@@ -463,9 +480,25 @@ function getLunarZodiacSign(date = new Date()) {
         { sign: 'Aquarius', symbol: '♒', start: 300 },
         { sign: 'Pisces', symbol: '♓', start: 330 },
     ];
+    const zodiacMeanings = {
+        Aries: 'good for new beginnings and initiatives',
+        Taurus: 'good for financial planning and material goals',
+        Gemini: 'good for communication and learning projects',
+        Cancer: 'good for home and family matters',
+        Leo: 'good for creative projects and self-expression',
+        Virgo: 'good for health and organization goals',
+        Libra: 'good for relationships and partnerships',
+        Scorpio: 'good for transformation and deep changes',
+        Sagittarius: 'good for travel and educational pursuits',
+        Capricorn: 'good for career and long-term goals',
+        Aquarius: 'good for community and humanitarian projects',
+        Pisces: 'good for spiritual and artistic endeavors',
+    };
+    const signs = zodiacSigns.map((signs) => signs.sign);
 
     // Find which sign the Moon is in
     const { sign, symbol } = zodiacSigns[Math.floor(longitude / 30)];
+    const meaning = zodiacMeanings[sign];
 
     // Calculate how far through the sign (0-30 degrees)
     const degreesInSign = longitude % 30;
@@ -482,15 +515,11 @@ function getLunarZodiacSign(date = new Date()) {
         longitude,
         degreesInSign,
         position,
+        meaning,
+        next: signs[(signs.indexOf(sign) + 1) % 12],
         // The Moon spends about 2.5 days in each sign
         approximateDaysInSign: 2.5,
     };
-}
-
-function getNextSign(currentSign) {
-    const signs = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces'];
-    const currentIndex = signs.indexOf(currentSign);
-    return signs[(currentIndex + 1) % 12];
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -532,7 +561,7 @@ function getEvents(store, category) {
     return active;
 }
 
-function checkEventCooldown(store, category, eventId, cooldownDays = 365) {
+function isEventCooldown(store, category, eventId, cooldownDays = 365) {
     if (!store.events || !store.events[category] || !store.events[category][eventId]) return true;
     const now = Date.now(),
         event = store.events[category][eventId];
@@ -557,12 +586,14 @@ module.exports = {
     getDST,
     getDaylightHours,
     getDaylightPhase,
+    getSeason,
+    //
     calculateDewPoint,
     calculateHeatIndex,
     calculateWindChill,
     calculateFeelsLike,
     calculateComfortLevel,
-    getSeason,
+    //
     isNearSolstice,
     isNearEquinox,
     isNearCrossQuarter,
@@ -570,11 +601,12 @@ module.exports = {
     getLunarDistance,
     getLunarPosition,
     getLunarTimes,
-    getLunarZodiacSign,
-    getNextSign,
+    getLunarName,
+    getLunarZodiac,
+    //
     addEvent,
     getEvents,
-    checkEventCooldown,
+    isEventCooldown,
     pruneEvents,
 };
 
