@@ -39,7 +39,8 @@ function daysIntoYear(date = new Date()) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function getDST(date = new Date()) {
-    const year = date.getFullYear(), month = date.getMonth();
+    const year = date.getFullYear(),
+        month = date.getMonth();
     if (month > 10 || month < 2) return false; // November to February
     if (month > 3 && month < 9) return true; // April to September
     const lastDayOfMarch = new Date(year, 2, 31);
@@ -59,7 +60,10 @@ function getDST(date = new Date()) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function getDaylightHours(latitude, longitude, date = new Date()) {
-    const year = date.getFullYear (), hours = date.getHours (), minutes = date.getMinutes(), tzoffset = date.getTimezoneOffset();
+    const year = date.getFullYear(),
+        hours = date.getHours(),
+        minutes = date.getMinutes(),
+        tzoffset = date.getTimezoneOffset();
     const latitudeRad = (latitude * Math.PI) / 180;
     const fracYear = ((2 * Math.PI) / (isLeapYear(year) ? 366 : 365)) * (daysIntoYear(date) - 1 + (hours - 12) / 24);
     const declination =
@@ -107,11 +111,7 @@ function getDaylightHours(latitude, longitude, date = new Date()) {
             : daylightAngle < -1
               ? 24
               : 0;
-    const isDaytime =
-        times.daylightDawn &&
-        times.daylightDusk &&
-        hours + minutes / 60 > times.daylightDawn &&
-        hours + minutes / 60 < times.daylightDusk;
+    const isDaytime = times.daylightDawn && times.daylightDusk && hours + minutes / 60 > times.daylightDawn && hours + minutes / 60 < times.daylightDusk;
 
     return {
         sunriseDecimal: times.daylightDawn,
@@ -232,7 +232,9 @@ function getSeason(date = new Date(), hemisphere = 'northern') {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function isNearSolstice(date = new Date(), hemisphere = 'northern', daysWindow = 7) {
-    const year = date.getFullYear(), month = date.getMonth (), time = date.getTime (),
+    const year = date.getFullYear(),
+        month = date.getMonth(),
+        time = date.getTime(),
         isNorthern = hemisphere === 'northern';
     const currentYearSummerSolstice = new Date(year, 5, 21),
         currentYearWinterSolstice = new Date(year, 11, 21); // June 21 / December 21
@@ -277,7 +279,8 @@ function isNearSolstice(date = new Date(), hemisphere = 'northern', daysWindow =
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function isNearEquinox(date = new Date(), hemisphere = 'northern', daysWindow = 7) {
-    const year = date.getFullYear(), time = date.getTime (),
+    const year = date.getFullYear(),
+        time = date.getTime(),
         isNorthern = hemisphere === 'northern';
     const springEquinox = new Date(year, 2, 20),
         autumnEquinox = new Date(year, 8, 22); // March 20 / September 22
@@ -323,7 +326,8 @@ function isNearEquinox(date = new Date(), hemisphere = 'northern', daysWindow = 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function isNearCrossQuarter(date = new Date(), hemisphere = 'northern', daysWindow = 7) {
-    const year = date.getFullYear(), month = date.getMonth();
+    const year = date.getFullYear(),
+        month = date.getMonth();
     const dates = [
         { date: new Date(year, 1, 1), name: 'Imbolc', northern: 'Imbolc (early spring)', southern: 'Lughnasadh (early autumn)' },
         { date: new Date(year, 4, 1), name: 'Beltane', northern: 'Beltane (early summer)', southern: 'Samhain (early winter)' },
@@ -455,16 +459,18 @@ function getLunarPosition(date, latitude, longitude) {
             180) /
         Math.PI;
     const azimuth =
-        (((Math.atan2(
+        ((Math.atan2(
             Math.sin((ha * Math.PI) / 180),
             Math.cos((ha * Math.PI) / 180) * Math.sin((latitude * Math.PI) / 180) - Math.tan((lat * Math.PI) / 180) * Math.cos((latitude * Math.PI) / 180)
         ) *
             180) /
-        Math.PI) + 360) % 360;
+            Math.PI +
+            360) %
+        360;
     return {
         altitude,
         azimuth,
-        direction: ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'] [Math.round(azimuth / 45) % 8],
+        direction: ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'][Math.round(azimuth / 45) % 8],
         illuminatedFraction: (1 - Math.cos(((L - getSolarLongitude(jd)) * Math.PI) / 180)) / 2,
     };
 }
@@ -522,32 +528,36 @@ function getLunarZodiac(date = new Date()) {
         Mrad = M * toRad,
         Drad = D * toRad;
     // Apply main corrections for true longitude, and normalize to 0-360
-    const longitude = (((L 
-    + 6.289 * Math.sin(Mrad)
-    + 1.274 * Math.sin(2 * Drad - Mrad)
-    + 0.658 * Math.sin(2 * Drad)
-    + 0.214 * Math.sin(2 * Mrad)
-    - 0.186 * Math.sin(Mrad)
-    - 0.114 * Math.sin(2 * Drad)) % 360) + 360) % 360;
+    const longitude =
+        (((L +
+            6.289 * Math.sin(Mrad) +
+            1.274 * Math.sin(2 * Drad - Mrad) +
+            0.658 * Math.sin(2 * Drad) +
+            0.214 * Math.sin(2 * Mrad) -
+            0.186 * Math.sin(Mrad) -
+            0.114 * Math.sin(2 * Drad)) %
+            360) +
+            360) %
+        360;
     // Zodiac signs start at these ecliptic longitudes
     const zodiacSigns = [
-        { sign: 'Aries', symbol: '♈', start: 0, meaning:'good for new beginnings and initiatives'},
-        { sign: 'Taurus', symbol: '♉', start: 30, meaning: 'good for financial planning and material goals'},
-        { sign: 'Gemini', symbol: '♊', start: 60, meaning: 'good for communication and learning projects'},
-        { sign: 'Cancer', symbol: '♋', start: 90, meaning: 'good for home and family matters'},
-        { sign: 'Leo', symbol: '♌', start: 120 , meaning: 'good for creative projects and self-expression'},
-        { sign: 'Virgo', symbol: '♍', start: 150 , meaning: 'good for health and organization goals'},
-        { sign: 'Libra', symbol: '♎', start: 180, meaning: 'good for relationships and partnerships'},
-        { sign: 'Scorpio', symbol: '♏', start: 210 , meaning:  'good for transformation and deep changes'},
-        { sign: 'Sagittarius', symbol: '♐', start: 240 , meaning:  'good for travel and educational pursuits'},
-        { sign: 'Capricorn', symbol: '♑', start: 270, meaning: 'good for career and long-term goals'},
-        { sign: 'Aquarius', symbol: '♒', start: 300 , meaning: 'good for community and humanitarian projects'},
-        { sign: 'Pisces', symbol: '♓', start: 330 , meaning:  'good for spiritual and artistic endeavors' },
+        { sign: 'Aries', symbol: '♈', start: 0, meaning: 'good for new beginnings and initiatives' },
+        { sign: 'Taurus', symbol: '♉', start: 30, meaning: 'good for financial planning and material goals' },
+        { sign: 'Gemini', symbol: '♊', start: 60, meaning: 'good for communication and learning projects' },
+        { sign: 'Cancer', symbol: '♋', start: 90, meaning: 'good for home and family matters' },
+        { sign: 'Leo', symbol: '♌', start: 120, meaning: 'good for creative projects and self-expression' },
+        { sign: 'Virgo', symbol: '♍', start: 150, meaning: 'good for health and organization goals' },
+        { sign: 'Libra', symbol: '♎', start: 180, meaning: 'good for relationships and partnerships' },
+        { sign: 'Scorpio', symbol: '♏', start: 210, meaning: 'good for transformation and deep changes' },
+        { sign: 'Sagittarius', symbol: '♐', start: 240, meaning: 'good for travel and educational pursuits' },
+        { sign: 'Capricorn', symbol: '♑', start: 270, meaning: 'good for career and long-term goals' },
+        { sign: 'Aquarius', symbol: '♒', start: 300, meaning: 'good for community and humanitarian projects' },
+        { sign: 'Pisces', symbol: '♓', start: 330, meaning: 'good for spiritual and artistic endeavors' },
     ];
     // Find which sign the Moon is in
     const index = Math.floor(longitude / 30);
     const { sign, symbol, meaning } = zodiacSigns[index];
-    const { sign: next } = zodiacSigns [(index + 1) % 12];
+    const { sign: next } = zodiacSigns[(index + 1) % 12];
     // Calculate how far through the sign (0-30 degrees)
     const degreesInSign = longitude % 30;
     // Determine if early, middle, or late in sign
@@ -615,8 +625,8 @@ function isEventCooldown(store, category, eventId, cooldownDays = 365) {
 }
 
 function pruneEvents(store, daysAgo = 30) {
-    const now = Date.now ();
-    if (!store.events || (store.eventsCleanedUp > now - msPerDay)) return;
+    const now = Date.now();
+    if (!store.events || store.eventsCleanedUp > now - msPerDay) return;
     const expiry = now - daysAgo * msPerDay;
     Object.entries(store.events).forEach(([category, events]) => {
         Object.entries(events)

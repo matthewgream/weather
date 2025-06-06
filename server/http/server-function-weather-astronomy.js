@@ -43,7 +43,7 @@ function predictAurora(results, situation, data) {
     if (activity >= 2.5) results.phenomena.push(`aurora conditions good (typical Kp ${activity.toFixed(1)})`);
 
     // Equinox enhancement
-    if ([2,3,8,9].includes (month)) results.phenomena.push('aurora equinoctial enhancement period');
+    if ([2, 3, 8, 9].includes(month)) results.phenomena.push('aurora equinoctial enhancement period');
 
     // Moon conditions
     const lunarPhase = helpers.getLunarPhase(date),
@@ -109,9 +109,12 @@ function interpretEquinox(results, situation, data) {
     results.phenomena.push(formatProximityText(equinoxInfo));
 
     // Daylight change rate
-    results.phenomena.push(`daylight rapidly ${equinoxInfo.type.includes('spring') ? 'increasing' : 'decreasing'}` + 
-        location.latitude > 50 ? ` (${Math.round(Math.abs(Math.sin((location.latitude * Math.PI) / 180)) * 4)} min/day)` : '');
- 
+    results.phenomena.push(
+        `daylight rapidly ${equinoxInfo.type.includes('spring') ? 'increasing' : 'decreasing'}` + location.latitude > 50
+            ? ` (${Math.round(Math.abs(Math.sin((location.latitude * Math.PI) / 180)) * 4)} min/day)`
+            : ''
+    );
+
     // Equinox storms
     if (Math.abs(equinoxInfo.days) <= 3 && windSpeed > 10) results.phenomena.push('equinoctial gales');
 }
@@ -120,8 +123,8 @@ function interpretEquinox(results, situation, data) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function interpretSolstice(results, situation, data) {
-    const { cloudCover, snowDepth, temp } = data;
-    const { date, day, month, hour, location, daylight } = situation;
+    const { cloudCover, temp } = data;
+    const { date, hour, location, daylight } = situation;
 
     const solsticeInfo = helpers.isNearSolstice(date, location.hemisphere, config.solsticeLookaheadDays);
     if (!solsticeInfo.near) return;
@@ -130,48 +133,46 @@ function interpretSolstice(results, situation, data) {
 
     if (solsticeInfo.type === 'longest day') {
         // Summer solstice phenomena
-        if (daylight.daylightHours > 16)
-            results.phenomena.push(`daylight hours extended (${daylight.daylightHours.toFixed (1)} hours)`);
-        
+        if (daylight.daylightHours > 16) results.phenomena.push(`daylight hours extended (${daylight.daylightHours.toFixed(1)} hours)`);
+
         // Latitude variations
         if (location.latitude > 59.5) {
-            if (location.latitude > 66.5 && daylight.daylightHours >= 24) 
-                results.phenomena.push('true midnight sun (sun never sets)' + (cloudCover !== undefined && cloudCover < 50 ?' (visible sun)' : '') );
-            else if (location.latitude > 63) 
-                results.phenomena.push('near-midnight sun' + (daylight.civilDuskDecimal > 23 || daylight.civilDawnDecimal < 1 ? ' (no true darkness, civil twilight all night)' : ''));
-            else if (location.latitude > 60) 
-                results.phenomena.push('white nights period (twilight throughout the night)');
+            if (location.latitude > 66.5 && daylight.daylightHours >= 24)
+                results.phenomena.push('true midnight sun (sun never sets)' + (cloudCover !== undefined && cloudCover < 50 ? ' (visible sun)' : ''));
+            else if (location.latitude > 63)
+                results.phenomena.push(
+                    'near-midnight sun' +
+                        (daylight.civilDuskDecimal > 23 || daylight.civilDawnDecimal < 1 ? ' (no true darkness, civil twilight all night)' : '')
+                );
+            else if (location.latitude > 60) results.phenomena.push('white nights period (twilight throughout the night)');
         }
 
         // Full moon during summer solstice
         const lunarPhase = helpers.getLunarPhase(date);
-        if (lunarPhase >= 0.48 && lunarPhase <= 0.52) 
-            results.phenomena.push('solstice full moon (rare astronomical event)' +  (cloudCover !== undefined && cloudCover < 40 ?  ' (strawberry moon visible)' : ''));
+        if (lunarPhase >= 0.48 && lunarPhase <= 0.52)
+            results.phenomena.push(
+                'solstice full moon (rare astronomical event)' + (cloudCover !== undefined && cloudCover < 40 ? ' (strawberry moon visible)' : '')
+            );
 
         // Cultural phenomena
         if (location.latitude > 55) if (Math.abs(solsticeInfo.days) <= 3) results.phenomena.push('midsummer celebration period');
     } else if (solsticeInfo.type === 'shortest day') {
         // Winter solstice phenomena
-        if (daylight.daylightHours < 8) 
-            results.phenomena.push(`daylight hours minimal (${daylight.daylightHours.toFixed (1)} hours)`);
+        if (daylight.daylightHours < 8) results.phenomena.push(`daylight hours minimal (${daylight.daylightHours.toFixed(1)} hours)`);
 
         // Latitude variations
         if (location.latitude > 59.5) {
-            if (location.latitude > 66.5 && daylight.daylightHours < 0.1)
-                results.phenomena.push('polar night (sun never rises)');
-            else if (location.latitude > 63) 
-                results.phenomena.push('near-polar twilight' +  (daylight.daylightHours < 3 ?  ' (sun barely above horizon)' : ''));
-            else if (location.latitude > 60) 
-                results.phenomena.push('very short days' + (hour >= 14 && !daylight.isDaytime ? ' (afternoon darkness)' : ''));
-            else 
-                results.phenomena.push('extended darkness period');
+            if (location.latitude > 66.5 && daylight.daylightHours < 0.1) results.phenomena.push('polar night (sun never rises)');
+            else if (location.latitude > 63) results.phenomena.push('near-polar twilight' + (daylight.daylightHours < 3 ? ' (sun barely above horizon)' : ''));
+            else if (location.latitude > 60) results.phenomena.push('very short days' + (hour >= 14 && !daylight.isDaytime ? ' (afternoon darkness)' : ''));
+            else results.phenomena.push('extended darkness period');
         }
 
         // Full moon during winter solstice
         const lunarPhase = helpers.getLunarPhase(date);
-        if (lunarPhase >= 0.48 && lunarPhase <= 0.52) 
+        if (lunarPhase >= 0.48 && lunarPhase <= 0.52)
             results.phenomena.push('winter solstice full moon' + (cloudCover !== undefined && cloudCover < 40 ? ' (cold moon illuminating snow)' : ''));
-    
+
         // Temperature-related solstice phenomena
         if (temp !== undefined && temp < -10 && Math.abs(solsticeInfo.days) <= 7) results.phenomena.push('deep winter cold near solstice');
     }
@@ -210,16 +211,15 @@ function interpretSolarConditions(results, situation, data) {
 
     // Solar noon
     if (Math.abs(hour + minutes / 60 - solarPos.noon) < 0.25)
-        results.phenomena.push(`solar noon at ${Math.floor(solarPos.noon)}:${Math.round((solarPos.noon % 1) * 60).toString().padStart(2, '0')}` + ` (altitude ${Math.round(solarPos.altitude)}°)`);
+        results.phenomena.push(`solar noon at ${Math.floor(solarPos.noon)}:${Math.round((solarPos.noon % 1) * 60).toString().padStart(2, '0')} (altitude ${Math.round(solarPos.altitude)}°)`);
 
     // Solar position
     if (solarPos.altitude > 0) {
-        results.phenomena.push(`sun ${Math.round(solarPos.altitude)}° above horizon` + ` (bearing ${Math.round(solarPos.azimuth)}°, ${solarPos.direction})`);
+        results.phenomena.push(`sun ${Math.round(solarPos.altitude)}° above horizon (bearing ${Math.round(solarPos.azimuth)}°, ${solarPos.direction})`);
 
         // Special conditions
         if (solarPos.altitude > 50) results.phenomena.push('high sun angle');
-        else if (solarPos.altitude < 10) 
-            results.phenomena.push('golden hour lighting' +  (solarPos.altitude < 6 ? ' (blue hour approaching)' : ''));
+        else if (solarPos.altitude < 10) results.phenomena.push('golden hour lighting' + (solarPos.altitude < 6 ? ' (blue hour approaching)' : ''));
 
         // Shadow length indicator
         if (solarPos.altitude > 0.1 && solarPos.altitude < 45)
@@ -227,7 +227,7 @@ function interpretSolarConditions(results, situation, data) {
     }
 
     // UV index warning for summer at this latitude
-    if (solarPos.altitude > 40 && (data.solarUvi !== undefined && data.solarUvi > 5))
+    if (solarPos.altitude > 40 && data.solarUvi !== undefined && data.solarUvi > 5)
         results.phenomena.push(`UV index ${data.solarUvi} - sun protection advised`);
 
     // Winter sun at this latitude
@@ -240,7 +240,7 @@ function interpretSolarConditions(results, situation, data) {
 
 function interpretLunarConditions(results, situation, data, _data_previous, store) {
     const { cloudCover, snowDepth, humidity, temp } = data;
-    const { date, year, month, day, hour, location } = situation;
+    const { date, month, day, hour, location } = situation;
 
     if (!store.astronomy) store.astronomy = {};
     if (store.astronomy?.currentMonth !== month) {
@@ -273,40 +273,43 @@ function interpretLunarConditions(results, situation, data, _data_previous, stor
 
         // Visibility and conditions
         if (cloudCover !== undefined) {
-            if (cloudCover < 30) 
-                results.phenomena.push('clear skies for moon viewing' + (temp !== undefined && temp < -5 && humidity !== undefined && humidity < 50 ?  ' (crisp moonlight conditions)': ''));
-            else if (cloudCover < 70) 
-                results.phenomena.push('partial moon visibility through clouds');
+            if (cloudCover < 30)
+                results.phenomena.push(
+                    'clear skies for moon viewing' +
+                        (temp !== undefined && temp < -5 && humidity !== undefined && humidity < 50 ? ' (crisp moonlight conditions)' : '')
+                );
+            else if (cloudCover < 70) results.phenomena.push('partial moon visibility through clouds');
             else results.phenomena.push('moon obscured by clouds');
-            if (cloudCover < 40 && snowDepth !== undefined && snowDepth > 50) 
-                results.phenomena.push('bright moonlit snow landscape' + (temp !== undefined && temp < -10 ?  ' (sparkling snow crystals in moonlight)' : ''));
+            if (cloudCover < 40 && snowDepth !== undefined && snowDepth > 50)
+                results.phenomena.push('bright moonlit snow landscape' + (temp !== undefined && temp < -10 ? ' (sparkling snow crystals in moonlight)' : ''));
         }
 
         // Name
         if (month === 8 || month === 9) {
             const equinoxInfo = helpers.isNearEquinox(date, location.hemisphere, 30);
-            if (equinoxInfo.near && equinoxInfo.type === 'autumn equinox' && Math.abs(equinoxInfo.days) < 15) 
-                results.phenomena.push('harvest moon - closest full moon to autumn equinox' + (hour >= 17 && hour <= 20 ? ' (moon rising near sunset for several nights)' : ''));
-            else 
-                results.phenomena.push(helpers.getLunarName(month));
-        } else 
-            results.phenomena.push(helpers.getLunarName(month));
+            if (equinoxInfo.near && equinoxInfo.type === 'autumn equinox' && Math.abs(equinoxInfo.days) < 15)
+                results.phenomena.push(
+                    'harvest moon - closest full moon to autumn equinox' + (hour >= 17 && hour <= 20 ? ' (moon rising near sunset for several nights)' : '')
+                );
+            else results.phenomena.push(helpers.getLunarName(month));
+        } else results.phenomena.push(helpers.getLunarName(month));
 
         // Zodiac
-        if (zodiac.position === 'late') 
-            results.phenomena.push(`moon in late ${zodiac.sign}, entering ${zodiac.next} soon`);
+        if (zodiac.position === 'late') results.phenomena.push(`moon in late ${zodiac.sign}, entering ${zodiac.next} soon`);
         else
-            results.phenomena.push(`moon in ${zodiac.sign} ${zodiac.symbol}` + (['Cancer', 'Pisces', 'Scorpio'].includes(zodiac.sign) ? ' (emotional full moon in water sign)' : ''));
+            results.phenomena.push(
+                `moon in ${zodiac.sign} ${zodiac.symbol}` +
+                    (['Cancer', 'Pisces', 'Scorpio'].includes(zodiac.sign) ? ' (emotional full moon in water sign)' : '')
+            );
     } else if (lunarPhase >= 0.98 || lunarPhase <= 0.02) {
         // *** New moon ***
         results.phenomena.push('new moon tonight');
 
         // Visibility
         if (cloudCover !== undefined && cloudCover < 30) {
-            if (location.lightPollution === 'low') 
-                results.phenomena.push('stargazing conditions excellent' + (month >= 6 && month <= 8 && hour >= 22 ?  ' (Milky Way visible)' : ''));
-            else if (location.lightPollution === 'medium') 
-                results.phenomena.push('stargazing conditions good for bright stars');
+            if (location.lightPollution === 'low')
+                results.phenomena.push('stargazing conditions excellent' + (month >= 6 && month <= 8 && hour >= 22 ? ' (Milky Way visible)' : ''));
+            else if (location.lightPollution === 'medium') results.phenomena.push('stargazing conditions good for bright stars');
         }
 
         // Zodiac
@@ -331,11 +334,8 @@ function interpretLunarConditions(results, situation, data, _data_previous, stor
         // *** Transitional moon ***
         const yesterday = store.astronomy.lunarPhaseHistory?.[store.astronomy.lunarPhaseHistory.length - 2];
         if (yesterday) {
-            if (yesterday.phase < 0.02 && lunarPhase > 0.02) 
-                results.phenomena.push('moon is waxing (to full)');
-            
-            else if (yesterday.phase < 0.5 && lunarPhase > 0.5) 
-                results.phenomena.push('moon is waning (past full)');
+            if (yesterday.phase < 0.02 && lunarPhase > 0.02) results.phenomena.push('moon is waxing (to full)');
+            else if (yesterday.phase < 0.5 && lunarPhase > 0.5) results.phenomena.push('moon is waning (past full)');
         } else {
             if (lunarPhase > 0.02 && lunarPhase < 0.23) results.phenomena.push('waxing crescent moon');
             else if (lunarPhase > 0.27 && lunarPhase < 0.48) results.phenomena.push('waxing gibbous moon');
@@ -365,7 +365,7 @@ function interpretLunarConditions(results, situation, data, _data_previous, stor
 
     // Lunar Position
     if (lunarPos.altitude > 0) {
-        results.phenomena.push(`moon ${Math.round(lunarPos.altitude)}° above horizon` + ` (bearing ${Math.round(lunarPos.azimuth)}°, ${lunarPos.direction})`);
+        results.phenomena.push(`moon ${Math.round(lunarPos.altitude)}° above horizon (bearing ${Math.round(lunarPos.azimuth)}°, ${lunarPos.direction})`);
         if (lunarPos.altitude > 60) results.phenomena.push('moon near zenith - excellent viewing');
         else if (lunarPos.altitude < 10) results.phenomena.push('moon low on horizon');
     } else if (hour >= 6 && hour <= 18) results.phenomena.push('moon below horizon');
@@ -374,24 +374,28 @@ function interpretLunarConditions(results, situation, data, _data_previous, stor
     const lunarDistance = helpers.getLunarDistance(date);
     if (lunarDistance.isSupermoon) {
         if (lunarPhase >= 0.48 && lunarPhase <= 0.52)
-            results.phenomena.push(`supermoon - appears larger and brighter: ${Math.round(((384400 - lunarDistance.distance) / 384400) * 100)}% closer than average`);
+            results.phenomena.push(
+                `supermoon - appears larger and brighter: ${Math.round(((384400 - lunarDistance.distance) / 384400) * 100)}% closer than average`
+            );
         else if (lunarPhase >= 0.98 || lunarPhase <= 0.02) results.phenomena.push('super new moon - extra high tides expected');
         else results.phenomena.push('supermoon - moon at closest approach');
     } else if (lunarDistance.isMicromoon) {
         if (lunarPhase >= 0.48 && lunarPhase <= 0.52)
-            results.phenomena.push(`micromoon - appears smaller and dimmer: ${Math.round(((lunarDistance.distance - 384400) / 384400) * 100)}% farther than average`);
+            results.phenomena.push(
+                `micromoon - appears smaller and dimmer: ${Math.round(((lunarDistance.distance - 384400) / 384400) * 100)}% farther than average`
+            );
     }
 
     // Lunar Visibility
     results.phenomena.push(`moon ${Math.round(((1 - Math.cos(lunarPhase * 2 * Math.PI)) / 2) * 100)}% illuminated`);
-    
+
     // Noctilucent Clouds (Important for latitude 59.66°N)
     if (month >= 5 && month <= 7 && location.latitude > 50) {
         if ((hour >= 22 || hour <= 2) && cloudCover !== undefined && cloudCover < 50) {
-            if (Math.abs(helpers.daysIntoYear (date) - 172) < 30) // Near summer solstice
+            if (Math.abs(helpers.daysIntoYear(date) - 172) < 30)
+                // Near summer solstice
                 results.phenomena.push('prime noctilucent cloud season - check northern horizon');
-             else 
-                results.phenomena.push('noctilucent clouds possible in north');
+            else results.phenomena.push('noctilucent clouds possible in north');
         }
     }
     if ((lunarPhase > 0.05 && lunarPhase < 0.15) || (lunarPhase > 0.85 && lunarPhase < 0.95))
@@ -406,34 +410,33 @@ function interpretLunarConditions(results, situation, data, _data_previous, stor
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-
-    const meteorShowers = [
-        // Major showers
-        { month: 0, start: 1, end: 5, peak: 3, name: 'Quadrantids', rate: 120, moon: 'any', radiant: 'Boötes' },
-        { month: 3, start: 16, end: 25, peak: 22, name: 'Lyrids', rate: 18, moon: 'favor_dark', radiant: 'Lyra' },
-        { month: 4, start: 19, end: 28, peak: 6, peakMonth: 5, name: 'Eta Aquarids', rate: 50, moon: 'any', radiant: 'Aquarius' },
-        { month: 6, start: 12, endMonth: 7, end: 23, peak: 28, peakMonth: 7, name: 'Delta Aquarids', rate: 25, moon: 'any', radiant: 'Aquarius' },
-        { month: 7, start: 17, end: 24, peak: 12, name: 'Perseids', rate: 100, moon: 'favor_dark', radiant: 'Perseus' },
-        { month: 9, start: 2, end: 11, peak: 8, name: 'Draconids', rate: 'variable', moon: 'any', radiant: 'Draco' },
-        { month: 9, start: 2, endMonth: 10, end: 7, peak: 21, name: 'Orionids', rate: 20, moon: 'favor_dark', radiant: 'Orion' },
-        { month: 10, start: 7, end: 10, peak: 9, name: 'Southern Taurids', rate: 10, moon: 'any', radiant: 'Taurus' },
-        { month: 10, start: 6, end: 30, peak: 12, name: 'Northern Taurids', rate: 15, moon: 'any', radiant: 'Taurus' },
-        { month: 10, start: 14, end: 21, peak: 17, name: 'Leonids', rate: 15, moon: 'favor_dark', radiant: 'Leo' },
-        { month: 11, start: 4, end: 17, peak: 14, name: 'Geminids', rate: 120, moon: 'favor_dark', radiant: 'Gemini' },
-        { month: 11, start: 17, end: 26, peak: 22, name: 'Ursids', rate: 10, moon: 'any', radiant: 'Ursa Minor' },
-        // Minor showers particularly visible at 59.66°N
-        { month: 0, start: 15, end: 25, peak: 20, name: 'Gamma Velids', rate: 5, moon: 'any', radiant: 'Vela' },
-        { month: 3, start: 14, end: 30, peak: 24, name: 'Mu Virginids', rate: 7, moon: 'any', radiant: 'Virgo' },
-        { month: 4, start: 8, end: 12, peak: 10, name: 'Eta Lyrids', rate: 3, moon: 'any', radiant: 'Lyra' },
-        { month: 5, start: 5, endMonth: 6, end: 2, peak: 27, peakMonth: 6, name: 'June Bootids', rate: 'variable', moon: 'any', radiant: 'Boötes' },
-        { month: 6, start: 25, endMonth: 7, end: 10, peak: 30, peakMonth: 7, name: 'Alpha Capricornids', rate: 5, moon: 'bright_ok', radiant: 'Capricornus' },
-        { month: 8, start: 25, endMonth: 9, end: 20, peak: 9, peakMonth: 9, name: 'September Epsilon Perseids', rate: 5, moon: 'any', radiant: 'Perseus' },
-        { month: 11, start: 6, end: 30, peak: 12, name: 'Sigma Hydrids', rate: 5, moon: 'any', radiant: 'Hydra' },
-    ];
+const meteorShowers = [
+    // Major showers
+    { month: 0, start: 1, end: 5, peak: 3, name: 'Quadrantids', rate: 120, moon: 'any', radiant: 'Boötes' },
+    { month: 3, start: 16, end: 25, peak: 22, name: 'Lyrids', rate: 18, moon: 'favor_dark', radiant: 'Lyra' },
+    { month: 4, start: 19, end: 28, peak: 6, peakMonth: 5, name: 'Eta Aquarids', rate: 50, moon: 'any', radiant: 'Aquarius' },
+    { month: 6, start: 12, endMonth: 7, end: 23, peak: 28, peakMonth: 7, name: 'Delta Aquarids', rate: 25, moon: 'any', radiant: 'Aquarius' },
+    { month: 7, start: 17, end: 24, peak: 12, name: 'Perseids', rate: 100, moon: 'favor_dark', radiant: 'Perseus' },
+    { month: 9, start: 2, end: 11, peak: 8, name: 'Draconids', rate: 'variable', moon: 'any', radiant: 'Draco' },
+    { month: 9, start: 2, endMonth: 10, end: 7, peak: 21, name: 'Orionids', rate: 20, moon: 'favor_dark', radiant: 'Orion' },
+    { month: 10, start: 7, end: 10, peak: 9, name: 'Southern Taurids', rate: 10, moon: 'any', radiant: 'Taurus' },
+    { month: 10, start: 6, end: 30, peak: 12, name: 'Northern Taurids', rate: 15, moon: 'any', radiant: 'Taurus' },
+    { month: 10, start: 14, end: 21, peak: 17, name: 'Leonids', rate: 15, moon: 'favor_dark', radiant: 'Leo' },
+    { month: 11, start: 4, end: 17, peak: 14, name: 'Geminids', rate: 120, moon: 'favor_dark', radiant: 'Gemini' },
+    { month: 11, start: 17, end: 26, peak: 22, name: 'Ursids', rate: 10, moon: 'any', radiant: 'Ursa Minor' },
+    // Minor showers particularly visible at 59.66°N
+    { month: 0, start: 15, end: 25, peak: 20, name: 'Gamma Velids', rate: 5, moon: 'any', radiant: 'Vela' },
+    { month: 3, start: 14, end: 30, peak: 24, name: 'Mu Virginids', rate: 7, moon: 'any', radiant: 'Virgo' },
+    { month: 4, start: 8, end: 12, peak: 10, name: 'Eta Lyrids', rate: 3, moon: 'any', radiant: 'Lyra' },
+    { month: 5, start: 5, endMonth: 6, end: 2, peak: 27, peakMonth: 6, name: 'June Bootids', rate: 'variable', moon: 'any', radiant: 'Boötes' },
+    { month: 6, start: 25, endMonth: 7, end: 10, peak: 30, peakMonth: 7, name: 'Alpha Capricornids', rate: 5, moon: 'bright_ok', radiant: 'Capricornus' },
+    { month: 8, start: 25, endMonth: 9, end: 20, peak: 9, peakMonth: 9, name: 'September Epsilon Perseids', rate: 5, moon: 'any', radiant: 'Perseus' },
+    { month: 11, start: 6, end: 30, peak: 12, name: 'Sigma Hydrids', rate: 5, moon: 'any', radiant: 'Hydra' },
+];
 
 function interpretMeteors(results, situation, data) {
     const { cloudCover } = data;
-    const { year, date, month, day, hour, daylight } = situation;
+    const { year, date, month, day, hour, daylight, location } = situation;
 
     const lunarPhase = helpers.getLunarPhase(date);
 
@@ -477,12 +480,12 @@ function interpretMeteors(results, situation, data) {
 
     // Add special meteor conditions for 59.66°N
     if (location.latitude > 59) {
-    if (currentShowers.length > 0 && (hour >= 22 || hour <= 4)) {
-        if (month >= 8 || month <= 2) results.phenomena.push('meteor viewing ideal with long dark nights');
-        else if (month >= 5 && month <= 7)
-            results.phenomena.push(`meteor viewing window: ${Math.floor(daylight.astronomicalDusk)}:00-${Math.floor(daylight.astronomicalDawn)}:00 only`);
+        if (currentShowers.length > 0 && (hour >= 22 || hour <= 4)) {
+            if (month >= 8 || month <= 2) results.phenomena.push('meteor viewing ideal with long dark nights');
+            else if (month >= 5 && month <= 7)
+                results.phenomena.push(`meteor viewing window: ${Math.floor(daylight.astronomicalDusk)}:00-${Math.floor(daylight.astronomicalDawn)}:00 only`);
+        }
     }
-}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -514,12 +517,12 @@ function interpretPlanets(results, situation, data) {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-    const periodicComets = [
-        { name: "Halley's Comet", period: 75.3, lastPerihelion: new Date('1986-02-09'), magnitude: 4 },
-        { name: 'Comet Encke', period: 3.3, lastPerihelion: new Date('2023-10-22'), magnitude: 6 },
-        { name: 'Comet 67P/Churyumov-Gerasimenko', period: 6.45, lastPerihelion: new Date('2021-11-02'), magnitude: 9 },
-    ];
-    
+const periodicComets = [
+    { name: "Halley's Comet", period: 75.3, lastPerihelion: new Date('1986-02-09'), magnitude: 4 },
+    { name: 'Comet Encke', period: 3.3, lastPerihelion: new Date('2023-10-22'), magnitude: 6 },
+    { name: 'Comet 67P/Churyumov-Gerasimenko', period: 6.45, lastPerihelion: new Date('2021-11-02'), magnitude: 9 },
+];
+
 function interpretComets(results, situation) {
     const { date } = situation;
 
