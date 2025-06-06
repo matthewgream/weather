@@ -470,54 +470,76 @@ function interpretMeteors(results, situation, data) {
 
     const lunarPhase = helpers.getLunarPhase(date);
 
-    const meteorShowers = [
-        // Major showers
-        { month: 0, start: 1, end: 5, peak: 3, name: 'Quadrantids', rate: 120, moon: 'any', radiant: 'Boötes' },
-        { month: 3, start: 16, end: 25, peak: 22, name: 'Lyrids', rate: 18, moon: 'favor_dark', radiant: 'Lyra' },
-        { month: 4, start: 19, end: 28, peak: 6, peakMonth: 5, name: 'Eta Aquarids', rate: 50, moon: 'any', radiant: 'Aquarius' },
-        { month: 6, start: 12, end: 23, peak: 28, peakMonth: 7, name: 'Delta Aquarids', rate: 25, moon: 'any', radiant: 'Aquarius' },
-        { month: 7, start: 17, end: 24, peak: 12, name: 'Perseids', rate: 100, moon: 'favor_dark', radiant: 'Perseus' },
-        { month: 9, start: 2, end: 11, peak: 8, name: 'Draconids', rate: 'variable', moon: 'any', radiant: 'Draco' },
-        { month: 9, start: 2, end: 7, peak: 21, name: 'Orionids', rate: 20, moon: 'favor_dark', radiant: 'Orion' },
-        { month: 10, start: 7, end: 10, peak: 9, name: 'Southern Taurids', rate: 10, moon: 'any', radiant: 'Taurus' },
-        { month: 10, start: 6, end: 30, peak: 12, name: 'Northern Taurids', rate: 15, moon: 'any', radiant: 'Taurus' },
-        { month: 10, start: 14, end: 21, peak: 17, name: 'Leonids', rate: 15, moon: 'favor_dark', radiant: 'Leo' },
-        { month: 11, start: 4, end: 17, peak: 14, name: 'Geminids', rate: 120, moon: 'favor_dark', radiant: 'Gemini' },
-        { month: 11, start: 17, end: 26, peak: 22, name: 'Ursids', rate: 10, moon: 'any', radiant: 'Ursa Minor' },
+const meteorShowers = [
+    // Major showers
+    { month: 0, start: 1, end: 5, peak: 3, name: 'Quadrantids', rate: 120, moon: 'any', radiant: 'Boötes' },
+    { month: 3, start: 16, end: 25, peak: 22, name: 'Lyrids', rate: 18, moon: 'favor_dark', radiant: 'Lyra' },
+    { month: 4, start: 19, end: 28, peak: 6, peakMonth: 5, name: 'Eta Aquarids', rate: 50, moon: 'any', radiant: 'Aquarius' },
+    { month: 6, start: 12, endMonth: 7, end: 23, peak: 28, peakMonth: 7, name: 'Delta Aquarids', rate: 25, moon: 'any', radiant: 'Aquarius' },
+    { month: 7, start: 17, end: 24, peak: 12, name: 'Perseids', rate: 100, moon: 'favor_dark', radiant: 'Perseus' },
+    { month: 9, start: 2, end: 11, peak: 8, name: 'Draconids', rate: 'variable', moon: 'any', radiant: 'Draco' },
+    { month: 9, start: 2, endMonth: 10, end: 7, peak: 21, name: 'Orionids', rate: 20, moon: 'favor_dark', radiant: 'Orion' },
+    { month: 10, start: 7, end: 10, peak: 9, name: 'Southern Taurids', rate: 10, moon: 'any', radiant: 'Taurus' },
+    { month: 10, start: 6, end: 30, peak: 12, name: 'Northern Taurids', rate: 15, moon: 'any', radiant: 'Taurus' },
+    { month: 10, start: 14, end: 21, peak: 17, name: 'Leonids', rate: 15, moon: 'favor_dark', radiant: 'Leo' },
+    { month: 11, start: 4, end: 17, peak: 14, name: 'Geminids', rate: 120, moon: 'favor_dark', radiant: 'Gemini' },
+    { month: 11, start: 17, end: 26, peak: 22, name: 'Ursids', rate: 10, moon: 'any', radiant: 'Ursa Minor' },
+    // Minor showers particularly visible at 59.66°N
+    { month: 0, start: 15, end: 25, peak: 20, name: 'Gamma Velids', rate: 5, moon: 'any', radiant: 'Vela' },
+    { month: 3, start: 14, end: 30, peak: 24, name: 'Mu Virginids', rate: 7, moon: 'any', radiant: 'Virgo' },
+    { month: 4, start: 8, end: 12, peak: 10, name: 'Eta Lyrids', rate: 3, moon: 'any', radiant: 'Lyra' },
+    { month: 5, start: 5, endMonth: 6, end: 2, peak: 27, peakMonth: 6, name: 'June Bootids', rate: 'variable', moon: 'any', radiant: 'Boötes' },
+    { month: 6, start: 25, endMonth: 7, end: 10, peak: 30, peakMonth: 7, name: 'Alpha Capricornids', rate: 5, moon: 'bright_ok', radiant: 'Capricornus' },
+    { month: 8, start: 25, endMonth: 9, end: 20, peak: 9, peakMonth: 9, name: 'September Epsilon Perseids', rate: 5, moon: 'any', radiant: 'Perseus' },
+    { month: 11, start: 6, end: 30, peak: 12, name: 'Sigma Hydrids', rate: 5, moon: 'any', radiant: 'Hydra' },
+];
 
-        // Minor showers particularly visible at 59.66°N
-        { month: 0, start: 15, end: 25, peak: 20, name: 'Gamma Velids', rate: 5, moon: 'any', radiant: 'Vela' },
-        { month: 3, start: 14, end: 30, peak: 24, name: 'Mu Virginids', rate: 7, moon: 'any', radiant: 'Virgo' },
-        { month: 4, start: 8, end: 12, peak: 10, name: 'Eta Lyrids', rate: 3, moon: 'any', radiant: 'Lyra' },
-        { month: 5, start: 5, end: 2, peak: 27, peakMonth: 6, name: 'June Bootids', rate: 'variable', moon: 'any', radiant: 'Boötes' },
-        { month: 6, start: 25, end: 10, peak: 30, peakMonth: 7, name: 'Alpha Capricornids', rate: 5, moon: 'bright_ok', radiant: 'Capricornus' },
-        { month: 8, start: 25, end: 20, peak: 9, peakMonth: 9, name: 'September Epsilon Perseids', rate: 5, moon: 'any', radiant: 'Perseus' },
-        { month: 11, start: 6, end: 30, peak: 12, name: 'Sigma Hydrids', rate: 5, moon: 'any', radiant: 'Hydra' },
-    ];
-
-    // Process meteor showers
-    const currentShowers = meteorShowers.filter((shower) => {
-        if (shower.peakMonth && month === shower.peakMonth) return day <= shower.peak;
-        return month === shower.month && day >= shower.start && day <= shower.end;
-    });
-
-    currentShowers.forEach((shower) => {
-        let text = shower.name;
-        const peakDay = shower.peakMonth && month === shower.peakMonth ? shower.peak : month === shower.month ? shower.peak : undefined;
-        if (peakDay && day === peakDay) {
-            text += ` PEAK TONIGHT`;
-            if (typeof shower.rate === 'number') text += ` (ZHR ~${shower.rate}/hr)`;
-            if (cloudCover < 30) {
-                if (lunarPhase <= 0.25 || lunarPhase >= 0.75) text += ' - excellent dark sky conditions';
-                else if (shower.moon === 'bright_ok') text += ' - bright meteors visible despite moon';
-                else if (lunarPhase >= 0.4 && lunarPhase <= 0.6) text += ' - moon will interfere';
-            }
-        } else if (peakDay && Math.abs(day - peakDay) <= 1) text += ' (near peak)';
-        // Special notes for high latitude
-        if (shower.radiant === 'Perseus' || shower.radiant === 'Ursa Minor' || shower.radiant === 'Draco' || shower.radiant === 'Boötes')
-            text += ' - favorable radiant position at this latitude';
-        results.phenomena.push(text);
-    });
+meteorShowers.filter((shower) => {
+    const showerStartMonth = shower.month,
+     showerEndMonth = shower.endMonth !== undefined ? shower.endMonth : shower.month,
+     showerPeakMonth = shower.peakMonth !== undefined ? shower.peakMonth : shower.month;
+    if (showerStartMonth === showerEndMonth) 
+        return month === showerStartMonth && day >= shower.start && day <= shower.end;
+     else if (showerEndMonth === showerStartMonth + 1 || (showerStartMonth === 11 && showerEndMonth === 0)) 
+        if ((month === showerStartMonth && day >= shower.start) || (month === showerEndMonth && day <= shower.end))
+            return true;
+    return false;
+}).forEach((shower) => {
+    let text = shower.name;
+    const showerPeakMonth = shower.peakMonth !== undefined ? shower.peakMonth : shower.month,
+     isPeakDay = month === showerPeakMonth && day === shower.peak;
+    let daysFromPeak = null;
+    if (shower.peakMonth !== undefined) {
+        const currentDate = new Date(situation.year, month, day), peakDate = new Date(situation.year, showerPeakMonth, shower.peak);
+        if (showerPeakMonth < shower.month && month >= shower.month) 
+            peakDate.setFullYear(situation.year + 1);
+         else if (showerPeakMonth > shower.month && month < shower.month) 
+            peakDate.setFullYear(situation.year - 1);
+        daysFromPeak = Math.round((peakDate - currentDate) / (24 * 60 * 60 * 1000));
+    } else if (month === shower.month) 
+            daysFromPeak = shower.peak - day;
+    if (isPeakDay) {
+        text += ` PEAK TONIGHT`;
+        if (typeof shower.rate === 'number') 
+            text += ` (ZHR ~${shower.rate}/hr)`;
+        if (cloudCover < 30) {
+            if (lunarPhase <= 0.25 || lunarPhase >= 0.75) 
+                text += ' - excellent dark sky conditions';
+             else if (shower.moon === 'bright_ok') 
+                text += ' - bright meteors visible despite moon';
+             else if (lunarPhase >= 0.4 && lunarPhase <= 0.6) 
+                text += ' - moon will interfere';
+        }
+    } else if (daysFromPeak !== null && Math.abs(daysFromPeak) <= 2) {
+        if (daysFromPeak > 0) 
+            text += ` (peak in ${daysFromPeak} day${daysFromPeak > 1 ? 's' : ''})`;
+         else if (daysFromPeak < 0) 
+            text += ` (peak was ${-daysFromPeak} day${-daysFromPeak > 1 ? 's' : ''} ago)`;
+    }
+    if (shower.radiant === 'Perseus' || shower.radiant === 'Ursa Minor' || shower.radiant === 'Draco' || shower.radiant === 'Boötes') 
+        text += ' - favorable radiant position at this latitude';
+    results.phenomena.push(text);
+});
 
     // Add special meteor conditions for 59.66°N
     if (currentShowers.length > 0 && (hour >= 22 || hour <= 4)) {
