@@ -37,7 +37,7 @@ function __weatherSituation(location, data) {
         day: date.getDate(),
         month: date.getMonth(),
         year: date.getFullYear(),
-        season: helpers.getSeason(location.hemisphere),
+        season: helpers.getSeason(date, location.hemisphere),
         daylight: helpers.getDaylightHours(location.latitude, location.longitude),
         dewPoint: helpers.calculateDewPoint(temp, humidity),
         windChill: helpers.calculateWindChill(temp, windSpeed),

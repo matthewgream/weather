@@ -67,9 +67,12 @@ function isLeapYear(yr) {
     return (yr % 4 === 0 && yr % 100 !== 0) || yr % 400 === 0;
 }
 
+function daysIntoYear(date = new Date()) {
+    return (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - Date.UTC(date.getFullYear(), 0, 0)) / 24 / 60 / 60 / 1000;
+}
+
 function getDaylightHours(latitude, longitude, date = new Date()) {
-    let dayOfYear = date.getDate();
-    for (let i = 0; i < date.getMonth(); i++) dayOfYear += [31, isLeapYear(date.getFullYear()) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][i];
+    const dayOfYear = daysIntoYear(date);
     const latitudeRad = (latitude * Math.PI) / 180;
     const fracYear = ((2 * Math.PI) / (isLeapYear(date.getFullYear()) ? 366 : 365)) * (dayOfYear - 1 + (date.getHours() - 12) / 24);
     const declination =
@@ -101,15 +104,14 @@ function getDaylightHours(latitude, longitude, date = new Date()) {
             times[type + 'Dusk'] = normalizeTime(solarNoon + hourAngle + utcOffset);
         } else if (cosHourAngle < -1) {
             // Sun never goes below this angle (midnight sun period)
-            times[type + 'Dawn'] = undefined;
-            times[type + 'Dusk'] = undefined;
+            times[type + 'Dawn'] = null; // eslint-disable-line unicorn/no-null
+            times[type + 'Dusk'] = null; // eslint-disable-line unicorn/no-null
         } else {
             // Sun never rises above this angle (polar night)
             times[type + 'Dawn'] = undefined;
             times[type + 'Dusk'] = undefined;
         }
     }
-
     const daylightAngle =
         (Math.cos((90.8333 * Math.PI) / 180) - Math.sin(latitudeRad) * Math.sin(declination)) / (Math.cos(latitudeRad) * Math.cos(declination));
     const daylightHours =
@@ -143,26 +145,25 @@ function getDaylightHours(latitude, longitude, date = new Date()) {
 
 function getDaylightPhase(currentHourDecimal, daylight) {
     if (daylight.isDaytime) return 'day';
-
-    // Handle special cases first
     if (daylight.isMidnightSun) return 'midnight_sun';
     if (daylight.isPolarNight) return 'polar_night';
-
-    // Check each twilight phase
-    if (daylight.astronomicalDawn === undefined || daylight.astronomicalDusk === undefined) {
-        // No astronomical twilight (continuous twilight in summer)
-        if (daylight.nauticalDawn && currentHourDecimal >= daylight.nauticalDawn && currentHourDecimal < daylight.sunriseDecimal) return 'nautical_dawn';
-        else if (daylight.sunsetDecimal && currentHourDecimal >= daylight.sunsetDecimal && currentHourDecimal <= daylight.nauticalDusk) return 'nautical_dusk';
-        else return 'white_night'; // Special case for high latitudes
-    }
-
-    // Normal twilight progression
-    if (currentHourDecimal >= daylight.astronomicalDawn && currentHourDecimal < daylight.nauticalDawn) return 'astronomical_dawn';
-    else if (currentHourDecimal >= daylight.nauticalDawn && currentHourDecimal < daylight.civilDawn) return 'nautical_dawn';
-    else if (currentHourDecimal >= daylight.civilDawn && currentHourDecimal < daylight.sunriseDecimal) return 'civil_dawn';
-    else if (currentHourDecimal >= daylight.sunsetDecimal && currentHourDecimal < daylight.civilDusk) return 'civil_dusk';
-    else if (currentHourDecimal >= daylight.civilDusk && currentHourDecimal < daylight.nauticalDusk) return 'nautical_dusk';
-    else if (currentHourDecimal >= daylight.nauticalDusk && currentHourDecimal < daylight.astronomicalDusk) return 'astronomical_dusk';
+    if (daylight.astronomicalDawn === null || daylight.astronomicalDusk === null) return 'white_night';
+    const phases = [
+        { start: daylight.astronomicalDawn, end: daylight.nauticalDawn, phase: 'astronomical_dawn' },
+        { start: daylight.nauticalDawn, end: daylight.civilDawn, phase: 'nautical_dawn' },
+        { start: daylight.civilDawn, end: daylight.sunriseDecimal, phase: 'civil_dawn' },
+        { start: daylight.sunsetDecimal, end: daylight.civilDusk, phase: 'civil_dusk' },
+        { start: daylight.civilDusk, end: daylight.nauticalDusk, phase: 'nautical_dusk' },
+        { start: daylight.nauticalDusk, end: daylight.astronomicalDusk, phase: 'astronomical_dusk' },
+    ];
+    for (const { start, end, phase } of phases)
+        if (start !== undefined && end !== undefined) {
+            if (start < end) {
+                if (currentHourDecimal >= start && currentHourDecimal < end) return phase;
+            } else {
+                if (currentHourDecimal >= start || currentHourDecimal < end) return phase;
+            }
+        }
     return 'night';
 }
 
@@ -177,37 +178,38 @@ function calculateDewPoint(temp, humidity) {
     return (b * alpha) / (a - alpha);
 }
 
-function calculateHeatIndex(temp, rh) {
-    if (temp < 20) return temp; // Only applicable for temps > 20°C
+function calculateHeatIndex(temp, humidity) {
+    if (temp === undefined || temp < 20) return temp; // Only applicable for temps > 20°C
     const tempF = (temp * 9) / 5 + 32; // Convert to Fahrenheit for the standard formula
-    let heatIndexF = 0.5 * (tempF + 61 + (tempF - 68) * 1.2 + rh * 0.094); // Simplified heat index formula
+    let heatIndexF = 0.5 * (tempF + 61 + (tempF - 68) * 1.2 + humidity * 0.094); // Simplified heat index formula
     if (tempF >= 80) {
         // Use more precise formula if hot enough
         heatIndexF =
             -42.379 +
             2.04901523 * tempF +
-            10.14333127 * rh -
-            0.22475541 * tempF * rh -
+            10.14333127 * humidity -
+            0.22475541 * tempF * humidity -
             6.83783e-3 * tempF * tempF -
-            5.481717e-2 * rh * rh +
-            1.22874e-3 * tempF * tempF * rh +
-            8.5282e-4 * tempF * rh * rh -
-            1.99e-6 * tempF * tempF * rh * rh;
-        if (rh < 13 && tempF >= 80 && tempF <= 112)
+            5.481717e-2 * humidity * humidity +
+            1.22874e-3 * tempF * tempF * humidity +
+            8.5282e-4 * tempF * humidity * humidity -
+            1.99e-6 * tempF * tempF * humidity * humidity;
+        if (humidity < 13 && tempF >= 80 && tempF <= 112)
             // Apply adjustment for low humidity or cool temps
-            heatIndexF -= ((13 - rh) / 4) * Math.hypot((17 - Math.abs(tempF - 95)) / 17);
-        else if (rh > 85 && tempF >= 80 && tempF <= 87) heatIndexF += ((rh - 85) / 10) * ((87 - tempF) / 5);
+            heatIndexF -= ((13 - humidity) / 4) * Math.hypot((17 - Math.abs(tempF - 95)) / 17);
+        else if (humidity > 85 && tempF >= 80 && tempF <= 87) heatIndexF += ((humidity - 85) / 10) * ((87 - tempF) / 5);
     }
     return ((heatIndexF - 32) * 5) / 9; // Convert back to Celsius
 }
 
 function calculateWindChill(temp, windSpeed) {
-    if (temp > 10 || windSpeed <= 1.3) return temp; // Only applicable for temps <= 10°C and wind > 1.3 m/s
+    if (temp === undefined || temp > 10 || windSpeed <= 1.3) return temp; // Only applicable for temps <= 10°C and wind > 1.3 m/s
     const windSpeedKmh = windSpeed * 3.6; // Convert wind speed to km/h
     return 13.12 + 0.6215 * temp - 11.37 * windSpeedKmh ** 0.16 + 0.3965 * temp * windSpeedKmh ** 0.16; // Calculate wind chill using Environment Canada formula
 }
 
 function calculateFeelsLike(temp, humidity, windSpeed) {
+    if (temp === undefined) return temp;
     if (temp <= 10)
         // For cold conditions, use wind chill
         return calculateWindChill(temp, windSpeed);
@@ -219,6 +221,7 @@ function calculateFeelsLike(temp, humidity, windSpeed) {
 }
 
 function calculateComfortLevel(temp, humidity, windSpeed, solarRad) {
+    if (temp === undefined) return 'undefined';
     const feelsLike = calculateFeelsLike(temp, humidity, windSpeed);
     if (feelsLike < -10 || feelsLike > 35) return 'very uncomfortable';
     if (feelsLike < 0 || feelsLike > 30) return 'uncomfortable';
@@ -233,12 +236,11 @@ function calculateComfortLevel(temp, humidity, windSpeed, solarRad) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function getSeason(hemisphere = 'northern') {
-    const seasons = {
+function getSeason(date = new Date(), hemisphere = 'northern') {
+    return {
         northern: ['winter', 'winter', 'winter', 'spring', 'spring', 'spring', 'summer', 'summer', 'summer', 'autumn', 'autumn', 'winter'],
         southern: ['summer', 'summer', 'summer', 'autumn', 'autumn', 'autumn', 'winter', 'winter', 'winter', 'spring', 'spring', 'summer'],
-    };
-    return seasons[hemisphere][new Date().getMonth()];
+    }[hemisphere][date.getMonth()];
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -351,7 +353,7 @@ function isNearCrossQuarter(date = new Date(), hemisphere = 'northern', daysWind
         if (Math.abs(days) <= daysWindow)
             return {
                 near: true,
-                name: hemisphere === 'northern' ? item.northern : item.southern,
+                type: `cross-quarter ${hemisphere === 'northern' ? item.northern : item.southern}`,
                 exact: Math.abs(days) < 1,
                 days,
             };
@@ -386,20 +388,22 @@ function getSolarPosition(date, latitude, longitude) {
     const lst = localSiderealTime(jd, longitude);
     const H = lst - alpha;
     // Convert to altitude/azimuth
-    const latRad = (latitude * Math.PI) / 180;
-    const deltaRad = (delta * Math.PI) / 180;
-    const Hrad = (H * Math.PI) / 180;
+    const latRad = (latitude * Math.PI) / 180,
+        deltaRad = (delta * Math.PI) / 180,
+        Hrad = (H * Math.PI) / 180;
     const altitude = (Math.asin(Math.sin(latRad) * Math.sin(deltaRad) + Math.cos(latRad) * Math.cos(deltaRad) * Math.cos(Hrad)) * 180) / Math.PI;
-    let azimuth = (Math.atan2(Math.sin(Hrad), Math.cos(Hrad) * Math.sin(latRad) - Math.tan(deltaRad) * Math.cos(latRad)) * 180) / Math.PI;
-    azimuth = (azimuth + 180) % 360; // Convert to 0-360 from North
+    const azimuth = ((Math.atan2(Math.sin(Hrad), Math.cos(Hrad) * Math.sin(latRad) - Math.tan(deltaRad) * Math.cos(latRad)) * 180) / Math.PI + 180) % 360;
+    const equationOfTime = 4 * (L0 - alpha); // minutes
     return {
         altitude,
         azimuth,
+        direction: ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'][Math.round(azimuth / 45) % 8],
         declination: delta,
         rightAscension: alpha,
         hourAngle: H,
         trueLongitude,
-        equationOfTime: 4 * (L0 - alpha), // in minutes
+        equationOfTime,
+        noon: 12 - equationOfTime / 60 - longitude / 15,
     };
 }
 
@@ -511,6 +515,11 @@ function getLunarName(month) {
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
+
+function getLunarBrightness(phase) {
+    return Math.round(((1 - Math.cos(phase * 2 * Math.PI)) / 2) * 100);
+}
+
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function getLunarZodiac(date = new Date()) {
@@ -673,6 +682,7 @@ module.exports = {
     getLunarPosition,
     getLunarTimes,
     getLunarName,
+    getLunarBrightness,
     getLunarZodiac,
     //
     addEvent,
