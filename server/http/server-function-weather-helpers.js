@@ -5,6 +5,37 @@
 
 const msPerDay = 1000 * 60 * 60 * 24;
 
+function dateToJulianDate(date) {
+    const year = date.getUTCFullYear(),
+        month = date.getUTCMonth() + 1,
+        day = date.getUTCDate(),
+        hour = date.getUTCHours(),
+        minute = date.getUTCMinutes(),
+        second = date.getUTCSeconds();
+
+    const a = Math.floor((14 - month) / 12),
+        y = year + 4800 - a,
+        m = month + 12 * a - 3;
+
+    let jd = day + Math.floor((153 * m + 2) / 5) + 365 * y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) - 32045;
+    jd += (hour - 12) / 24 + minute / 1440 + second / 86400;
+
+    return jd;
+}
+
+function localSiderealTime(jd, longitude) {
+    const T = (jd - 2451545) / 36525;
+    const st = 280.46061837 + 360.98564736629 * (jd - 2451545) + 0.000387933 * T * T;
+    return (st + longitude) % 360;
+}
+
+function getSolarLongitude(jd) {
+    const n = jd - 2451545.0;
+    const L = (280.46 + 0.9856474 * n) % 360;
+    const g = (((357.528 + 0.9856003 * n) % 360) * Math.PI) / 180;
+    return (L + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) % 360;
+}
+
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -330,6 +361,63 @@ function getLunarDistance(date = new Date()) {
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
+
+function getLunarPosition(date, latitude, longitude) {
+    const jd = dateToJulianDate(date),
+        T = (jd - 2451545) / 36525;
+
+    const L = (218.316 + 13.176396 * T * 36525) % 360,
+        M = (134.963 + 13.064993 * T * 36525) % 360,
+        F = (93.272 + 13.22935 * T * 36525) % 360;
+
+    const lon = (L + 6.289 * Math.sin((M * Math.PI) / 180) + 1.274 * Math.sin(((2 * F - M) * Math.PI) / 180)) % 360,
+        lat = 5.128 * Math.sin((F * Math.PI) / 180);
+
+    const lst = localSiderealTime(jd, longitude),
+        ha = lst - lon;
+
+    const altitude =
+        (Math.asin(
+            Math.sin((lat * Math.PI) / 180) * Math.sin((latitude * Math.PI) / 180) +
+                Math.cos((lat * Math.PI) / 180) * Math.cos((latitude * Math.PI) / 180) * Math.cos((ha * Math.PI) / 180)
+        ) *
+            180) /
+        Math.PI;
+    const azimuth =
+        (Math.atan2(
+            Math.sin((ha * Math.PI) / 180),
+            Math.cos((ha * Math.PI) / 180) * Math.sin((latitude * Math.PI) / 180) - Math.tan((lat * Math.PI) / 180) * Math.cos((latitude * Math.PI) / 180)
+        ) *
+            180) /
+        Math.PI;
+
+    return {
+        altitude,
+        azimuth: (azimuth + 360) % 360,
+        illuminatedFraction: (1 - Math.cos(((L - getSolarLongitude(jd)) * Math.PI) / 180)) / 2,
+    };
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+function getLunarTimes(date, latitude, longitude) {
+    const times = { rise: undefined, set: undefined };
+
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    let previousAltitude = getLunarPosition(startOfDay, latitude, longitude).altitude;
+    for (let minutes = 0; minutes < 1440; minutes += 10) {
+        const checkTime = new Date(startOfDay.getTime() + minutes * 60000),
+            position = getLunarPosition(checkTime, latitude, longitude);
+        if (previousAltitude < -0.5 && position.altitude > -0.5) times.rise = checkTime;
+        else if (previousAltitude > -0.5 && position.altitude < -0.5) times.set = checkTime;
+        previousAltitude = position.altitude;
+    }
+    return times;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function getLunarZodiacSign(date = new Date()) {
@@ -480,6 +568,8 @@ module.exports = {
     isNearCrossQuarter,
     getLunarPhase,
     getLunarDistance,
+    getLunarPosition,
+    getLunarTimes,
     getLunarZodiacSign,
     getNextSign,
     addEvent,

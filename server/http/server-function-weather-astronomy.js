@@ -157,11 +157,16 @@ function interpretMoonPhase(results, situation, data, _data_previous, store, _op
     if (!store.astronomy) store.astronomy = {};
     if (store.astronomy?.currentMonth !== month) {
         store.astronomy.firstFullMoonDay = undefined;
+        store.astronomy.firstFullMoonMonth = undefined;
         store.astronomy.currentMonth = month;
+        store.astronomy.moonPhaseHistory = [];
     }
 
     const lunarPhase = helpers.getLunarPhase(date),
         lunarDistance = helpers.getLunarDistance(date);
+
+    store.astronomy.moonPhaseHistory.push({ date, phase: lunarPhase });
+    if (store.astronomy.moonPhaseHistory.length > 30) store.astronomy.moonPhaseHistory.shift();
 
     // Show moon distance info for all phases (not just full moon)
     if (lunarDistance.isSupermoon) {
@@ -251,7 +256,6 @@ function interpretMoonPhase(results, situation, data, _data_previous, store, _op
         [
             { month: 0, start: 1, end: 5, name: 'Quadrantids meteor shower' },
             { month: 3, start: 16, end: 25, name: 'Lyrids meteor shower' },
-            { month: 3, start: 22, end: 23, name: 'April Lyrids peak' }, // Peak night
             { month: 4, start: 5, end: 7, name: 'Eta Aquarids meteor shower' },
             { month: 7, start: 17, end: 24, name: 'Perseids meteor shower viewing optimal' },
             { month: 7, start: 28, end: 30, name: 'Delta Aquarids meteor shower' },
@@ -300,8 +304,40 @@ function interpretMoonPhase(results, situation, data, _data_previous, store, _op
         else if (lunarPhase > 0.27 && lunarPhase < 0.48) results.phenomena.push('waxing gibbous moon');
         else if (lunarPhase > 0.52 && lunarPhase < 0.73) results.phenomena.push('waning gibbous moon');
         else if (lunarPhase > 0.77 && lunarPhase < 0.98) results.phenomena.push('waning crescent moon');
+
+        const yesterday = store.astronomy.moonPhaseHistory[store.astronomy.moonPhaseHistory.length - 2];
+        if (yesterday) {
+            if (yesterday.phase < 0.02 && lunarPhase > 0.02) results.phenomena.push('moon has entered waxing phase');
+            else if (yesterday.phase < 0.5 && lunarPhase > 0.5) results.phenomena.push('moon has passed full phase, now waning');
+        }
+
         if (zodiac.position === 'late') results.phenomena.push(`moon in late ${zodiac.sign}, entering ${helpers.getNextSign(zodiac.sign)} soon`);
         else results.phenomena.push(`moon in ${zodiac.sign} ${zodiac.symbol}`);
+    }
+
+    // Moon Position
+    const lunarPos = helpers.getLunarPosition(date, location.latitude, location.longitude);
+    if (lunarPos.altitude > 0) {
+        results.phenomena.push(`moon ${Math.round(lunarPos.altitude)}° above horizon`);
+        if (lunarPos.altitude > 60) results.phenomena.push('moon near zenith - excellent viewing');
+        else if (lunarPos.altitude < 10) results.phenomena.push('moon low on horizon');
+        const directions = ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'],
+            dirIndex = Math.round(lunarPos.azimuth / 45) % 8;
+        results.phenomena.push(`moon in ${directions[dirIndex]} sky`);
+    } else if (hour >= 6 && hour <= 18) results.phenomena.push('moon below horizon');
+
+    // Moon rise/set
+    const lunarTimes = helpers.getLunarTimes(date, location.latitude, location.longitude);
+    if (lunarTimes.rise || lunarTimes.set) {
+        const times = [];
+        if (lunarTimes.rise) times.push(`rises ${lunarTimes.rise.toTimeString().slice(0, 5)}`);
+        if (lunarTimes.set) times.push(`sets ${lunarTimes.set.toTimeString().slice(0, 5)}`);
+        if (times.length > 0) results.phenomena.push(`moon ${times.join(', ')}`);
+    }
+
+    if (lunarPhase >= 0.48 && lunarPhase <= 0.52) {
+        if (lunarPos.altitude > 0) results.phenomena.push('full moon visible now');
+        else if (lunarTimes.rise && lunarTimes.rise.getHours() < 23) results.phenomena.push(`full moon rises at ${lunarTimes.rise.toTimeString().slice(0, 5)}`);
     }
 
     // Moon Illumination Percentage
@@ -328,8 +364,8 @@ function interpretMoonPhase(results, situation, data, _data_previous, store, _op
 
     // Basic planetary visibility
     if (cloudCover < 50) {
-        if (hour >= 4 && hour <= 7 && month >= 0 && month <= 5) results.phenomena.push('Venus may be visible as morning star in east');
-        else if (hour >= 18 && hour <= 21 && month >= 6 && month <= 11) results.phenomena.push('Venus may be visible as evening star in west');
+        if (hour >= 4 && hour <= 7 && month >= 0) results.phenomena.push('Venus may be visible as morning star in east');
+        else if (hour >= 18 && hour <= 21) results.phenomena.push('Venus may be visible as evening star in west');
         if (hour >= 22 || hour <= 2) {
             if (month >= 0 && month <= 3) results.phenomena.push('Jupiter well-placed for viewing');
             if (month >= 7 && month <= 10) results.phenomena.push('Saturn well-placed for viewing');
@@ -337,8 +373,36 @@ function interpretMoonPhase(results, situation, data, _data_previous, store, _op
         }
     }
 
+    // Comets
+    const periodicComets = [
+        { name: "Halley's Comet", period: 75.3, lastPerihelion: new Date('1986-02-09'), magnitude: 4 },
+        { name: 'Comet Encke', period: 3.3, lastPerihelion: new Date('2023-10-22'), magnitude: 6 },
+        { name: 'Comet 67P/Churyumov-Gerasimenko', period: 6.45, lastPerihelion: new Date('2021-11-02'), magnitude: 9 },
+    ];
+
+    periodicComets.forEach((comet) => {
+        const yearsSinceLast = (date - comet.lastPerihelion) / (365.25 * 24 * 60 * 60 * 1000);
+        const periodsElapsed = yearsSinceLast / comet.period;
+        const nextReturn = Math.ceil(periodsElapsed) * comet.period - yearsSinceLast;
+
+        if (nextReturn < 1) {
+            // Within a year
+            const daysUntil = Math.round(nextReturn * 365.25);
+            if (daysUntil < 30) {
+                results.phenomena.push(`${comet.name} approaching perihelion in ${daysUntil} days`);
+            }
+        }
+    });
+
     if ((lunarPhase > 0.05 && lunarPhase < 0.15) || (lunarPhase > 0.85 && lunarPhase < 0.95))
         if (cloudCover < 30) results.phenomena.push('earthshine visible on dark portion of moon');
+
+    const daysToNextPhase = Math.round((0.25 - (lunarPhase % 0.25)) * 29.53);
+    if (daysToNextPhase <= 2) {
+        const nextPhase = Math.ceil(lunarPhase * 4) % 4,
+            phaseNames = ['new moon', 'first quarter', 'full moon', 'last quarter'];
+        results.phenomena.push(`${phaseNames[nextPhase]} in ${daysToNextPhase} days`);
+    }
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
