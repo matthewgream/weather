@@ -1,6 +1,15 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+// const DEGREES_TO_RADIANS = Math.PI / 180;
+// const RADIANS_TO_DEGREES = 180 / Math.PI;
+// const ASTRONOMICAL_UNIT_KM = 149597870.7;
+const LUNAR_CYCLE_DAYS = 29.53059;
+const LUNAR_MEAN_DISTANCE_KM = 384400;
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 function dateToJulianDateUTC(date) {
     let year = date.getUTCFullYear(),
         month = date.getUTCMonth() + 1,
@@ -340,6 +349,25 @@ function localSiderealTime(jd, longitude) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+function calculateAngularSeparation(ra1, dec1, ra2, dec2) {
+    // Convert to radians
+    const toRad = Math.PI / 180,
+        ra1Rad = ra1 * toRad,
+        dec1Rad = dec1 * toRad,
+        ra2Rad = ra2 * toRad,
+        dec2Rad = dec2 * toRad;
+    // Using the Haversine formula for celestial sphere
+    const deltaRA = ra2Rad - ra1Rad,
+        deltaDec = dec2Rad - dec1Rad;
+    const a = Math.sin(deltaDec / 2) * Math.sin(deltaDec / 2) + Math.cos(dec1Rad) * Math.cos(dec2Rad) * Math.sin(deltaRA / 2) * Math.sin(deltaRA / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    // Return separation in degrees
+    return (c * 180) / Math.PI;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 function getSolarPosition(date, latitude, longitude) {
     const jd = dateToJulianDateUTC(date);
     const T = (jd - 2451545) / 36525;
@@ -395,11 +423,17 @@ function getSolarLongitude(jd) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function getSolarSituation(date, latitude, longitude) {
+    const position = getSolarPosition(date, latitude, longitude);
+    const altitudeRadians = position.altitude * (Math.PI / 180);
+
     return {
-        position: getSolarPosition(date, latitude, longitude),
+        position,
+        altitudeRadians,
+        isGoldenHour: position.altitude > 0 && position.altitude < 10,
+        isBlueHour: position.altitude > -6 && position.altitude < 0,
+        shadowMultiplier: position.altitude > 0.1 ? 1 / Math.tan(altitudeRadians) : Infinity,
     };
 }
-
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -450,8 +484,8 @@ function getLunarDistance(date = new Date()) {
         isMicromoon: distance > 405000 && Math.abs(phase - 0.5) < 0.02,
         isPerigee: distance < 363000,
         isApogee: distance > 405000,
-        percentCloser: distance < 384400 ? Math.round(((384400 - distance) / 384400) * 100) : 0,
-        percentFarther: distance > 384400 ? Math.round(((distance - 384400) / 384400) * 100) : 0,
+        percentCloser: distance < LUNAR_MEAN_DISTANCE_KM ? Math.round(((LUNAR_MEAN_DISTANCE_KM - distance) / LUNAR_MEAN_DISTANCE_KM) * 100) : 0,
+        percentFarther: distance > LUNAR_MEAN_DISTANCE_KM ? Math.round(((distance - LUNAR_MEAN_DISTANCE_KM) / LUNAR_MEAN_DISTANCE_KM) * 100) : 0,
     };
 }
 
@@ -619,6 +653,10 @@ function getLunarSituation(date, latitude, longitude) {
         brightness: getLunarBrightness(phase),
         zodiac: getLunarZodiac(date),
         name: getLunarName(date.getMonth()),
+        constants: {
+            LUNAR_CYCLE_DAYS,
+            LUNAR_MEAN_DISTANCE_KM,
+        },
     };
 }
 
@@ -688,6 +726,30 @@ function formatProximity(type, days) {
     else if (days > 0) return `${type} in ${Math.ceil(days)} day${Math.ceil(days) > 1 ? 's' : ''}`;
     else return `${type} ${Math.abs(Math.floor(days))} day${Math.abs(Math.floor(days)) > 1 ? 's' : ''} ago`;
 }
+function formatAltitude(altitude) {
+    return `${Math.round(altitude)}°`;
+}
+function formatDirection(bearing) {
+    return `${Math.round(bearing)}°`;
+}
+function formatVisibility(condition) {
+    const visibilityMap = {
+        excellent: 'excellent',
+        good: 'good',
+        fair: 'fair',
+        poor: 'poor',
+    };
+    return visibilityMap[condition] || condition;
+}
+function formatMagnitude(mag) {
+    return mag.toFixed(1);
+}
+function formatPercentage(value) {
+    return `${Math.round(value)}%`;
+}
+function formatTime(hours, minutes) {
+    return `${hours}:${minutes.toString().padStart(2, '0')}`;
+}
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -698,6 +760,7 @@ module.exports = {
     getDaylight,
     getSeason,
     daysIntoYear,
+    dateToJulianDateUTC,
     //
     calculateDewPoint,
     calculateHeatIndex,
@@ -708,6 +771,9 @@ module.exports = {
     isNearSolstice,
     isNearEquinox,
     isNearCrossQuarter,
+    //
+    localSiderealTime,
+    calculateAngularSeparation,
     //
     // getSolarPosition,
     // getSolarLongitude,
@@ -728,6 +794,12 @@ module.exports = {
     pruneEvents,
     //
     formatProximity,
+    formatAltitude,
+    formatDirection,
+    formatVisibility,
+    formatMagnitude,
+    formatPercentage,
+    formatTime,
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
