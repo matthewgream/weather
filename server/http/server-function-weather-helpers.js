@@ -7,6 +7,14 @@
 const LUNAR_CYCLE_DAYS = 29.53059;
 const LUNAR_MEAN_DISTANCE_KM = 384400;
 
+const DAYS_PER_YEAR = 365.25;
+const MILLISECONDS_PER_DAY = 1000 * 60 * 60 * 24;
+
+const constants = {
+    MILLISECONDS_PER_DAY,
+    DAYS_PER_YEAR,
+};
+
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -29,8 +37,6 @@ function dateToJulianDateUTC(date) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const msPerDay = 1000 * 60 * 60 * 24;
-
 function normalizeTime(time) {
     if (time < 0) return time + 24;
     return time >= 24 ? time - 24 : time;
@@ -41,7 +47,7 @@ function isLeapYear(year) {
 }
 
 function daysIntoYear(date = new Date()) {
-    return (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - Date.UTC(date.getFullYear(), 0, 0)) / msPerDay;
+    return (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - Date.UTC(date.getFullYear(), 0, 0)) / MILLISECONDS_PER_DAY;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -245,9 +251,9 @@ function isNearSolstice(date = new Date(), hemisphere = 'northern', daysWindow =
     const otherYearRelevantSolstice = isNorthern ? (month < 6 ? prevYearWinterSolstice : nextYearSummerSolstice) : month < 6 ? new Date(year - 1, 5, 21) : new Date(year + 1, 11, 21);
     const currentYearLongestDay = isNorthern ? currentYearSummerSolstice : currentYearWinterSolstice;
     const currentYearShortestDay = isNorthern ? currentYearWinterSolstice : currentYearSummerSolstice;
-    const daysToCurrYearLongest = (currentYearLongestDay.getTime() - time) / msPerDay,
-        daysToCurrYearShortest = (currentYearShortestDay.getTime() - time) / msPerDay,
-        daysToOtherYearSolstice = (otherYearRelevantSolstice.getTime() - time) / msPerDay;
+    const daysToCurrYearLongest = (currentYearLongestDay.getTime() - time) / MILLISECONDS_PER_DAY,
+        daysToCurrYearShortest = (currentYearShortestDay.getTime() - time) / MILLISECONDS_PER_DAY,
+        daysToOtherYearSolstice = (otherYearRelevantSolstice.getTime() - time) / MILLISECONDS_PER_DAY;
     if (Math.abs(daysToCurrYearLongest) <= daysWindow)
         return {
             near: true,
@@ -279,12 +285,12 @@ function isNearEquinox(date = new Date(), hemisphere = 'northern', daysWindow = 
         autumnEquinox = new Date(year, 8, 22); // March 20 / September 22
     const firstEquinox = isNorthern ? springEquinox : autumnEquinox,
         secondEquinox = isNorthern ? autumnEquinox : springEquinox;
-    const daysToFirst = (firstEquinox.getTime() - time) / msPerDay,
-        daysToSecond = (secondEquinox.getTime() - time) / msPerDay;
+    const daysToFirst = (firstEquinox.getTime() - time) / MILLISECONDS_PER_DAY,
+        daysToSecond = (secondEquinox.getTime() - time) / MILLISECONDS_PER_DAY;
     const prevYearSecondEquinox = new Date(year - 1, 8, 22),
-        daysToPrevYearSecond = (prevYearSecondEquinox.getTime() - time) / msPerDay;
+        daysToPrevYearSecond = (prevYearSecondEquinox.getTime() - time) / MILLISECONDS_PER_DAY;
     const nextYearFirstEquinox = new Date(year + 1, 2, 20),
-        daysToNextYearFirst = (nextYearFirstEquinox.getTime() - time) / msPerDay;
+        daysToNextYearFirst = (nextYearFirstEquinox.getTime() - time) / MILLISECONDS_PER_DAY;
     if (Math.abs(daysToFirst) <= daysWindow)
         return {
             near: true,
@@ -326,7 +332,7 @@ function isNearCrossQuarter(date = new Date(), hemisphere = 'northern', daysWind
     if (month === 0) dates.push({ date: new Date(year - 1, 10, 1), name: 'Samhain', northern: 'Samhain (early winter)', southern: 'Beltane (early summer)' });
     if (month === 11) dates.push({ date: new Date(year + 1, 1, 1), name: 'Imbolc', northern: 'Imbolc (early spring)', southern: 'Lughnasadh (early autumn)' });
     for (const item of dates) {
-        const days = (item.date - date) / msPerDay;
+        const days = (item.date - date) / MILLISECONDS_PER_DAY;
         if (Math.abs(days) <= daysWindow)
             return {
                 near: true,
@@ -593,7 +599,7 @@ function getLunarBrightness(phase) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function getLunarZodiac(date = new Date()) {
-    const daysSinceJ2000 = (date - new Date('2000-01-01T12:00:00Z')) / msPerDay;
+    const daysSinceJ2000 = (date - new Date('2000-01-01T12:00:00Z')) / MILLISECONDS_PER_DAY;
     const L = (218.316 + 13.176396 * daysSinceJ2000) % 360,
         M = (134.963 + 13.064993 * daysSinceJ2000) % 360,
         D = (297.85 + 12.190749 * daysSinceJ2000) % 360;
@@ -663,6 +669,29 @@ function getLunarSituation(date, latitude, longitude) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+const geomagneticActivity = {
+    // January through December (0-11)
+    0: 1.5, // January
+    1: 2, // February
+    2: 2.5, // March - Spring equinox
+    3: 2.8, // April
+    4: 1.8, // May
+    5: 1.5, // June
+    6: 1.2, // July
+    7: 1.5, // August
+    8: 2.8, // September - Autumn equinox
+    9: 3, // October
+    10: 2.5, // November
+    11: 2, // December
+};
+
+function getGeomagneticActivity(month) {
+    return geomagneticActivity[month] || 2;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 function addEvent(store, category, eventId, message, durationHours = 24) {
     if (!store.events) {
         store.events = {};
@@ -703,13 +732,13 @@ function isEventCooldown(store, category, eventId, cooldownDays = 365) {
     if (!store.events || !store.events[category] || !store.events[category][eventId]) return true;
     const now = Date.now(),
         event = store.events[category][eventId];
-    return now > event.detected + cooldownDays * msPerDay;
+    return now > event.detected + cooldownDays * MILLISECONDS_PER_DAY;
 }
 
 function pruneEvents(store, daysAgo = 30) {
     const now = Date.now();
-    if (!store.events || store.eventsCleanedUp > now - msPerDay) return;
-    const expiry = now - daysAgo * msPerDay;
+    if (!store.events || store.eventsCleanedUp > now - MILLISECONDS_PER_DAY) return;
+    const expiry = now - daysAgo * MILLISECONDS_PER_DAY;
     Object.entries(store.events).forEach(([category, events]) => {
         Object.entries(events)
             .filter(([_, event]) => event.expires < expiry)
@@ -731,6 +760,9 @@ function formatAltitude(altitude) {
 }
 function formatDirection(bearing) {
     return `${Math.round(bearing)}°`;
+}
+function formatPosition(altitude, bearing, direction) {
+    return `${formatAltitude(altitude)} above horizon (bearing ${formatDirection(bearing)}, ${direction})`;
 }
 function formatVisibility(condition) {
     const visibilityMap = {
@@ -755,6 +787,8 @@ function formatTime(hours, minutes) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 module.exports = {
+    constants,
+    //
     getDST,
     getDaylightHours,
     getDaylight,
@@ -788,6 +822,8 @@ module.exports = {
     // getLunarZodiac,
     getLunarSituation,
     //
+    getGeomagneticActivity,
+    //
     addEvent,
     getEvents,
     isEventCooldown,
@@ -796,6 +832,7 @@ module.exports = {
     formatProximity,
     formatAltitude,
     formatDirection,
+    formatPosition,
     formatVisibility,
     formatMagnitude,
     formatPercentage,
