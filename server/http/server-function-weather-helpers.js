@@ -55,21 +55,25 @@ function daysIntoYear(date = new Date()) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // NOTE: european only
+let lastSundayOfMarch, lastSundayOfOctober, yearDst;
 function getDST(date = new Date()) {
     const year = date.getFullYear(),
         month = date.getMonth();
     if (month > 10 || month < 2) return false; // November to February
     if (month > 3 && month < 9) return true; // April to September
-    const lastDayOfMarch = new Date(year, 2, 31);
-    while (lastDayOfMarch.getMonth() > 2) lastDayOfMarch.setDate(lastDayOfMarch.getDate() - 1);
-    const lastSundayOfMarch = new Date(lastDayOfMarch);
-    while (lastSundayOfMarch.getDay() !== 0) lastSundayOfMarch.setDate(lastSundayOfMarch.getDate() - 1);
-    lastSundayOfMarch.setHours(2, 0, 0, 0); // 02:00 CET
-    const lastDayOfOctober = new Date(year, 9, 31);
-    while (lastDayOfOctober.getMonth() > 9) lastDayOfOctober.setDate(lastDayOfOctober.getDate() - 1);
-    const lastSundayOfOctober = new Date(lastDayOfOctober);
-    while (lastSundayOfOctober.getDay() !== 0) lastSundayOfOctober.setDate(lastSundayOfOctober.getDate() - 1);
-    lastSundayOfOctober.setHours(3, 0, 0, 0); // 03:00 CEST
+    if (!yearDst || yearDst !== year) {
+        const lastDayOfMarch = new Date(year, 2, 31);
+        while (lastDayOfMarch.getMonth() > 2) lastDayOfMarch.setDate(lastDayOfMarch.getDate() - 1);
+        lastSundayOfMarch = new Date(lastDayOfMarch);
+        while (lastSundayOfMarch.getDay() !== 0) lastSundayOfMarch.setDate(lastSundayOfMarch.getDate() - 1);
+        lastSundayOfMarch.setHours(2, 0, 0, 0); // 02:00 CET
+        const lastDayOfOctober = new Date(year, 9, 31);
+        while (lastDayOfOctober.getMonth() > 9) lastDayOfOctober.setDate(lastDayOfOctober.getDate() - 1);
+        lastSundayOfOctober = new Date(lastDayOfOctober);
+        while (lastSundayOfOctober.getDay() !== 0) lastSundayOfOctober.setDate(lastSundayOfOctober.getDate() - 1);
+        lastSundayOfOctober.setHours(3, 0, 0, 0); // 03:00 CEST
+        yearDst = year;
+    }
     return date >= lastSundayOfMarch && date < lastSundayOfOctober;
 }
 
@@ -160,6 +164,8 @@ function getDaylightHours(date, latitude, longitude) {
     };
 }
 
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 function getDaylight(date, latitude, longitude) {
     const daylight = getDaylightHours(date, latitude, longitude);
     return { ...daylight, phase: __getDaylightPhase(date.getHours() + date.getMinutes() / 60, daylight) };
@@ -248,8 +254,8 @@ function getSeason(date = new Date(), hemisphere = 'northern') {
             { name: 'autumn', start: 266, end: 355 }, // ~Sep 23 - Dec 21
         ],
         southern: [
-            { name: 'summer', start: 354, end: 80 }, // ~Dec 20 - Mar 21
-            { name: 'autumn', start: 80, end: 171 }, // ~Mar 21 - Jun 20
+            { name: 'summer', start: 355, end: 79 }, // ~Dec 20 - Mar 20
+            { name: 'autumn', start: 79, end: 172 }, // ~Mar 20 - Jun 21
             { name: 'winter', start: 172, end: 266 }, // ~Jun 21 - Sep 23
             { name: 'spring', start: 266, end: 355 }, // ~Sep 23 - Dec 21
         ],
@@ -479,18 +485,28 @@ function calculateMoonsetAzimuth(lunarTimes, location) {
 function getSolarPosition(date, latitude, longitude) {
     const jd = dateToJulianDateUTC(date);
     const T = (jd - 2451545) / 36525;
+    const T2 = T * T;
     // Mean longitude of sun (ensure positive)
-    const L0 = (((280.46646 + 36000.76983 * T + 0.0003032 * T * T) % 360) + 360) % 360;
+    const L0 = (((280.46646 + 36000.76983 * T + 0.0003032 * T2) % 360) + 360) % 360;
     // Mean anomaly of sun (ensure positive)
-    const M = (((357.52911 + 35999.05029 * T - 0.0001537 * T * T) % 360) + 360) % 360;
+    const M = (((357.52911 + 35999.05029 * T - 0.0001537 * T2) % 360) + 360) % 360;
     const Mrad = (M * Math.PI) / 180;
+    // Eccentricity
+    const e = 0.016708634 - 0.000042037 * T - 0.0000001267 * T2;
     // Equation of center
-    const C = (1.914602 - 0.004817 * T - 0.000014 * T * T) * Math.sin(Mrad) + (0.019993 - 0.000101 * T) * Math.sin(2 * Mrad) + 0.000289 * Math.sin(3 * Mrad);
+    const C = (1.914602 - 0.004817 * T - 0.000014 * T2) * Math.sin(Mrad) + (0.019993 - 0.000101 * T) * Math.sin(2 * Mrad) + 0.000289 * Math.sin(3 * Mrad);
     // True longitude (ensure positive)
     const trueLongitude = (((L0 + C) % 360) + 360) % 360;
+    // True anomaly
+    const v = M + C;
+    // Distance in AU
+    const R = (1.000001018 * (1 - e * e)) / (1 + e * Math.cos((v * Math.PI) / 180));
     // Obliquity of ecliptic
     const epsilon = 23.439291 - 0.0130042 * T - 0.00000016 * T * T + 0.0000005 * T * T * T;
     const epsilonRad = (epsilon * Math.PI) / 180;
+    // Apparent longitude (with nutation and aberration)
+    const omega = 125.04 - 1934.136 * T;
+    const apparentLongitude = trueLongitude - 0.00569 - 0.00478 * Math.sin((omega * Math.PI) / 180);
     // Right ascension and declination
     const trueLongRad = (trueLongitude * Math.PI) / 180;
     const alpha = (Math.atan2(Math.cos(epsilonRad) * Math.sin(trueLongRad), Math.cos(trueLongRad)) * 180) / Math.PI;
@@ -518,8 +534,16 @@ function getSolarPosition(date, latitude, longitude) {
         trueLongitude,
         equationOfTime,
         noon: noon < 0 ? noon + 24 : noon >= 24 ? noon - 24 : noon,
+        angularDiameter: 0.533128 / R,
+        //
+        longitude: apparentLongitude, // Ecliptic longitude
+        latitude: 0, // Sun's ecliptic latitude is always ~0
+        distance: R, // Distance in AU
+        velocity: 0.9856473, // Degrees per day (approximate)
     };
 }
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
 function getSolarLongitude(jd) {
     const n = jd - 2451545,
@@ -607,13 +631,16 @@ function getLunarDistance(date = new Date()) {
 
 function getLunarPosition(date, latitude, longitude) {
     const jd = dateToJulianDateUTC(date);
-    const T = (jd - 2451545) / 36525;
+    const T = (jd - 2451545) / 36525,
+        T2 = T * T,
+        T3 = T2 * T,
+        T4 = T3 * T;
     // Fundamental arguments (Meeus Ch. 47)
-    const L = (218.3164477 + 481267.88123421 * T - 0.0015786 * T * T + (T * T * T) / 538841 - (T * T * T * T) / 65194000) % 360;
-    const D = (297.8501921 + 445267.1114034 * T - 0.0018819 * T * T + (T * T * T) / 545868 - (T * T * T * T) / 113065000) % 360;
-    const M = (357.5291092 + 35999.0502909 * T - 0.0001536 * T * T + (T * T * T) / 24490000) % 360;
-    const Mp = (134.9633964 + 477198.8675055 * T + 0.0087414 * T * T + (T * T * T) / 69699 - (T * T * T * T) / 14712000) % 360;
-    const F = (93.272095 + 483202.0175233 * T - 0.0036539 * T * T - (T * T * T) / 3526000 + (T * T * T * T) / 863310000) % 360;
+    const L = (218.3164477 + 481267.88123421 * T - 0.0015786 * T2 + T3 / 538841 - T4 / 65194000) % 360;
+    const D = (297.8501921 + 445267.1114034 * T - 0.0018819 * T2 + T3 / 545868 - T4 / 113065000) % 360;
+    const M = (357.5291092 + 35999.0502909 * T - 0.0001536 * T2 + T3 / 24490000) % 360;
+    const Mp = (134.9633964 + 477198.8675055 * T + 0.0087414 * T2 + T3 / 69699 - T4 / 14712000) % 360;
+    const F = (93.272095 + 483202.0175233 * T - 0.0036539 * T2 - T3 / 3526000 + T4 / 863310000) % 360;
     // Convert to radians
     const toRad = Math.PI / 180;
     // const Lrad = L * toRad;
@@ -636,6 +663,20 @@ function getLunarPosition(date, latitude, longitude) {
         0.046 * Math.sin(2 * Drad - Mrad);
     // Latitude corrections (simplified)
     const lat = 5.128 * Math.sin(Frad) + 0.28 * Math.sin(Mprad + Frad) + 0.277 * Math.sin(Mprad - Frad) + 0.173 * Math.sin(2 * Drad - Frad);
+    // Distance
+    let dR = 0;
+    dR -= 20905 * Math.cos(Mprad);
+    dR -= 3699 * Math.cos(2 * Drad - Mprad);
+    dR -= 2956 * Math.cos(2 * Drad);
+    dR -= 570 * Math.cos(2 * Mprad);
+    dR += 246 * Math.cos(2 * Drad - 2 * Mprad);
+    dR -= 205 * Math.cos(Mprad - 2 * Frad);
+    dR -= 171 * Math.cos(Drad);
+    dR -= 152 * Math.cos(Mprad + 2 * Drad);
+    const distanceKm = 385000.56 + dR;
+    const distanceEarthRadii = distanceKm / 6371; // Convert to Earth radii for compatibility
+    // Calculate velocity (degrees per day)
+    const velocity = 13.176396 + 0.549016 * Math.cos(Mprad) + 0.109927 * Math.cos(2 * Drad - Mprad) + 0.078303 * Math.cos(2 * Drad);
     // Convert to equatorial coordinates
     const epsilon = 23.439291 - 0.0130042 * T;
     const omega = (125.04452 - 1934.136261 * T) % 360;
@@ -680,14 +721,22 @@ function getLunarPosition(date, latitude, longitude) {
             // Features visible due to libration
             features: getVisibleLunarFeatures(librationLon, librationLat), // You'd implement this
         },
+        //
+        longitude: lonTrue, // True ecliptic longitude (with nutation)
+        latitude: lat, // Ecliptic latitude
+        distance: distanceEarthRadii, // Distance in Earth radii
+        velocity, // Degrees per day
+
+        // Additional useful fields
+        distanceKm, // Also provide distance in km
+        angularDiameter: (2 * Math.atan(1737.4 / distanceKm) * 180) / Math.PI, // degrees
     };
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const moonHorizon = -0.5667 - 0.25; // Approximately -0.8167
-
 function getLunarTimes(date, latitude, longitude) {
+    const moonHorizon = -0.5667 - 0.25; // Approximately -0.8167
     try {
         const times = { rise: undefined, set: undefined };
         if (Math.abs(latitude) > 85) return times;
@@ -698,7 +747,7 @@ function getLunarTimes(date, latitude, longitude) {
             const checkTime = new Date(startOfDay.getTime() + minutes * 60000),
                 position = getLunarPosition(checkTime, latitude, longitude);
             if (previousAltitude < moonHorizon && position.altitude > moonHorizon) times.rise = checkTime;
-            else if (previousAltitude > -0.5 && position.altitude < -0.5) times.set = checkTime;
+            else if (previousAltitude > moonHorizon && position.altitude < moonHorizon) times.set = checkTime;
             previousAltitude = position.altitude;
         }
         return times;
@@ -742,13 +791,18 @@ function getLunarApsis(date) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function getLunarZodiac(date = new Date()) {
-    const daysSinceJ2000 = (date - new Date('2000-01-01T12:00:00Z')) / MILLISECONDS_PER_DAY;
-    const L = (218.316 + 13.176396 * daysSinceJ2000) % 360,
-        M = (134.963 + 13.064993 * daysSinceJ2000) % 360,
-        D = (297.85 + 12.190749 * daysSinceJ2000) % 360;
+    const jd = dateToJulianDateUTC(date);
+    const T = (jd - 2451545) / 36525;
+    const L = (218.316 + 13.176396 * T) % 360,
+        M = (134.963 + 13.064993 * T) % 360,
+        D = (297.85 + 12.190749 * T) % 360,
+        F = (93.27 + 13.22935 * T) % 360;
+    const Mp = (134.9633964 + 477198.8675055 * T) % 360; // Moon's mean anomaly        
     const toRad = Math.PI / 180,
         Mrad = M * toRad,
-        Drad = D * toRad;
+        Drad = D * toRad,
+        Frad = F * toRad,
+        Mprad = Mp * toRad;
     // Apply main corrections for true longitude, and normalize to 0-360
     const longitude =
         (((L +
@@ -856,6 +910,22 @@ function getLunarSituation(date, latitude, longitude) {
         },
     };
 }
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+// function getEarthShadowRadii(sunDistanceAU, moonDistanceKm) {
+// function getSolarAngularDiameter(distance) {
+//     // distance in AU
+//     return 0.533128 / distance; // degrees
+// }
+//     const sunAngularRadius = getSolarAngularDiameter(sunDistanceAU) / 2;
+//     const parallax = Math.asin(6371 / moonDistanceKm) * 180 / Math.PI;
+//     return {
+//         penumbral: 1.2848 * parallax + 0.5450 * sunAngularRadius,
+//         umbral: 0.7403 * parallax - 0.5450 * sunAngularRadius
+//     };
+// }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
