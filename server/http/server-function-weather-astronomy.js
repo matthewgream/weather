@@ -12,6 +12,15 @@ const config = {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+function isSameDay(a, b) {
+    if (a === undefined || b === undefined) return false;
+    return a.getDate() == b.getDate() && a.getMonth() == b.getMonth() && a.getFullYear() == b.getFullYear();
+}
+
+function daysBetween(a, b) {
+    return a ? Math.floor((b - a) / helpers.constants.MILLISECONDS_PER_DAY) : 999;
+}
+
 function isNearSunriseOrSet(daylight, hourDecimal, threshold) {
     const nearSunrise = daylight.sunriseDecimal && Math.abs(hourDecimal - daylight.sunriseDecimal) < threshold,
         nearSunset = daylight.sunsetDecimal && Math.abs(hourDecimal - daylight.sunsetDecimal) < threshold;
@@ -69,7 +78,7 @@ function checkCrepuscularRays(results, situation, data) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretAtmosphericOptics(results, situation, data) {
+function checkAtmosphericOptics(results, situation, data) {
     const { daylight, location, solar } = situation;
     const { temp, humidity, cloudCover, windSpeed } = data;
 
@@ -89,7 +98,7 @@ function interpretAtmosphericOptics(results, situation, data) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function assessSeeingConditions(results, situation, data, data_previous) {
+function interpretViewingConditions(results, situation, data, data_previous) {
     const { hour } = situation;
     const { temp, windSpeed, pressure } = data;
 
@@ -99,11 +108,11 @@ function assessSeeingConditions(results, situation, data, data_previous) {
             thermalEffect = hour >= 12 && hour <= 16 ? 1 : 0;
         // Seeing
         const seeingIndex = tempChange + jetStreamEffect + thermalEffect + windSpeed / 5;
-        if (seeingIndex < 2) results.phenomena.push('seeing: excellent (steady air for telescopes)');
-        else if (seeingIndex < 4) results.phenomena.push('seeing: good for astronomy');
-        else if (seeingIndex > 6) results.phenomena.push('seeing: poor (heavy twinkling)');
+        if (seeingIndex < 2) results.phenomena.push('viewing: excellent (steady air for telescopes)');
+        else if (seeingIndex < 4) results.phenomena.push('viewing: good for astronomy');
+        else if (seeingIndex > 6) results.phenomena.push('viewing: poor (heavy twinkling)');
         // Scintillation index
-        if (windSpeed !== undefined && windSpeed > 10 && pressure !== undefined && Math.abs(pressure - 1013) > 10) results.phenomena.push('seeing: strong scintillation (colorful twinkling)');
+        if (windSpeed !== undefined && windSpeed > 10 && pressure !== undefined && Math.abs(pressure - 1013) > 10) results.phenomena.push('viewing: strong scintillation (colorful twinkling)');
     }
 }
 
@@ -129,7 +138,7 @@ function checkGreenFlash(results, situation, data) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretTwilightPhenomena(results, situation, data) {
+function checkTwilightPhenomena(results, situation, data) {
     const { daylight, hourDecimal, location } = situation;
     const { cloudCover } = data;
 
@@ -145,7 +154,7 @@ function interpretTwilightPhenomena(results, situation, data) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function enhanceZodiacalLight(results, situation, data) {
+function checkZodiacalLight(results, situation, data) {
     const { month, hour, location, lunar } = situation;
     const { cloudCover } = data;
 
@@ -166,7 +175,7 @@ function enhanceZodiacalLight(results, situation, data) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function predictAurora(results, situation, data) {
+function checkAurora(results, situation, data) {
     const { location, month, hour, daylight, lunar } = situation;
     const { cloudCover, snowDepth, temp, humidity } = data;
 
@@ -202,7 +211,7 @@ function predictAurora(results, situation, data) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function detectAirglow(results, situation, data) {
+function checkAirglow(results, situation, data) {
     const { location, month, hour } = situation;
     const { cloudCover } = data;
 
@@ -213,7 +222,7 @@ function detectAirglow(results, situation, data) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function checkWhiteNights(results, situation) {
+function interpretWhiteNights(results, situation) {
     const { location, date, year } = situation;
 
     if (location.latitude > 48) {
@@ -811,7 +820,7 @@ function interpretOrbitingBodies(results, situation, data) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const eventsIntervals = [
+const eventsExceptions = [
     { event: 'lastSupermoon', threshold: 300, message: 'supermoon' },
     { event: 'lastBlueMoon', threshold: 800, message: 'blue moon' },
     { event: 'lastMeteorStorm', threshold: 10000, message: 'meteor storm' },
@@ -867,11 +876,12 @@ const eventsDefaults = {
         bestSeeingConditions: undefined,
     },
     // Annual statistics
-    yearly: eventsDefaultsYearly,
+    yearly: { ...eventsDefaultsYearly },
 };
 
-function eventsInitialise(store) {
+function eventsLoad(store) {
     if (!store.astronomy.events) store.astronomy.events = eventsDefaults;
+    return store.astronomy.events;
 }
 
 function eventsAdd(store, eventType, date, details = {}) {
@@ -899,8 +909,8 @@ function eventsAdd(store, eventType, date, details = {}) {
     if (details.record) Object.assign(events.records, details.record);
 }
 
-function eventsOccurred(events, currentDate) {
-    return eventsIntervals
+function eventsExceptionsOcurrences(events, currentDate) {
+    return eventsExceptions
         .filter(({ event }) => events.events[event])
         .map(({ event, threshold, message }) => {
             const days = Math.floor((currentDate - events.events[event]) / helpers.constants.MILLISECONDS_PER_DAY);
@@ -910,39 +920,31 @@ function eventsOccurred(events, currentDate) {
 }
 
 // XXX make simpler
-function eventsSummaryYearly(yearly) {
+function eventsSummaryYearly(events) {
     const summary = [];
-    summary.push(`${yearly.fullMoons} full moons (${yearly.supermoons} super, ${yearly.blueMoons} blue)`);
-    summary.push(`${yearly.meteorShowersObserved}/${yearly.meteorShowers} meteor showers`);
-    summary.push(`${yearly.clearNights} clear nights`);
-    summary.push(`${yearly.perfectViewingNights} perfect viewing nights`);
-    if (yearly.auroraAlerts > 0) summary.push(`${yearly.auroraSightings}/${yearly.auroraAlerts} aurora sightings/alerts`);
-    if (yearly.eclipses > 0) summary.push(`${yearly.eclipses} eclipses`);
-    return `${yearly.year}: ${summary.join(', ')}`;
+    summary.push(`${events.yearly.fullMoons} full moons (${events.yearly.supermoons} super, ${events.yearly.blueMoons} blue)`);
+    summary.push(`${events.yearly.meteorShowersObserved}/${events.yearly.meteorShowers} meteor showers`);
+    summary.push(`${events.yearly.clearNights} clear nights`);
+    summary.push(`${events.yearly.perfectViewingNights} perfect viewing nights`);
+    if (events.yearly.auroraAlerts > 0) summary.push(`${events.yearly.auroraSightings}/${events.yearly.auroraAlerts} aurora sightings/alerts`);
+    if (events.yearly.eclipses > 0) summary.push(`${events.yearly.eclipses} eclipses`);
+    return `${events.yearly.year}: ${summary.join(', ')}`;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
-
-function isSameDay(a, b) {
-    if (a === undefined || b === undefined) return false;
-    return a.getDate() == b.getDate() && a.getMonth() == b.getMonth() && a.getFullYear() == b.getFullYear();
-}
-function daysBetween(a, b) {
-    return a ? Math.floor((b - a) / helpers.constants.MILLISECONDS_PER_DAY) : 999;
-}
 
 function processAstronomicalEvents(results, situation, data, _data_previous, store) {
     const { date, year, day, hour } = situation;
     const { cloudCover, humidity, windSpeed, temp } = data;
 
-    const { events } = store.astronomy;
-    if (!events) eventsInitialise(store);
+    const events = eventsLoad(store);
 
     if (events.yearly.year !== year) {
-        if (day === 1) results.phenomena.push(eventsSummaryYearly(events.yearly));
-        else if (day === 2) events.yearly = eventsDefaultsYearly;
+        if (day === 1) results.phenomena.push(eventsSummaryYearly(events));
+        else if (day === 2) events.yearly = { ...eventsDefaultsYearly };
     }
 
+    // track clear nights
     const isClearNight = cloudCover !== undefined && cloudCover < 20 && (hour >= 22 || hour <= 2);
     if (isClearNight) {
         if (!isSameDay(events.events.lastClearNight, date)) {
@@ -956,6 +958,7 @@ function processAstronomicalEvents(results, situation, data, _data_previous, sto
         events.streaks.currentClearNights = 0;
     }
 
+    // track perfect viewing nights
     const isPerfectViewing = cloudCover !== undefined && cloudCover < 10 && humidity !== undefined && humidity < 70 && windSpeed !== undefined && windSpeed < 3 && temp !== undefined && Math.abs(temp - 10) < 15 && (hour >= 22 || hour <= 2);
     if (isPerfectViewing) {
         if (!isSameDay(events.events.lastPerfectViewing, date)) {
@@ -965,7 +968,8 @@ function processAstronomicalEvents(results, situation, data, _data_previous, sto
         }
     }
 
-    eventsOccurred(events, date).forEach(({ days, message }) => results.phenomena.push(`${days} days since last ${message}`));
+    // show event ocurrences
+    eventsExceptionsOcurrences(events, date).forEach(({ days, message }) => results.phenomena.push(`${days} days since last ${message}`));
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -977,9 +981,9 @@ module.exports = function (options) {
         // 1. Current sky conditions (what's happening right now)
         interpretSolarConditions, // Sun position and immediate effects
         interpretLunarConditions, // Moon position and phase
-        assessSeeingConditions, // Current viewing conditions
+        interpretViewingConditions, // Current viewing conditions
         // 2. Twilight and daily phenomena
-        interpretTwilightPhenomena, // Belt of Venus, Earth's shadow
+        checkTwilightPhenomena, // Belt of Venus, Earth's shadow
         checkCrepuscularRays, // Sunset/sunrise rays
         checkGreenFlash, // Sunset/sunrise flash
         checkMoonIllusion, // Moon size illusion near horizon
@@ -987,12 +991,12 @@ module.exports = function (options) {
         interpretEquinox, // Seasonal markers
         interpretSolstice, // Seasonal extremes
         interpretCrossQuarter, // Traditional calendar
-        checkWhiteNights, // Seasonal twilight effects
+        interpretWhiteNights, // Seasonal twilight effects
         // 4. Atmospheric optical phenomena
-        interpretAtmosphericOptics, // Halos, sundogs, etc.
+        checkAtmosphericOptics, // Halos, sundogs, etc.
         checkAtmosphericShadowBands, // Non-eclipse shadow bands
-        enhanceZodiacalLight, // Zodiacal light/gegenschein
-        detectAirglow, // Upper atmosphere glow
+        checkZodiacalLight, // Zodiacal light/gegenschein
+        checkAirglow, // Upper atmosphere glow
         // 5. Dynamic celestial events
         interpretMeteors, // Meteor showers
         interpretPlanets, // Planetary positions
@@ -1001,7 +1005,7 @@ module.exports = function (options) {
         interpretDeepSky, // Deep sky object visibility
         interpretOrbitingBodies, // ISS, satellites
         // 6. Location-specific phenomena
-        predictAurora, // Aurora predictions
+        checkAurora, // Aurora predictions
         checkTides, // Tidal effects
         // 7. Event tracking (when implemented)
         processAstronomicalEvents, // Exceptional event tracking
