@@ -5,7 +5,7 @@
 // const RADIANS_TO_DEGREES = 180 / Math.PI;
 // const ASTRONOMICAL_UNIT_KM = 149597870.7;
 const LUNAR_CYCLE_DAYS = 29.53059;
-const LUNAR_MEAN_DISTANCE_KM = 384400;
+const LUNAR_MEAN_DISTANCE_KM = 384399;
 
 const DAYS_PER_YEAR = 365.25;
 const MILLISECONDS_PER_DAY = 1000 * 60 * 60 * 24;
@@ -118,7 +118,7 @@ function getDaylightHours(date, latitude, longitude) {
     const fracYear = ((2 * Math.PI) / (isLeapYear(year) ? 366 : 365)) * (daysIntoYear(date) - 1 + (hours - 12) / 24);
     const declination = 0.006918 - 0.399912 * Math.cos(fracYear) + 0.070257 * Math.sin(fracYear) - 0.006758 * Math.cos(2 * fracYear) + 0.000907 * Math.sin(2 * fracYear) - 0.002697 * Math.cos(3 * fracYear) + 0.00148 * Math.sin(3 * fracYear);
     const eqTime = 229.18 * (0.000075 + 0.001868 * Math.cos(fracYear) - 0.032077 * Math.sin(fracYear) - 0.014615 * Math.cos(2 * fracYear) - 0.040849 * Math.sin(2 * fracYear));
-    const solarNoon = 12 - eqTime / 60 - longitude / 15;
+    const solarNoon = 12 - eqTime / 60 + longitude / 15;
     const utcOffset = -tzoffset / 60;
 
     const times = {};
@@ -172,8 +172,8 @@ function calculateDewPoint(temp, humidity) {
     // Magnus-Tetens formula
     if (humidity <= 0 || humidity > 100) return temp; // Invalid humidity
     if (temp < -50 || temp > 60) return temp; // Extreme temps
-    const a = 17.27,
-        b = 237.7;
+    const a = 17.625,
+        b = 243.04;
     const alpha = (a * temp) / (b + temp) + Math.log(humidity / 100);
     const dewPoint = (b * alpha) / (a - alpha);
     return Number.isFinite(dewPoint) ? dewPoint : temp;
@@ -204,9 +204,9 @@ function calculateHeatIndex(temp, humidity) {
 }
 
 function calculateWindChill(temp, windSpeed) {
-    // Wind chill applies below 10°C AND with sufficient wind
-    if (temp >= 10 || windSpeed < 4.8) return temp; // 4.8 m/s = 17 km/h
-    const windSpeedKmh = windSpeed * 3.6; // Convert wind speed to km/h
+    // Wind chill applies below 10°C AND with sufficient wind (greater than 4.8km/h)
+    const windSpeedKmh = windSpeed * 3.6;
+    if (temp >= 10 || windSpeedKmh < 4.8) return temp;
     return 13.12 + 0.6215 * temp - 11.37 * windSpeedKmh ** 0.16 + 0.3965 * temp * windSpeedKmh ** 0.16; // Calculate wind chill using Environment Canada formula
 }
 
@@ -248,8 +248,8 @@ function getSeason(date = new Date(), hemisphere = 'northern') {
             { name: 'autumn', start: 266, end: 355 }, // ~Sep 23 - Dec 21
         ],
         southern: [
-            { name: 'summer', start: 355, end: 79 }, // ~Dec 21 - Mar 20
-            { name: 'autumn', start: 79, end: 172 }, // ~Mar 20 - Jun 21
+            { name: 'summer', start: 354, end: 80 }, // ~Dec 20 - Mar 21
+            { name: 'autumn', start: 80, end: 171 }, // ~Mar 21 - Jun 20
             { name: 'winter', start: 172, end: 266 }, // ~Jun 21 - Sep 23
             { name: 'spring', start: 266, end: 355 }, // ~Sep 23 - Dec 21
         ],
@@ -280,10 +280,10 @@ function getCrossQuarterDates(year) {
     for (const target of targetLongitudes) {
         // Approximate dates as starting points
         const approxDates = {
-            315: new Date(year, 1, 4), // ~Feb 4
-            45: new Date(year, 4, 5), // ~May 5
-            135: new Date(year, 7, 7), // ~Aug 7
-            225: new Date(year, 10, 7), // ~Nov 7
+            315: new Date(year, 1, 2), // ~Feb 2
+            45: new Date(year, 4, 6), // ~May 6
+            135: new Date(year, 7, 6), // ~Aug 6
+            225: new Date(year, 10, 6), // ~Nov 6
         };
         let testDate = approxDates[target.lon];
         let prevLon = undefined;
@@ -350,8 +350,8 @@ function isNearEquinox(date = new Date(), hemisphere = 'northern', daysWindow = 
     const year = date.getFullYear(),
         time = date.getTime(),
         isNorthern = hemisphere === 'northern';
-    const springEquinox = new Date(year, 2, 20),
-        autumnEquinox = new Date(year, 8, 23); // March 20 / September 23
+    const springEquinox = new Date(year, 2, 20), // Can vary Mar 19-21
+        autumnEquinox = new Date(year, 8, 22); // Can vary Sep 22-23
     const firstEquinox = isNorthern ? springEquinox : autumnEquinox,
         secondEquinox = isNorthern ? autumnEquinox : springEquinox;
     const daysToFirst = (firstEquinox.getTime() - time) / MILLISECONDS_PER_DAY,
@@ -418,8 +418,8 @@ function isNearCrossQuarter(date = new Date(), hemisphere = 'northern', daysWind
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function localSiderealTime(jd, longitude) {
-    const T = (jd - 2451545) / 36525,
-        st = 280.46061837 + 360.98564736629 * (jd - 2451545) + 0.000387933 * T * T;
+    const T = (jd - 2451545) / 36525;
+    const st = 280.46061837 + 360.98564736629 * (jd - 2451545) + 0.000387933 * T * T - (T * T * T) / 38710000;
     return (st + longitude) % 360;
 }
 
@@ -453,7 +453,8 @@ function calculateMoonriseAzimuth(lunarTimes, location) {
     // cos(Az) = sin(dec) / cos(lat)
     const cosAz = Math.sin(dec) / Math.cos(lat);
     // Handle edge cases where moon doesn't rise/set at this latitude
-    if (Math.abs(cosAz) > 1) return undefined;
+    if (cosAz > 1) return 90; // Moon rises due east (only possible at equator)
+    if (cosAz < -1) return 90; // Should not happen for rising
     // Azimuth at rising (eastern horizon)
     const azimuth = (Math.acos(cosAz) * 180) / Math.PI;
     // Adjust for declination sign
@@ -465,7 +466,8 @@ function calculateMoonsetAzimuth(lunarTimes, location) {
     const dec = (lunarPosition.dec * Math.PI) / 180,
         lat = (location.latitude * Math.PI) / 180;
     const cosAz = Math.sin(dec) / Math.cos(lat);
-    if (Math.abs(cosAz) > 1) return undefined;
+    if (cosAz > 1) return 270; // Moon sets due west (only possible at equator)
+    if (cosAz < -1) return 270; // Should not happen for setting
     // Azimuth at setting (western horizon)
     const azimuth = (Math.acos(cosAz) * 180) / Math.PI;
     return lunarPosition.dec > 0 ? 360 - azimuth : 180 + azimuth;
@@ -503,7 +505,7 @@ function getSolarPosition(date, latitude, longitude) {
     const altitude = (Math.asin(Math.sin(latRad) * Math.sin(deltaRad) + Math.cos(latRad) * Math.cos(deltaRad) * Math.cos(Hrad)) * 180) / Math.PI;
     const azimuth = ((Math.atan2(Math.sin(Hrad), Math.cos(Hrad) * Math.sin(latRad) - Math.tan(deltaRad) * Math.cos(latRad)) * 180) / Math.PI + 180) % 360;
     // Equation of time in minutes
-    const equationOfTime = 4 * (L0 - 0.0057183 - alpha + longitude * (longitude > 180 ? -1 : 1));
+    const equationOfTime = 4 * (L0 - 0.0057183 - alpha);
     // Solar noon calculation
     const noon = 12 - equationOfTime / 60 - longitude / 15;
     return {
@@ -550,11 +552,13 @@ function getLunarPhase(date = new Date()) {
     const D = (297.8501921 + 445267.1114034 * T) % 360; // Mean elongation Moon-Sun
     const M = (357.5291092 + 35999.0502909 * T) % 360; // Sun's mean anomaly
     const Mp = (134.9633964 + 477198.8675055 * T) % 360; // Moon's mean anomaly
+    const F = (93.272095 + 483202.0175233 * T) % 360;
     // Convert to radians
     const toRad = Math.PI / 180;
     const Drad = D * toRad;
     const Mrad = M * toRad;
     const Mprad = Mp * toRad;
+    const Frad = F * toRad;
     // Apply corrections for a more accurate phase
     // These are the primary periodic terms
     const corrections =
@@ -567,7 +571,9 @@ function getLunarPhase(date = new Date()) {
         +0.046 * Math.sin(2 * Drad - Mrad) +
         +0.041 * Math.sin(Mprad - Mrad) +
         -0.035 * Math.sin(Drad) + // Parallactic equation
-        -0.031 * Math.sin(Mprad + Mrad);
+        -0.031 * Math.sin(Mprad + Mrad) +
+        -0.015 * Math.sin(2 * Frad - 2 * Drad) + // F term correction
+        +0.011 * Math.sin(Mprad - 4 * Drad); // Additional term
     // Calculate corrected elongation
     const elongation = (((D + corrections) % 360) + 360) % 360;
     // Phase is based on elongation (0° = new moon, 180° = full moon)
@@ -582,12 +588,12 @@ function getLunarDistance(date = new Date()) {
     // Mean anomaly of moon
     const M = (134.963 + 13.064993 * T * 36525) % 360,
         Mrad = (M * Math.PI) / 180;
-    const distance = 385000.56 - 20905.355 * Math.cos(Mrad) - 3699.111 * Math.cos(2 * Mrad) - 2955.968 * Math.cos(3 * Mrad);
+    const distance = 385000.56 - 20905 * Math.cos(Mrad) - 3699.111 * Math.cos(2 * Mrad) - 2955.968 * Math.cos(3 * Mrad);
     const phase = getLunarPhase(date);
     const apsis = getLunarApsis(date);
     return {
         distance,
-        isSupermoon: distance < 361885 && (Math.abs(phase - 0.5) < 0.02 || phase < 0.02 || phase > 0.98),
+        isSupermoon: distance < 361863 && (Math.abs(phase - 0.5) < 0.02 || phase < 0.02 || phase > 0.98),
         isMicromoon: distance > 405000 && Math.abs(phase - 0.5) < 0.02,
         isPerigee: Math.abs(apsis.daysToPerigee) < 1,
         isApogee: Math.abs(apsis.daysToApogee) < 1,
@@ -632,8 +638,14 @@ function getLunarPosition(date, latitude, longitude) {
     const lat = 5.128 * Math.sin(Frad) + 0.28 * Math.sin(Mprad + Frad) + 0.277 * Math.sin(Mprad - Frad) + 0.173 * Math.sin(2 * Drad - Frad);
     // Convert to equatorial coordinates
     const epsilon = 23.439291 - 0.0130042 * T;
-    const epsilonRad = epsilon * toRad;
-    const lonRad = lon * toRad;
+    const omega = (125.04452 - 1934.136261 * T) % 360;
+    const omegaRad = omega * toRad;
+    const deltaPsi = -0.00569 - 0.00478 * Math.sin(omegaRad); // Nutation in longitude
+    const deltaEpsilon = 0.00256 * Math.cos(omegaRad); // Nutation in obliquity
+    const epsilonTrue = epsilon + deltaEpsilon;
+    const epsilonRad = epsilonTrue * toRad;
+    const lonTrue = lon + deltaPsi; // Apply nutation to longitude
+    const lonRad = lonTrue * toRad;
     const latRad = lat * toRad;
     // Right ascension and declination
     const x = Math.cos(latRad) * Math.cos(lonRad);
@@ -673,6 +685,8 @@ function getLunarPosition(date, latitude, longitude) {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+const moonHorizon = -0.5667 - 0.25; // Approximately -0.8167
+
 function getLunarTimes(date, latitude, longitude) {
     try {
         const times = { rise: undefined, set: undefined };
@@ -683,7 +697,7 @@ function getLunarTimes(date, latitude, longitude) {
         for (let minutes = 0; minutes < 1440; minutes += 10) {
             const checkTime = new Date(startOfDay.getTime() + minutes * 60000),
                 position = getLunarPosition(checkTime, latitude, longitude);
-            if (previousAltitude < -0.5 && position.altitude > -0.5) times.rise = checkTime;
+            if (previousAltitude < moonHorizon && position.altitude > moonHorizon) times.rise = checkTime;
             else if (previousAltitude > -0.5 && position.altitude < -0.5) times.set = checkTime;
             previousAltitude = position.altitude;
         }
@@ -711,11 +725,14 @@ function getLunarBrightness(phase) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function getLunarApsis(date) {
-    const anomalisticMonth = 27.554549; // days
-    const lastPerigee = new Date('2025-01-13'); // Known perigee
+    const anomalisticMonth = 27.554549878; // days
+    const k = Math.floor((date - new Date('2000-01-01')) / MILLISECONDS_PER_DAY / anomalisticMonth);
+    const T = k / 1325.55; // Centuries since J2000
+    // Mean time of perigee
+    const lastPerigeeJD = 2451534.6698 + 27.55454989 * k + -0.0006691 * T * T + -0.000001098 * T * T * T;
+    const lastPerigee = new Date((lastPerigeeJD - 2440587.5) * MILLISECONDS_PER_DAY);
     const daysSince = (date - lastPerigee) / MILLISECONDS_PER_DAY;
     const cyclePosition = (daysSince % anomalisticMonth) / anomalisticMonth;
-
     return {
         daysToPerigee: cyclePosition < 0.5 ? cyclePosition * anomalisticMonth : (1 - cyclePosition) * anomalisticMonth,
         daysToApogee: cyclePosition < 0.5 ? (0.5 - cyclePosition) * anomalisticMonth : (1.5 - cyclePosition) * anomalisticMonth,
@@ -733,7 +750,24 @@ function getLunarZodiac(date = new Date()) {
         Mrad = M * toRad,
         Drad = D * toRad;
     // Apply main corrections for true longitude, and normalize to 0-360
-    const longitude = (((L + 6.289 * Math.sin(Mrad) + 1.274 * Math.sin(2 * Drad - Mrad) + 0.658 * Math.sin(2 * Drad) + 0.214 * Math.sin(2 * Mrad) - 0.186 * Math.sin(Mrad) - 0.114 * Math.sin(2 * Drad)) % 360) + 360) % 360;
+    const longitude =
+        (((L +
+            6.289 * Math.sin(Mprad) +
+            1.274 * Math.sin(2 * Drad - Mprad) +
+            0.658 * Math.sin(2 * Drad) +
+            0.214 * Math.sin(2 * Mprad) +
+            -0.186 * Math.sin(Mprad) +
+            -0.114 * Math.sin(2 * Frad) +
+            0.059 * Math.sin(2 * Drad - 2 * Mprad) +
+            0.057 * Math.sin(2 * Drad - Mrad - Mprad) +
+            0.053 * Math.sin(2 * Drad + Mprad) +
+            0.046 * Math.sin(2 * Drad - Mrad) +
+            -0.041 * Math.sin(Mrad - Mprad) +
+            -0.035 * Math.sin(Drad) +
+            -0.031 * Math.sin(Mrad + Mprad)) %
+            360) +
+            360) %
+        360;
     // Zodiac signs start at these ecliptic longitudes
     const zodiacSigns = [
         { sign: 'Aries', symbol: '♈', start: 0, meaning: 'good for new beginnings and initiatives' },
@@ -835,9 +869,9 @@ function getVenusElongation(date) {
     const M_venus = (50.416444 + 58517.8038999 * T) % 360;
     const M_venus_rad = (M_venus * Math.PI) / 180;
     // Venus orbital eccentricity
-    // const e_venus = 0.00677323 - 0.00004938 * T;
+    const e_venus = 0.00677323 - 0.00004938 * T;
     // Equation of center for Venus (simplified)
-    const C_venus = (0.761 + 0.004 * T) * Math.sin(M_venus_rad) + 0.006 * Math.sin(2 * M_venus_rad);
+    const C_venus = (2 * e_venus - 0.25 * e_venus * e_venus * e_venus) * Math.sin(M_venus_rad) + 1.25 * e_venus * e_venus * Math.sin(2 * M_venus_rad) + (13 / 12) * e_venus * e_venus * e_venus * Math.sin(3 * M_venus_rad);
     // True longitude of Venus
     const L_venus_true = (L_venus + C_venus) % 360;
     // Get Sun's position
