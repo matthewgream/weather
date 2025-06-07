@@ -37,7 +37,7 @@ function createLookupMap(eclipses) {
     return map;
 }
 
-function updateLookupMap(currentMap, precomputeFunc, currentDate, previousDate, daysAhead = 60, daysBefore = 5) {
+function updateLookupMap(currentMap, precomputeFunc, currentDate, previousDate, latitude, longitude, daysAhead = 60, daysBefore = 5) {
     const now = new Date(currentDate);
     now.setUTCHours(0, 0, 0, 0);
     if (!previousDate) {
@@ -45,7 +45,7 @@ function updateLookupMap(currentMap, precomputeFunc, currentDate, previousDate, 
         startDate.setDate(startDate.getDate() - daysBefore);
         const endDate = new Date(now);
         endDate.setDate(endDate.getDate() + daysAhead);
-        currentMap = createLookupMap(precomputeFunc(startDate, endDate));
+        currentMap = createLookupMap(precomputeFunc(startDate, endDate, latitude, longitude));
         return [now, currentMap];
     }
     if (Math.floor((now - previousDate) / (1000 * 60 * 60 * 24)) > daysBefore) {
@@ -53,7 +53,7 @@ function updateLookupMap(currentMap, precomputeFunc, currentDate, previousDate, 
         startDateNew.setDate(startDateNew.getDate() + (daysAhead - 2 * daysBefore));
         const endDateNew = new Date(now);
         endDateNew.setDate(endDateNew.getDate() + daysAhead);
-        for (const [key, value] of createLookupMap(precomputeFunc(startDateNew, endDateNew))) currentMap.set(key, value);
+        for (const [key, value] of createLookupMap(precomputeFunc(startDateNew, endDateNew, latitude, longitude))) currentMap.set(key, value);
         const cutoffDate = new Date(now);
         cutoffDate.setDate(cutoffDate.getDate() - daysBefore);
         const [cutoffKey] = cutoffDate.toISOString().split('T');
@@ -73,232 +73,6 @@ const AU_TO_KM = 149597870.7; // Astronomical unit in kilometers
 
 const LUNAR_ECLIPSE_LIMIT = 17; // Maximum angular distance from node for any eclipse
 const SOLAR_ECLIPSE_LIMIT = 18.5; // Maximum angular distance from node for any solar eclipse
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-function __jdFromYMDHMS(ymdhms) {
-    let { year, month, day, hour, minute, second } = ymdhms;
-    if (month <= 2) {
-        year -= 1;
-        month += 12;
-    }
-    const a = Math.floor(year / 100),
-        b = 2 - a + Math.floor(a / 4);
-    return Math.floor(365.25 * (year + 4716)) + Math.floor(30.6001 * (month + 1)) + day + hour / 24 + minute / 1440 + second / 86400 + b - 1524.5;
-}
-
-function __jdToYMD(jd) {
-    const z = Math.floor(jd + 0.5),
-        f = jd + 0.5 - z;
-    const A = z < 2299161 ? z : z + 1 + Math.floor((z - 1867216.25) / 36524.25) - Math.floor(Math.floor((z - 1867216.25) / 36524.25) / 4),
-        B = A + 1524,
-        C = Math.floor((B - 122.1) / 365.25),
-        D = Math.floor(365.25 * C),
-        E = Math.floor((B - D) / 30.6001);
-    const month = E < 14 ? E - 1 : E - 13;
-    return {
-        day: B - D - Math.floor(30.6001 * E) + f,
-        month,
-        year: month > 2 ? C - 4716 : C - 4715,
-    };
-}
-
-function __jdFromDate(date) {
-    return __jdFromYMDHMS({
-        year: date.getFullYear(),
-        month: date.getMonth() + 1,
-        day: date.getDate(),
-        hour: date.getHours(),
-        minute: date.getMinutes(),
-        second: date.getSeconds(),
-    });
-}
-
-function __jdToDate(jd) {
-    const ymd = __jdToYMD(jd);
-    return new Date(Date.UTC(ymd.year, ymd.month - 1, ymd.day, 0, 0, 0));
-}
-
-function __jdTimeCentury(jd) {
-    return (jd - 2451545) / 36525;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-function calculateNodeDistance(lunarLongitude, jd) {
-    const T = __jdTimeCentury(jd);
-    // Mean longitude of ascending node
-    const omega = 125.0445479 - 1934.1362891 * T + 0.0020754 * T * T + (T * T * T) / 467441;
-    const nodeNormalized = normalizeAngle(omega);
-    // Angular distance to ascending node
-    const distToAscending = Math.abs(normalizeAngle(lunarLongitude - nodeNormalized)),
-        distToDescending = Math.abs(normalizeAngle(lunarLongitude - nodeNormalized - 180));
-    return Math.min(distToAscending, distToDescending);
-}
-
-function eclipticToEquatorial(jd, longitude, latitude) {
-    const T = (jd - 2451545) / 36525;
-    const obliquity = degToRad(23.43929111 - 0.0130041 * T);
-    const lonRad = degToRad(longitude),
-        latRad = degToRad(latitude);
-    const dec = Math.asin(Math.sin(latRad) * Math.cos(obliquity) + Math.cos(latRad) * Math.sin(obliquity) * Math.sin(lonRad));
-    const y = Math.sin(lonRad) * Math.cos(obliquity) - Math.tan(latRad) * Math.sin(obliquity),
-        x = Math.cos(lonRad);
-    let ra = Math.atan2(y, x);
-    if (ra < 0) ra += 2 * Math.PI;
-    return { ra, dec };
-}
-
-function localSiderealTime(jd, longitude) {
-    const T = (jd - 2451545) / 36525;
-    const gmst = 280.46061837 + 360.98564736629 * (jd - 2451545) + 0.000387933 * T * T;
-    return degToRad(((((gmst % 360) + 360) % 360) + longitude) % 360);
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-function getLunarPosition(jd) {
-    const T = __jdTimeCentury(jd),
-        T2 = T * T,
-        T3 = T2 * T,
-        T4 = T3 * T;
-
-    // Mean longitude of the lunar
-    const L0 = 218.3164477 + 481267.88123421 * T - 0.0015786 * T2 + T3 / 538841 - T4 / 65194000;
-    // Mean elongation of the lunar
-    const D = 297.8501921 + 445267.1114034 * T - 0.0018819 * T2 + T3 / 545868 - T4 / 113065000;
-    // Mean anomaly of the solar
-    const M = 357.5291092 + 35999.0502909 * T - 0.0001536 * T2 + T3 / 24490000;
-    // Mean anomaly of the lunar
-    const M1 = 134.9633964 + 477198.8675055 * T + 0.0087414 * T2 + T3 / 69699 - T4 / 14712000;
-    // Moon's argument of latitude
-    const F = 93.272095 + 483202.0175233 * T - 0.0036539 * T2 - T3 / 3526000 + T4 / 863310000;
-
-    // Normalize angles
-    const L0n = normalizeAngle(L0),
-        Dn = normalizeAngle(D),
-        Mn = normalizeAngle(M),
-        M1n = normalizeAngle(M1),
-        Fn = normalizeAngle(F);
-
-    // Convert to radians
-    const d2r = Math.PI / 180,
-        Dr = Dn * d2r,
-        Mr = Mn * d2r,
-        M1r = M1n * d2r,
-        Fr = Fn * d2r;
-
-    // Longitude perturbations
-    let dL = 0;
-    dL += 6.288774 * Math.sin(M1r);
-    dL += 1.274027 * Math.sin(2 * Dr - M1r);
-    dL += 0.658314 * Math.sin(2 * Dr);
-    dL += 0.213618 * Math.sin(2 * M1r);
-    dL -= 0.185116 * Math.sin(Mr);
-    dL -= 0.114332 * Math.sin(2 * Fr);
-    dL += 0.058793 * Math.sin(2 * Dr - 2 * M1r);
-    dL += 0.057066 * Math.sin(2 * Dr - Mr - M1r);
-    dL += 0.053322 * Math.sin(2 * Dr + M1r);
-    dL += 0.045758 * Math.sin(2 * Dr - Mr);
-    dL -= 0.040923 * Math.sin(M1r - Mr);
-    dL -= 0.03472 * Math.sin(Dr);
-    dL -= 0.030383 * Math.sin(Mr + M1r);
-    dL += 0.015327 * Math.sin(2 * Dr - 2 * Fr);
-    dL -= 0.012528 * Math.sin(2 * Fr + M1r);
-    dL += 0.01098 * Math.sin(2 * Fr - M1r);
-    dL += 0.010675 * Math.sin(4 * Dr - M1r);
-    dL += 0.010034 * Math.sin(3 * M1r);
-    dL += 0.008548 * Math.sin(4 * Dr - 2 * M1r);
-    const longitude = normalizeAngle(L0n + dL);
-
-    // Latitude perturbations
-    let dB = 0;
-    dB += 5.128122 * Math.sin(Fr);
-    dB += 0.280602 * Math.sin(M1r + Fr);
-    dB += 0.277693 * Math.sin(M1r - Fr);
-    dB += 0.173237 * Math.sin(2 * Dr - Fr);
-    dB += 0.055413 * Math.sin(2 * Dr + Fr - M1r);
-    dB += 0.046271 * Math.sin(2 * Dr - Fr - M1r);
-    dB += 0.032573 * Math.sin(2 * Dr + Fr);
-    dB += 0.017198 * Math.sin(2 * M1r + Fr);
-    dB += 0.009266 * Math.sin(2 * Dr + M1r - Fr);
-    dB += 0.008822 * Math.sin(2 * M1r - Fr);
-    dB += 0.008216 * Math.sin(2 * Dr - M1r - Fr);
-    dB += 0.004324 * Math.sin(2 * Dr - 2 * M1r - Fr);
-    dB += 0.0042 * Math.sin(2 * Dr + Fr + M1r);
-    const latitude = dB;
-
-    // Distance calculation
-    let dR = 0;
-    dR -= 0.0058 * Math.cos(M1r);
-    dR -= 0.0041 * Math.cos(2 * Dr - M1r);
-    dR -= 0.0018 * Math.cos(2 * Dr);
-    dR -= 0.0011 * Math.cos(2 * M1r);
-    dR += 0.0008 * Math.cos(2 * Dr - 2 * M1r);
-    dR += 0.0008 * Math.cos(2 * Dr + M1r);
-    dR += 0.0006 * Math.cos(2 * Dr - Mr);
-    dR += 0.0004 * Math.cos(M1r - Mr);
-    dR += 0.0004 * Math.cos(Dr);
-    dR += 0.0004 * Math.cos(Mr + M1r);
-    dR -= 0.0004 * Math.cos(2 * Fr + M1r);
-    dR -= 0.0003 * Math.cos(M1r + 2 * Fr);
-    const distance = 60.2666 + dR; // Earth radii
-
-    // Velocity calculation
-    const velocity = 13.176396 + 0.001944 * Math.sin(M1r) - 0.000595 * Math.sin(2 * Dr);
-
-    return { longitude, latitude, distance, velocity };
-}
-
-function getSolarPosition(jd) {
-    const T = __jdTimeCentury(jd),
-        T2 = T * T;
-
-    const L0 = 280.46646 + 36000.76983 * T + 0.0003032 * T2;
-    const M = 357.52911 + 35999.05029 * T - 0.0001537 * T2;
-    const e = 0.016708634 - 0.000042037 * T - 0.0000001267 * T2;
-
-    const C = (1.914602 - 0.004817 * T - 0.000014 * T2) * Math.sin((M * Math.PI) / 180) + (0.019993 - 0.000101 * T) * Math.sin((2 * M * Math.PI) / 180) + 0.000289 * Math.sin((3 * M * Math.PI) / 180);
-
-    const trueL = L0 + C;
-    const omega = 125.04 - 1934.136 * T;
-    const apparentL = trueL - 0.00569 - 0.00478 * Math.sin((omega * Math.PI) / 180);
-
-    const longitude = normalizeAngle(apparentL);
-    const R = (1.000001018 * (1 - e * e)) / (1 + e * Math.cos((M * Math.PI) / 180));
-
-    return {
-        longitude,
-        latitude: 0,
-        distance: R,
-        velocity: 0.9856473,
-    };
-}
-
-function getLunarAltitude(date, latitude, longitude) {
-    const jd = __jdFromDate(date);
-    const lunarPos = getLunarPosition(jd);
-    const { ra, dec } = eclipticToEquatorial(jd, lunarPos.longitude, lunarPos.latitude);
-    const lst = localSiderealTime(jd, longitude);
-    const ha = lst - ra;
-    const latRad = degToRad(latitude);
-    const altitude = Math.asin(Math.sin(latRad) * Math.sin(dec) + Math.cos(latRad) * Math.cos(dec) * Math.cos(ha));
-    return radToDeg(altitude);
-}
-
-function getSolarAltitude(date, latitude, longitude) {
-    const jd = __jdFromDate(date),
-        solarPos = getSolarPosition(jd);
-    const { ra, dec } = eclipticToEquatorial(jd, solarPos.longitude, solarPos.latitude);
-    const lst = localSiderealTime(jd, longitude);
-    const ha = lst - ra;
-    const latRad = degToRad(latitude);
-    const altitude = Math.asin(Math.sin(latRad) * Math.sin(dec) + Math.cos(latRad) * Math.cos(dec) * Math.cos(ha));
-    return radToDeg(altitude);
-}
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -407,7 +181,7 @@ function calculateLunarEclipseContacts(eclipseParams, lunarPos, peakTime) {
 /**
  * Find the exact moment of greatest eclipse by iteration: This refines the initial estimate
  */
-function calculateLunarEclipseGreatestMoment(jd, lunarPos, solarPos) {
+function calculateLunarEclipseGreatestMoment(jd, lunarPos, solarPos, latitude, longitude) {
     let minSeparation = calculateLunarEclipseMinimumSeparation(lunarPos, solarPos);
     let step = 0.01; // About 15 minutes
 
@@ -415,11 +189,11 @@ function calculateLunarEclipseGreatestMoment(jd, lunarPos, solarPos) {
     for (let i = 0; i < 10; i++) {
         const jdBefore = jd - step,
             jdAfter = jd + step;
-        const lunarBefore = getLunarPosition(jdBefore),
-            solarBefore = getSolarPosition(jdBefore),
+        const lunarBefore = helpers.getLunarPosition(helpers.juliandDateToDateUTC(jdBefore), latitude, longitude),
+            solarBefore = helpers.getSolarPosition(helpers.juliandDateToDateUTC(jdBefore), latitude, longitude),
             sepBefore = calculateLunarEclipseMinimumSeparation(lunarBefore, solarBefore);
-        const lunarAfter = getLunarPosition(jdAfter),
-            solarAfter = getSolarPosition(jdAfter),
+        const lunarAfter = helpers.getLunarPosition(helpers.juliandDateToDateUTC(jdAfter), latitude, longitude),
+            solarAfter = helpers.getSolarPosition(helpers.juliandDateToDateUTC(jdAfter), latitude, longitude),
             sepAfter = calculateLunarEclipseMinimumSeparation(lunarAfter, solarAfter);
 
         if (sepBefore < minSeparation) {
@@ -470,7 +244,7 @@ function calculateLunarEclipseVisibility(eclipse, latitude, longitude) {
 
     for (const point of checkPoints) {
         if (point.time) {
-            const altitude = getLunarAltitude(point.time, latitude, longitude),
+            const { altitude } = helpers.getLunarPosition(point.time, latitude, longitude),
                 visible = altitude > -0.5;
             visibility.phases[point.name] = {
                 time: point.time,
@@ -503,9 +277,8 @@ function calculateLunarEclipseVisibility(eclipse, latitude, longitude) {
     return visibility;
 }
 
-function calculateLunarEclipseVisibilityRegions(eclipse) {
-    const jd = __jdFromDate(eclipse.date),
-        solarPos = getSolarPosition(jd),
+function calculateLunarEclipseVisibilityRegions(eclipse, latitude, longitude) {
+    const solarPos = helpers.getSolarPosition(eclipse.date, latitude, longitude),
         antiSolarLon = (solarPos.longitude + 180) % 360;
 
     const regions = [
@@ -536,34 +309,35 @@ function calculateLunarEclipseVisibilityRegions(eclipse) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function precomputeLunarEclipses(startDate, endDate) {
+function precomputeLunarEclipses(startDate, endDate, latitude, longitude) {
     const eclipses = [];
 
-    const jdStart = __jdFromDate(startDate),
-        jdEnd = __jdFromDate(endDate);
+    const jdStart = helpers.dateToJulianDateUTC(startDate),
+        jdEnd = helpers.dateToJulianDateUTC(endDate);
+    const date = startDate;
     let jd = jdStart;
     while (jd <= jdEnd) {
         // Check if near full lunar (within 2%)
-        const lunarPhase = helpers.getLunarPhase(__jdToDate(jd));
+        const lunarPhase = helpers.getLunarPhase(date);
         if (lunarPhase >= 0.48 && lunarPhase <= 0.52) {
-            const lunarPos = getLunarPosition(jd),
-                solarPos = getSolarPosition(jd);
+            const lunarPos = helpers.getLunarPosition(date, latitude, longitude),
+                solarPos = helpers.getSolarPosition(date, latitude, longitude);
 
             // Check node distance
-            const nodeDistance = calculateNodeDistance(lunarPos.longitude, jd);
+            const nodeDistance = helpers.calculateNodeDistance(jd, lunarPos.longitude);
             if (nodeDistance <= LUNAR_ECLIPSE_LIMIT) {
                 // Potential eclipse - find exact greatest eclipse moment
-                const greatestJd = calculateLunarEclipseGreatestMoment(jd, lunarPos, solarPos),
-                    lunarAtGreatest = getLunarPosition(greatestJd),
-                    solarAtGreatest = getSolarPosition(greatestJd);
+                const greatestJd = calculateLunarEclipseGreatestMoment(jd, lunarPos, solarPos, latitude, longitude);
+                const greatestDate = helpers.juliandDateToDateUTC(greatestJd);
+                const lunarAtGreatest = helpers.getLunarPosition(greatestDate, latitude, longitude);
+                const solarAtGreatest = helpers.getSolarPosition(greatestDate, latitude, longitude);
 
                 // Calculate eclipse parameters
                 const params = calculateLunarEclipseParameters(lunarAtGreatest, solarAtGreatest);
                 if (params.type !== 'none') {
-                    const date = __jdToDate(greatestJd);
-                    const contacts = calculateLunarEclipseContacts(params, lunarAtGreatest, date);
+                    const contacts = calculateLunarEclipseContacts(params, lunarAtGreatest, greatestDate);
                     eclipses.push({
-                        date,
+                        date: greatestDate,
                         type: params.type,
                         magnitude: params.magnitude,
                         penumbralMagnitude: params.penumbralMagnitude,
@@ -579,11 +353,13 @@ function precomputeLunarEclipses(startDate, endDate) {
 
                     // Skip ahead to avoid finding the same eclipse
                     jd += 20;
+                    date.setTime(date.getTime() + 20 * 24 * 60 * 60 * 1000);
                     continue;
                 }
             }
         }
         jd++;
+        date.setTime(date.getTime() + 1 * 24 * 60 * 60 * 1000);
     }
 
     console.error(`precomputeLunarEclipses: ${startDate.toISOString()}/${endDate.toISOString()} (${jdEnd - jdStart} days) -- ${eclipses.length} results`);
@@ -668,7 +444,7 @@ function generateLunarEclipseCurrentInterpretation(eclipse, location, cloudCover
         }
     }
 
-    const visibleRegions = calculateLunarEclipseVisibilityRegions(eclipse);
+    const visibleRegions = calculateLunarEclipseVisibilityRegions(eclipse, location.latitude, location.longitude);
     if (visibleRegions.length > 0) interpretation.phenomena.push(`visible from: ${visibleRegions.slice(0, 5).join(', ')}${visibleRegions.length > 5 ? ' and others' : ''}`);
 
     if (lunarDistance < 362000) interpretation.phenomena.push('eclipse occurs near lunar perigee - Moon appears larger');
@@ -753,6 +529,8 @@ function interpretLunarEclipses(results, situation, data, _data_previous, store,
             precomputeLunarEclipses,
             date,
             store.lunarEclipse.cacheUpdated,
+            location.latitude,
+            location.longitude,
             lunarEclipseLookupCacheDaysAhead,
             lunarEclipseLookupCacheDaysBefore
         );
@@ -942,17 +720,19 @@ function calculateSolarEclipseDuration(params) {
 /**
  * Find exact moment of solar conjunction (new moon)
  */
-function calculateSolarEclipseConjunction(jd, lunarPos, solarPos) {
+function calculateSolarEclipseConjunction(jd, lunarPos, solarPos, latitude, longitude) {
     let step = 0.01; // About 15 minutes
     // Find minimum elongation
     for (let i = 0; i < 10; i++) {
         const jdBefore = jd - step,
             jdAfter = jd + step;
-        const lunarBefore = getLunarPosition(jdBefore),
-            solarBefore = getSolarPosition(jdBefore),
+        const dateBefore = helpers.juliandDateToDateUTC(jdBefore),
+            dateAfter = helpers.juliandDateToDateUTC(jdAfter);
+        const lunarBefore = helpers.getLunarPosition(dateBefore, latitude, longitude),
+            solarBefore = helpers.getSolarPosition(dateBefore, latitude, longitude),
             elongBefore = Math.abs(normalizeAngle(lunarBefore.longitude - solarBefore.longitude));
-        const lunarAfter = getLunarPosition(jdAfter),
-            solarAfter = getSolarPosition(jdAfter),
+        const lunarAfter = helpers.getLunarPosition(dateAfter, latitude, longitude),
+            solarAfter = helpers.getSolarPosition(dateAfter, latitude, longitude),
             elongAfter = Math.abs(normalizeAngle(lunarAfter.longitude - solarAfter.longitude));
         const elongCurrent = Math.abs(normalizeAngle(lunarPos.longitude - solarPos.longitude));
         if (elongBefore < elongCurrent) {
@@ -1005,8 +785,8 @@ function calculateSolarEclipseVisibility(eclipse, latitude, longitude) {
         }
     } else if (eclipse.type === 'partial') {
         // Partial eclipses visible over large area: Simplified visibility check
-        const solarAltitude = getSolarAltitude(eclipse.date, latitude, longitude);
-        if (solarAltitude > -0.5) {
+        const { altitude } = helpers.getSolarPosition(eclipse.date, latitude, longitude);
+        if (altitude > -0.5) {
             visibility.visible = true;
             visibility.type = 'partial';
             visibility.magnitude = eclipse.magnitude * 0.5; // Simplified
@@ -1019,32 +799,34 @@ function calculateSolarEclipseVisibility(eclipse, latitude, longitude) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function precomputeSolarEclipses(startDate, endDate) {
+function precomputeSolarEclipses(startDate, endDate, latitude, longitude) {
     const eclipses = [];
 
-    const jdStart = __jdFromDate(startDate),
-        jdEnd = __jdFromDate(endDate);
+    const jdStart = helpers.dateToJulianDateUTC(startDate),
+        jdEnd = helpers.dateToJulianDateUTC(endDate);
     let jd = jdStart;
+    const date = helpers.juliandDateToDateUTC(jd);
     while (jd <= jdEnd) {
         // Check if near new moon (within 3%)
-        const lunarPhase = helpers.getLunarPhase(__jdToDate(jd));
+        const lunarPhase = helpers.getLunarPhase(date);
         if (lunarPhase >= 0.97 || lunarPhase <= 0.03) {
-            const lunarPos = getLunarPosition(jd),
-                solarPos = getSolarPosition(jd);
+            const lunarPos = helpers.getLunarPosition(date, latitude, longitude),
+                solarPos = helpers.getSolarPosition(date, latitude, longitude);
 
             // Check if Moon is near a node
-            const nodeDistance = calculateNodeDistance(lunarPos.longitude, jd);
+            const nodeDistance = helpers.calculateNodeDistance(jd, lunarPos.longitude);
             if (nodeDistance <= SOLAR_ECLIPSE_LIMIT) {
                 // Find exact moment of conjunction
-                const conjunctionJd = calculateSolarEclipseConjunction(jd, lunarPos, solarPos),
-                    lunarAtConj = getLunarPosition(conjunctionJd),
-                    solarAtConj = getSolarPosition(conjunctionJd);
+                const conjunctionJd = calculateSolarEclipseConjunction(jd, lunarPos, solarPos, latitude, longitude);
+                const conjunctionDate = helpers.juliandDateToDateUTC(conjunctionJd);
+                const lunarAtConj = helpers.getLunarPosition(conjunctionDate, latitude, longitude);
+                const solarAtConj = helpers.getSolarPosition(conjunctionDate, latitude, longitude);
 
                 // Calculate eclipse parameters
                 const params = calculateSolarEclipseParameters(lunarAtConj, solarAtConj);
                 if (params.type !== 'none') {
                     eclipses.push({
-                        date: __jdToDate(conjunctionJd),
+                        date: conjunctionDate,
                         type: params.type,
                         magnitude: params.magnitude,
                         obscuration: params.obscuration,
@@ -1058,11 +840,13 @@ function precomputeSolarEclipses(startDate, endDate) {
 
                     // Skip ahead to avoid finding the same eclipse
                     jd += 25;
+                    date.setTime(date.getTime() + 25 * 24 * 60 * 60 * 1000);
                     continue;
                 }
             }
         }
         jd += 1;
+        date.setTime(date.getTime() + 1 * 24 * 60 * 60 * 1000);
     }
 
     console.error(`precomputeSolarEclipses: ${startDate.toISOString()}/${endDate.toISOString()} (${jdEnd - jdStart} days) -- ${eclipses.length} results`);
@@ -1229,6 +1013,8 @@ function interpretSolarEclipses(results, situation, data, _data_previous, store,
             precomputeSolarEclipses,
             date,
             store.solarEclipse.cacheUpdated,
+            location.latitude,
+            location.longitude,
             solarEclipseLookupCacheDaysAhead,
             solarEclipseLookupCacheDaysBefore
         );
