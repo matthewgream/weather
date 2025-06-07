@@ -27,9 +27,7 @@ function initialise(app, prefix, directory, location) {
     app.get(prefix + '/images.json', (req, res) => {
         const url_base = `http://${location}${prefix}/`;
         const manifest = image_dataManifest(directory).map(({ filename, ...rest }) => ({ ...rest, url: url_base + filename }));
-        console.log(
-            `images manifest request: ${manifest.length} items, ${JSON.stringify(manifest).length} bytes, types = ${manifest.map((item) => item.type).join(', ')}, version = ${req.query.version || 'unspecified'}`
-        );
+        console.log(`images manifest request: ${manifest.length} items, ${JSON.stringify(manifest).length} bytes, types = ${manifest.map((item) => item.type).join(', ')}, version = ${req.query.version || 'unspecified'}`);
         res.json(manifest);
     });
     app.put(String(prefix) + '', image_upload.single('image'), (req, res) => {
@@ -53,9 +51,7 @@ function initialise(app, prefix, directory, location) {
             const compressedName = path.join(directory, uploadedName) + '.zz',
                 compressedData = image_dataCompress(uploadedData);
             fs.writeFileSync(compressedName, compressedData);
-            console.log(
-                `images upload succeeded: '${uploadedName}' (${uploadedData.length} bytes) --> '${compressedName}' (${compressedData.length} bytes) [${remote}]`
-            );
+            console.log(`images upload succeeded: '${uploadedName}' (${uploadedData.length} bytes) --> '${compressedName}' (${compressedData.length} bytes) [${remote}]`);
             return res.send('File uploaded, compressed, and saved successfully.');
         } catch (e) {
             console.error(`images upload failed [${remote}], error:`, e);

@@ -141,14 +141,12 @@ function initialise(app, prefix, directory, server) {
             );
             if (closest.file) closestSnapshots[interval] = closest.file;
         }
-        for (const interval in closestSnapshots)
-            await intervalsSnapshotsSet(path.join(directory, closestSnapshots[interval]), `snapshot_M${interval}.jpg`, THUMBNAIL_WIDTH_SNAPSHOT);
+        for (const interval in closestSnapshots) await intervalsSnapshotsSet(path.join(directory, closestSnapshots[interval]), `snapshot_M${interval}.jpg`, THUMBNAIL_WIDTH_SNAPSHOT);
         await intervalsSnapshotsSet(path.join(directory, earliest), 'snapshot.jpg', THUMBNAIL_WIDTH_CAMERA);
     }
     async function intervalsThumbnailsGet() {
         const thumbnails = {};
-        for (const interval of SNAPSHOT_INTERVALS)
-            thumbnails[`M${interval}`] = await createThumbnailFromImage(`snapshot_M${interval}.jpg`, THUMBNAIL_WIDTH_SNAPSHOT);
+        for (const interval of SNAPSHOT_INTERVALS) thumbnails[`M${interval}`] = await createThumbnailFromImage(`snapshot_M${interval}.jpg`, THUMBNAIL_WIDTH_SNAPSHOT);
         // eslint-disable-next-line dot-notation
         thumbnails['current'] = await createThumbnailFromImage('snapshot.jpg', THUMBNAIL_WIDTH_CAMERA);
         return thumbnails;

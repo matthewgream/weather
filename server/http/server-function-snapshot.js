@@ -78,8 +78,7 @@ class SnapshotDirectoryManager {
     cacheRemoveDirectory(dirName) {
         const initialLength = this.snapshotsCache.length;
         this.snapshotsCache = this.snapshotsCache.filter((item) => item.dateCode !== dirName);
-        if (initialLength !== this.snapshotsCache.length)
-            debugSnapshotFunctions && console.log(`SnapshotDirectoryManager(${this.snapshotsDir}): remove directory: ${dirName}`);
+        if (initialLength !== this.snapshotsCache.length) debugSnapshotFunctions && console.log(`SnapshotDirectoryManager(${this.snapshotsDir}): remove directory: ${dirName}`);
     }
     getListOfDates() {
         if (!this.isInitialized) this.initializeCache();
@@ -161,8 +160,7 @@ class SnapshotContentsManager {
                 this.watchers.get(date).close();
                 this.watchers.delete(date);
                 this.watcherTimestamps.delete(date);
-                debugSnapshotFunctions &&
-                    console.log(`SnapshotContentsManager(${this.snapshotsDir}): (date=${date}) watcher closed (watchers=${this.watchers.size})`);
+                debugSnapshotFunctions && console.log(`SnapshotContentsManager(${this.snapshotsDir}): (date=${date}) watcher closed (watchers=${this.watchers.size})`);
             } catch (e) {
                 console.error(`SnapshotContentsManager(${this.snapshotsDir}): (date=${date}) watcher error:`, e);
             }
@@ -301,8 +299,7 @@ class SnapshotThumbnailsManager {
         let keysToRemove = sortedKeys.filter((key) => now - this.cacheDetails[key].added > this.cacheTime);
         if (cacheKeys.length - keysToRemove.length > this.cacheSize) {
             const additionalToRemove = cacheKeys.length - keysToRemove.length - Math.floor(this.cacheSize * 0.9);
-            if (additionalToRemove > 0)
-                keysToRemove = [...keysToRemove, ...sortedKeys.filter((key) => !keysToRemove.includes(key)).slice(0, additionalToRemove)];
+            if (additionalToRemove > 0) keysToRemove = [...keysToRemove, ...sortedKeys.filter((key) => !keysToRemove.includes(key)).slice(0, additionalToRemove)];
         }
         keysToRemove.forEach((key) => {
             delete this.cacheEntries[key];
@@ -404,8 +401,7 @@ class SnapshotTimelapseManager {
     removeFileFromCache(fileName) {
         const initialLength = this.timelapseCache.length;
         this.timelapseCache = this.timelapseCache.filter((item) => item.file !== fileName);
-        if (initialLength !== this.timelapseCache.length)
-            debugSnapshotFunctions && console.log(`SnapshotTimelapseManager(${this.timelapseDir}): removed file: ${fileName}`);
+        if (initialLength !== this.timelapseCache.length) debugSnapshotFunctions && console.log(`SnapshotTimelapseManager(${this.timelapseDir}): removed file: ${fileName}`);
     }
     getListOfFiles() {
         if (!this.isInitialized) this.initializeCache();

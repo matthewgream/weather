@@ -26,19 +26,37 @@ function __weatherDetails(results) {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function __weatherSituation(location, data) {
+let __weatherSituationCache = {};
+
+function __weatherSituation(location, data, options) {
     const { temp, humidity, windSpeed, solarRad } = data;
     const date = new Date();
+
+    if (!__weatherSituationCache.cached || __weatherSituationCache.cached.getDate() !== date.getDate()) {
+        __weatherSituationCache = {
+            location,
+            year: date.getFullYear(),
+            month: date.getMonth(),
+            day: date.getDate(),
+            daysIntoYear: helpers.daysIntoYear(date),
+            season: helpers.getSeason(date, location.hemisphere),
+            lunar: helpers.getLunarSituation(date, location.latitude, location.longitude),
+            solar: helpers.getSolarSituation(date, location.latitude, location.longitude),
+            cached: date,
+        };
+        if (options?.debug) console.error(`weather: situation cached: ${date.getFullYear()}/${date.getMonth().toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`);
+    }
+
     return {
-        location,
+        ...__weatherSituationCache,
+        //
         date,
         minute: date.getMinutes(),
         hour: date.getHours(),
-        day: date.getDate(),
-        month: date.getMonth(),
-        year: date.getFullYear(),
-        season: helpers.getSeason(date, location.hemisphere),
-        daylight: helpers.getDaylightHours(location.latitude, location.longitude),
+        hourDecimal: date.getHours() + date.getMinutes() / 60,
+        //
+        daylight: helpers.getDaylight(date, location.latitude, location.longitude),
+        //
         dewPoint: helpers.calculateDewPoint(temp, humidity),
         windChill: helpers.calculateWindChill(temp, windSpeed),
         heatIndex: helpers.calculateHeatIndex(temp, humidity),
@@ -50,14 +68,25 @@ function __weatherSituation(location, data) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function getWeatherInterpretationImpl(interpreters, location, data, data_previous, store, options) {
-    const situation = __weatherSituation(location, data);
+    const situation = __weatherSituation(location, data, options);
+    if (options?.debug) console.error('weather: situation applied:', situation);
     const results = { conditions: [], phenomena: [], alerts: [] };
     Object.entries(interpreters).forEach(([name, func]) => {
         try {
-            if (options?.debug) console.error('--> ' + name);
-            func(results, situation, data, data_previous, store, options);
+            if (options?.debug) console.error(`weather: interpret '${name}'`);
+            const result = { conditions: [], phenomena: [], alerts: [] };
+            func(result, situation, data, data_previous, store, options);
+            results.conditions = [...results.conditions, ...result.conditions];
+            results.phenomena = [...results.phenomena, ...result.phenomena];
+            results.alerts = [...results.alerts, ...result.alerts];
+            if (options?.debug && (result.conditions.length > 0 || result.phenomena.length > 0 || result.alerts.length > 0)) {
+                if (result.conditions.length === 0) delete result.conditions;
+                if (result.phenomena.length === 0) delete result.phenomena;
+                if (result.alerts.length === 0) delete result.alerts;
+                console.error(`weather: response:`, result);
+            }
         } catch (e) {
-            console.error(`weather: interpreter '${name}' error:`, e);
+            console.error(`weather: interpret '${name}', error:`, e);
         }
     });
     results.feelsLike = situation.feelsLike;

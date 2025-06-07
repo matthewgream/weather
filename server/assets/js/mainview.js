@@ -22,9 +22,7 @@ function joinand(items) {
 const format = (e, v) => (v === undefined ? 'n/a' : Number(v).toFixed(e.decimals ?? 0));
 const formatWindSpeed = (e, v) => (v === undefined ? 'n/a' : (v / 3.6).toFixed(e.decimals ?? 0));
 const formatWindDirection = (e, v) =>
-    v === undefined
-        ? 'n/a'
-        : `${v.toFixed(e.decimals ?? 0)}° ${['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][Math.floor(((v + 11.25) % 360) / 22.5)]}`;
+    v === undefined ? 'n/a' : `${v.toFixed(e.decimals ?? 0)}° ${['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][Math.floor(((v + 11.25) % 360) / 22.5)]}`;
 const formatDepthFromMMtoCM = (e, v) => (v === undefined ? 'n/a' : (v / 10).toFixed(e.decimals ?? 0));
 
 const formatList = [
@@ -349,10 +347,7 @@ function createSectionDataSummary(data_location, vars) {
 
     ////
     if (aircraft?.alerts?.length > 0) {
-        const flights = aircraft.alerts.reduce(
-            (flights, alert) => ({ ...flights, [alert.flight]: [...(flights[alert.flight] || []), encodehtml(alert.text)] }),
-            {}
-        );
+        const flights = aircraft.alerts.reduce((flights, alert) => ({ ...flights, [alert.flight]: [...(flights[alert.flight] || []), encodehtml(alert.text)] }), {});
         const text = Object.entries(flights)
             .map(([flight, alerts]) => `${flight} ${alerts.join(', ')}`)
             .join('; ');
@@ -585,14 +580,7 @@ function create(vars, data) {
     timezone = conf.location_data.timezone; // eslint-disable-line prefer-destructuring
     const time = locate(vars, conf.var_timestamp);
     const links = conf.external_links;
-    document.querySelector('#weather-dashboard').innerHTML = [
-        createHeader(),
-        createBanner(time),
-        createSectionData(conf.location_data, vars),
-        createSectionCamera(data),
-        createSectionTime(time),
-        createSectionLinks(links),
-    ].join('');
+    document.querySelector('#weather-dashboard').innerHTML = [createHeader(), createBanner(time), createSectionData(conf.location_data, vars), createSectionCamera(data), createSectionTime(time), createSectionLinks(links)].join('');
     schedule(vars);
 }
 

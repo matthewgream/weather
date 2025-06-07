@@ -158,15 +158,9 @@ class SingleEJSTemplateCache {
             this.lastHash = undefined;
             this.lastHtml = undefined;
             if (this.watch) this.setupWatcher();
-            const opts = [
-                `minTemplate:${this.minifyTemplate}`,
-                `minOutput:${this.minifyOutput}`,
-                ...this.compressionTypes.map((type) => `${type}:${this.compressionLevel?.[type] || '?'}`),
-            ];
+            const opts = [`minTemplate:${this.minifyTemplate}`, `minOutput:${this.minifyOutput}`, ...this.compressionTypes.map((type) => `${type}:${this.compressionLevel?.[type] || '?'}`)];
             this.stats.templates.loaded++;
-            console.log(
-                `cache-ejs: template load '${this.templateName}' from '${this.templatePath}' (${originalSize} ${this.minifyTemplate ? 'to ' + this.cached.minifiedSize + ' bytes' : ''}): ${opts.join(', ')}`
-            );
+            console.log(`cache-ejs: template load '${this.templateName}' from '${this.templatePath}' (${originalSize} ${this.minifyTemplate ? 'to ' + this.cached.minifiedSize + ' bytes' : ''}): ${opts.join(', ')}`);
         } catch (e) {
             console.error(`cache-ejs: template load '${this.templateName}' from '${this.templatePath}' error:`, e);
             throw e;
@@ -299,16 +293,12 @@ class SingleEJSTemplateCache {
         if (this.compressionRatio && ratio >= this.compressionRatio) {
             this.stats.compression.skipRatio.count++;
             this.stats.compression.skipRatio.totalSize += htmlSize;
-            if (this.debug)
-                console.log(
-                    `cache-ejs: compressed [${name}:${detail}] ${htmlSize} -> ${compressedSize} bytes (${reduction}% reduction, ratio ${ratio.toFixed(1)}%) in ${time.toFixed(2)}ms - SKIPPED`
-                );
+            if (this.debug) console.log(`cache-ejs: compressed [${name}:${detail}] ${htmlSize} -> ${compressedSize} bytes (${reduction}% reduction, ratio ${ratio.toFixed(1)}%) in ${time.toFixed(2)}ms - SKIPPED`);
             this.updateCompressionStats(name, htmlSize, compressedSize, time, false);
             return undefined;
         }
 
-        if (this.debug)
-            console.log(`cache-ejs: compressed [${name}:${detail}] ${htmlSize} -> ${compressedSize} bytes (${reduction}% reduction) in ${time.toFixed(2)}ms`);
+        if (this.debug) console.log(`cache-ejs: compressed [${name}:${detail}] ${htmlSize} -> ${compressedSize} bytes (${reduction}% reduction) in ${time.toFixed(2)}ms`);
 
         this.updateCompressionStats(name, htmlSize, compressedSize, time, true);
         return compressed;
@@ -384,10 +374,7 @@ class SingleEJSTemplateCache {
                 ...this.stats.compression,
                 total: {
                     ...this.stats.compression.total,
-                    avgCompressionTime:
-                        this.stats.compression.total.compressed > 0
-                            ? `${(this.stats.compression.total.compressionTime / this.stats.compression.total.compressed).toFixed(2)}ms`
-                            : '0ms',
+                    avgCompressionTime: this.stats.compression.total.compressed > 0 ? `${(this.stats.compression.total.compressionTime / this.stats.compression.total.compressed).toFixed(2)}ms` : '0ms',
                     totalBytesSaved: this.formatSize(this.stats.compression.total.bytesSaved),
                 },
                 byType: Object.entries(this.stats.compression.byType).reduce((acc, [type, stats]) => {
@@ -401,17 +388,11 @@ class SingleEJSTemplateCache {
                 }, {}),
                 belowThreshold: {
                     ...this.stats.compression.belowThreshold,
-                    avgSize:
-                        this.stats.compression.belowThreshold.count > 0
-                            ? this.formatSize(this.stats.compression.belowThreshold.totalSize / this.stats.compression.belowThreshold.count)
-                            : '0B',
+                    avgSize: this.stats.compression.belowThreshold.count > 0 ? this.formatSize(this.stats.compression.belowThreshold.totalSize / this.stats.compression.belowThreshold.count) : '0B',
                 },
                 skipRatio: {
                     ...this.stats.compression.skipRatio,
-                    avgSize:
-                        this.stats.compression.skipRatio.count > 0
-                            ? this.formatSize(this.stats.compression.skipRatio.totalSize / this.stats.compression.skipRatio.count)
-                            : '0B',
+                    avgSize: this.stats.compression.skipRatio.count > 0 ? this.formatSize(this.stats.compression.skipRatio.totalSize / this.stats.compression.skipRatio.count) : '0B',
                 },
             },
             cache: {
@@ -455,11 +436,7 @@ module.exports = function (templatePath, options = {}) {
                 res.set('Last-Modified', lastModified);
                 if (req.headers?.['if-none-match'] === etag || req.headers?.['if-modified-since'] === lastModified) return res.status(304).end();
                 res.set('Content-Type', 'text/html; charset=utf-8');
-                if (result.isMinifiedTemplate || result.isMinifiedOutput)
-                    res.set(
-                        'X-Minified',
-                        [result.isMinifiedTemplate ? 'template' : undefined, result.isMinifiedOutput ? 'output' : undefined].filter(Boolean).join(',')
-                    );
+                if (result.isMinifiedTemplate || result.isMinifiedOutput) res.set('X-Minified', [result.isMinifiedTemplate ? 'template' : undefined, result.isMinifiedOutput ? 'output' : undefined].filter(Boolean).join(','));
                 for (const [type, html] of Object.entries(result.htmlCompressed)) {
                     if (html && req.headers['accept-encoding']?.includes(type)) {
                         res.set('Content-Encoding', type);

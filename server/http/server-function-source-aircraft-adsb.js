@@ -49,8 +49,7 @@ function initialise(config) {
     mqtt_client.on('offline', () => {
         reconnect_attempts++;
         if (reconnect_attempts === 1) console.log('aircraft-adsb: mqtt offline, will attempt to reconnect');
-        else if (reconnect_attempts === ADSB_MAX_RECONNECT_ATTEMPTS)
-            console.log(`aircraft-adsb: mqtt reconnect #${ADSB_MAX_RECONNECT_ATTEMPTS}, will continue trying silently`);
+        else if (reconnect_attempts === ADSB_MAX_RECONNECT_ATTEMPTS) console.log(`aircraft-adsb: mqtt reconnect #${ADSB_MAX_RECONNECT_ATTEMPTS}, will continue trying silently`);
     });
     mqtt_client.on('reconnect', () => {});
     mqtt_client.on('close', () => {});

@@ -35,6 +35,9 @@ configData.LOCATION = {
     forestCoverage: 'high',
     nearbyLakes: true,
     lightPollution: 'low',
+    horizonClear: false,
+    distanceToOcean: 140,
+    nearMountains: true,
     climateType: 'humid continental',
     location: 'Central Sweden',
     hemisphere: 'northern',
@@ -257,9 +260,7 @@ setInterval(process_variables, 15 * 1000);
 const mqtt_client = require('mqtt').connect(configData.MQTT, {
     clientId: configData.MQTT_CLIENT,
 });
-mqtt_client.on('connect', () =>
-    mqtt_client.subscribe(configData.CONTENT_DATA_SUBS, () => console.log(`mqtt connected & subscribed for '${configData.CONTENT_DATA_SUBS}'`))
-);
+mqtt_client.on('connect', () => mqtt_client.subscribe(configData.CONTENT_DATA_SUBS, () => console.log(`mqtt connected & subscribed for '${configData.CONTENT_DATA_SUBS}'`)));
 mqtt_client.on('message', (topic, message) => {
     try {
         if (topic.startsWith('snapshots')) receive_snapshots(topic, message);
@@ -270,10 +271,7 @@ mqtt_client.on('message', (topic, message) => {
 });
 console.log(`Loaded 'mqtt:subscriber' using 'server=${configData.MQTT}, topics=[${configData.CONTENT_DATA_SUBS.join(', ')}]'`);
 
-setInterval(
-    () => mqtt_client.publish(configData.DIAGNOSTICS_PUBLISH_TOPIC, JSON.stringify(diagnostics.getPublishableStats())),
-    configData.DIAGNOSTICS_PUBLISH_PERIOD * 1000
-);
+setInterval(() => mqtt_client.publish(configData.DIAGNOSTICS_PUBLISH_TOPIC, JSON.stringify(diagnostics.getPublishableStats())), configData.DIAGNOSTICS_PUBLISH_PERIOD * 1000);
 console.log(`Loaded 'mqtt:publisher' using 'topic=${configData.DIAGNOSTICS_PUBLISH_TOPIC}, period=${configData.DIAGNOSTICS_PUBLISH_PERIOD}'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

@@ -74,10 +74,7 @@ const mqtt_client = require('mqtt').connect(configData.MQTT, {
     clientId: 'server-archiver-http-' + Math.random().toString(16).slice(2, 8),
 });
 mqtt_client.on('connect', () => console.log(`mqtt connected (no subscriptions)`));
-setInterval(
-    () => mqtt_client.publish(configData.DIAGNOSTICS_PUBLISH_TOPIC, JSON.stringify(diagnostics.getPublishableStats())),
-    configData.DIAGNOSTICS_PUBLISH_PERIOD * 1000
-);
+setInterval(() => mqtt_client.publish(configData.DIAGNOSTICS_PUBLISH_TOPIC, JSON.stringify(diagnostics.getPublishableStats())), configData.DIAGNOSTICS_PUBLISH_PERIOD * 1000);
 console.log(`Loaded 'mqtt:publisher' using 'topic=${configData.DIAGNOSTICS_PUBLISH_TOPIC}, period=${configData.DIAGNOSTICS_PUBLISH_PERIOD}'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

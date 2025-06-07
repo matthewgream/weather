@@ -261,10 +261,7 @@ function getSolarPosition(jd) {
     const M = 357.52911 + 35999.05029 * T - 0.0001537 * T2;
     const e = 0.016708634 - 0.000042037 * T - 0.0000001267 * T2;
 
-    const C =
-        (1.914602 - 0.004817 * T - 0.000014 * T2) * Math.sin((M * Math.PI) / 180) +
-        (0.019993 - 0.000101 * T) * Math.sin((2 * M * Math.PI) / 180) +
-        0.000289 * Math.sin((3 * M * Math.PI) / 180);
+    const C = (1.914602 - 0.004817 * T - 0.000014 * T2) * Math.sin((M * Math.PI) / 180) + (0.019993 - 0.000101 * T) * Math.sin((2 * M * Math.PI) / 180) + 0.000289 * Math.sin((3 * M * Math.PI) / 180);
 
     const trueL = L0 + C;
     const omega = 125.04 - 1934.136 * T;
@@ -283,7 +280,7 @@ function getSolarPosition(jd) {
 
 function getLunarAltitude(date, latitude, longitude) {
     const jd = __jdFromDate(date);
-    const lunarPos = helpers.getMoonPosition(jd);
+    const lunarPos = getLunarPosition(jd);
     const { ra, dec } = eclipticToEquatorial(jd, lunarPos.longitude, lunarPos.latitude);
     const lst = localSiderealTime(jd, longitude);
     const ha = lst - ra;
@@ -383,16 +380,14 @@ function calculateLunarEclipseContacts(eclipseParams, lunarPos, peakTime) {
     // Calculate time from peak to each contact
     const contacts = {};
     // Penumbral contacts (P1 and P4)
-    const penumbralSemiDuration =
-        Math.sqrt(Math.max(0, (shadowCone.penumbralRadius + lunarRadiusEarthRadii) ** 2 - separationEarthRadii ** 2)) / lunarVelocityRadiiPerHour;
+    const penumbralSemiDuration = Math.sqrt(Math.max(0, (shadowCone.penumbralRadius + lunarRadiusEarthRadii) ** 2 - separationEarthRadii ** 2)) / lunarVelocityRadiiPerHour;
     if (penumbralSemiDuration > 0) {
         contacts.p1 = new Date(peakTime.getTime() - penumbralSemiDuration * 60 * 60 * 1000);
         contacts.p4 = new Date(peakTime.getTime() + penumbralSemiDuration * 60 * 60 * 1000);
     }
     // Umbral contacts (U1 and U4) for partial and total eclipses
     if (type === 'partial' || type === 'total') {
-        const umbralSemiDuration =
-            Math.sqrt(Math.max(0, (shadowCone.umbralRadius + lunarRadiusEarthRadii) ** 2 - separationEarthRadii ** 2)) / lunarVelocityRadiiPerHour;
+        const umbralSemiDuration = Math.sqrt(Math.max(0, (shadowCone.umbralRadius + lunarRadiusEarthRadii) ** 2 - separationEarthRadii ** 2)) / lunarVelocityRadiiPerHour;
         if (umbralSemiDuration > 0) {
             contacts.u1 = new Date(peakTime.getTime() - umbralSemiDuration * 60 * 60 * 1000);
             contacts.u4 = new Date(peakTime.getTime() + umbralSemiDuration * 60 * 60 * 1000);
@@ -400,8 +395,7 @@ function calculateLunarEclipseContacts(eclipseParams, lunarPos, peakTime) {
     }
     // Total phase contacts (U2 and U3) for total eclipses
     if (type === 'total') {
-        const totalSemiDuration =
-            Math.sqrt(Math.max(0, (shadowCone.umbralRadius - lunarRadiusEarthRadii) ** 2 - separationEarthRadii ** 2)) / lunarVelocityRadiiPerHour;
+        const totalSemiDuration = Math.sqrt(Math.max(0, (shadowCone.umbralRadius - lunarRadiusEarthRadii) ** 2 - separationEarthRadii ** 2)) / lunarVelocityRadiiPerHour;
         if (totalSemiDuration > 0) {
             contacts.u2 = new Date(peakTime.getTime() - totalSemiDuration * 60 * 60 * 1000);
             contacts.u3 = new Date(peakTime.getTime() + totalSemiDuration * 60 * 60 * 1000);
@@ -530,8 +524,7 @@ function calculateLunarEclipseVisibilityRegions(eclipse) {
     ];
     const visibleRegions = [];
     for (const region of regions) {
-        const inRange =
-            region.west > region.east ? antiSolarLon >= region.west || antiSolarLon <= region.east : antiSolarLon >= region.west && antiSolarLon <= region.east;
+        const inRange = region.west > region.east ? antiSolarLon >= region.west || antiSolarLon <= region.east : antiSolarLon >= region.west && antiSolarLon <= region.east;
         const regionCenter = region.west > region.east ? ((region.west + region.east + 360) / 2) % 360 : (region.west + region.east) / 2;
         const angularDistance = Math.abs(regionCenter - antiSolarLon);
         const normalizedDistance = angularDistance > 180 ? 360 - angularDistance : angularDistance;
@@ -659,8 +652,7 @@ function generateLunarEclipseCurrentInterpretation(eclipse, location, cloudCover
             interpretation.phenomena.push(visibility.description);
             if (visibility.bestViewingTime)
                 interpretation.phenomena.push(
-                    `best viewing: ${visibility.bestViewingTime.getHours()}:${String(visibility.bestViewingTime.getMinutes()).padStart(2, '0')} ` +
-                        `(Moon ${Math.round(visibility.lunarPosition.altitude)}° above horizon)`
+                    `best viewing: ${visibility.bestViewingTime.getHours()}:${String(visibility.bestViewingTime.getMinutes()).padStart(2, '0')} (Moon ${Math.round(visibility.lunarPosition.altitude)}° above horizon)`
                 );
             if (cloudCover !== undefined) {
                 if (cloudCover < 20) interpretation.phenomena.push('excellent conditions for eclipse viewing');
@@ -677,8 +669,7 @@ function generateLunarEclipseCurrentInterpretation(eclipse, location, cloudCover
     }
 
     const visibleRegions = calculateLunarEclipseVisibilityRegions(eclipse);
-    if (visibleRegions.length > 0)
-        interpretation.phenomena.push(`visible from: ${visibleRegions.slice(0, 5).join(', ')}${visibleRegions.length > 5 ? ' and others' : ''}`);
+    if (visibleRegions.length > 0) interpretation.phenomena.push(`visible from: ${visibleRegions.slice(0, 5).join(', ')}${visibleRegions.length > 5 ? ' and others' : ''}`);
 
     if (lunarDistance < 362000) interpretation.phenomena.push('eclipse occurs near lunar perigee - Moon appears larger');
     else if (lunarDistance > 405000) interpretation.phenomena.push('eclipse occurs near lunar apogee - Moon appears smaller');
@@ -741,6 +732,7 @@ let lunarEclipseLookupAheadDays = 14,
 
 function interpretLunarEclipses(results, situation, data, _data_previous, store, _options) {
     const { date, location } = situation;
+    const { cloudCover, humidity, windSpeed } = data;
 
     if (!store.lunarEclipse)
         store.lunarEclipse = {
@@ -766,7 +758,7 @@ function interpretLunarEclipses(results, situation, data, _data_previous, store,
         );
         const eclipse = lunarEclipseLookupCache.get(todayKeyStr);
         interpretation = eclipse
-            ? generateLunarEclipseCurrentInterpretation(eclipse, location, data.cloudCover, data.humidity, data.windSpeed)
+            ? generateLunarEclipseCurrentInterpretation(eclipse, location, cloudCover, humidity, windSpeed)
             : generateLunarEclipseUpcomingInterpretation(date, location, lunarEclipseLookupCache, lunarEclipseLookupAheadDays);
         if (interpretation) {
             store.lunarEclipse.cacheToday.date = todayKeyStr;
@@ -1034,10 +1026,8 @@ function precomputeSolarEclipses(startDate, endDate) {
         jdEnd = __jdFromDate(endDate);
     let jd = jdStart;
     while (jd <= jdEnd) {
-        const date = __jdToDate(jd);
-
         // Check if near new moon (within 3%)
-        const lunarPhase = helpers.getLunarPhase(date);
+        const lunarPhase = helpers.getLunarPhase(__jdToDate(jd));
         if (lunarPhase >= 0.97 || lunarPhase <= 0.03) {
             const lunarPos = getLunarPosition(jd),
                 solarPos = getSolarPosition(jd);
@@ -1218,6 +1208,7 @@ let solarEclipseLookupAheadDays = 14,
 
 function interpretSolarEclipses(results, situation, data, _data_previous, store, _options) {
     const { date, location } = situation;
+    const { cloudCover } = data;
 
     if (!store.solarEclipse)
         store.solarEclipse = {
@@ -1242,9 +1233,7 @@ function interpretSolarEclipses(results, situation, data, _data_previous, store,
             solarEclipseLookupCacheDaysBefore
         );
         const eclipse = solarEclipseLookupCache.get(todayKeyStr);
-        interpretation = eclipse
-            ? generateSolarEclipseCurrentInterpretation(eclipse, location, data.cloudCover)
-            : generateSolarEclipseUpcomingInterpretation(date, location, solarEclipseLookupCache, solarEclipseLookupAheadDays);
+        interpretation = eclipse ? generateSolarEclipseCurrentInterpretation(eclipse, location, cloudCover) : generateSolarEclipseUpcomingInterpretation(date, location, solarEclipseLookupCache, solarEclipseLookupAheadDays);
         if (interpretation) {
             store.solarEclipse.cacheToday.date = todayKeyStr;
             store.solarEclipse.cacheToday.interpretation = interpretation;

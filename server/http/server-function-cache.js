@@ -309,24 +309,12 @@ class StaticFileCache {
             const etag = createHash('md5').update(processedContent).digest('hex');
             const contentCompressed = {
                 // order in priority of serving
-                br: this.compressionWrapper(
-                    'brotli',
-                    `${this.compressionLevel.brotli} <${relativePath}>`,
-                    (content, opts) => zlib.brotliCompressSync(content, opts),
-                    processedContent,
-                    {
-                        params: { [zlib.constants.BROTLI_PARAM_QUALITY]: this.compressionLevel.brotli },
-                    }
-                ),
-                gzip: this.compressionWrapper(
-                    'gzip',
-                    `${this.compressionLevel.gzip} <${relativePath}>`,
-                    (content, opts) => zlib.gzipSync(content, opts),
-                    processedContent,
-                    {
-                        level: this.compressionLevel.gzip,
-                    }
-                ),
+                br: this.compressionWrapper('brotli', `${this.compressionLevel.brotli} <${relativePath}>`, (content, opts) => zlib.brotliCompressSync(content, opts), processedContent, {
+                    params: { [zlib.constants.BROTLI_PARAM_QUALITY]: this.compressionLevel.brotli },
+                }),
+                gzip: this.compressionWrapper('gzip', `${this.compressionLevel.gzip} <${relativePath}>`, (content, opts) => zlib.gzipSync(content, opts), processedContent, {
+                    level: this.compressionLevel.gzip,
+                }),
             };
 
             this.cache.set(relativePath, {
@@ -487,16 +475,11 @@ class StaticFileCache {
                 this.detailedStats.compression.skipRatio.count++;
                 this.detailedStats.compression.skipRatio.totalSize += contentSize;
                 if (this.debug)
-                    console.log(
-                        `cache: compressed [${name}:${detail}] ${contentSize} -> ${compressedSize} bytes (${reduction}% reduction, ratio ${ratio.toFixed(1)}%) in ${time.toFixed(2)}ms - SKIPPED (ratio >= ${this.compressionRatio}%)`
-                    );
+                    console.log(`cache: compressed [${name}:${detail}] ${contentSize} -> ${compressedSize} bytes (${reduction}% reduction, ratio ${ratio.toFixed(1)}%) in ${time.toFixed(2)}ms - SKIPPED (ratio >= ${this.compressionRatio}%)`);
                 this.updateCompressionStats(name, contentSize, compressedSize, time, false);
                 return undefined;
             }
-            if (this.debug)
-                console.log(
-                    `cache: compressed [${name}:${detail}] ${contentSize} -> ${compressedSize} bytes (${reduction}% reduction) in ${time.toFixed(2)}ms`
-                );
+            if (this.debug) console.log(`cache: compressed [${name}:${detail}] ${contentSize} -> ${compressedSize} bytes (${reduction}% reduction) in ${time.toFixed(2)}ms`);
             this.updateCompressionStats(name, contentSize, compressedSize, time, true);
             return compressed;
         } catch (e) {
@@ -530,11 +513,7 @@ class StaticFileCache {
         for (const [ext, stats] of Object.entries(this.stats.byExtension)) {
             const originalSize = this.formatSize(stats.originalSize);
             const compressedSize = this.formatSize(stats.compressedSize);
-            parts.push(
-                `${ext.slice(1) || 'no-ext'} (${stats.files} file${stats.files === 1 ? '' : 's'}, ${originalSize}` +
-                    (stats.originalSize === stats.compressedSize ? '' : ` to ${compressedSize}`) +
-                    `)`
-            );
+            parts.push(`${ext.slice(1) || 'no-ext'} (${stats.files} file${stats.files === 1 ? '' : 's'}, ${originalSize}` + (stats.originalSize === stats.compressedSize ? '' : ` to ${compressedSize}`) + `)`);
         }
         return parts.join(', ');
     }
@@ -580,10 +559,7 @@ class StaticFileCache {
     }
 
     getDiagnostics() {
-        const compressionRatio =
-            this.stats.totalOriginalSize > 0
-                ? (((this.stats.totalOriginalSize - this.stats.totalCompressedSize) / this.stats.totalOriginalSize) * 100).toFixed(1)
-                : 0;
+        const compressionRatio = this.stats.totalOriginalSize > 0 ? (((this.stats.totalOriginalSize - this.stats.totalCompressedSize) / this.stats.totalOriginalSize) * 100).toFixed(1) : 0;
         const availableMinifiers = [];
         if (terser) availableMinifiers.push('terser');
         if (cleanCSS) availableMinifiers.push('clean-css');
@@ -630,8 +606,7 @@ class StaticFileCache {
             compression: {
                 total: {
                     ...compression.total,
-                    avgCompressionTime:
-                        compression.total.compressed > 0 ? `${(compression.total.compressionTime / compression.total.compressed).toFixed(2)}ms` : '0ms',
+                    avgCompressionTime: compression.total.compressed > 0 ? `${(compression.total.compressionTime / compression.total.compressed).toFixed(2)}ms` : '0ms',
                     totalBytesSaved: this.formatSize(compression.total.bytesSaved),
                 },
                 byType: Object.entries(compression.byType).reduce((acc, [type, stats]) => {
@@ -645,8 +620,7 @@ class StaticFileCache {
                 }, {}),
                 belowThreshold: {
                     ...compression.belowThreshold,
-                    avgSize:
-                        compression.belowThreshold.count > 0 ? this.formatSize(compression.belowThreshold.totalSize / compression.belowThreshold.count) : '0B',
+                    avgSize: compression.belowThreshold.count > 0 ? this.formatSize(compression.belowThreshold.totalSize / compression.belowThreshold.count) : '0B',
                     totalSize: this.formatSize(compression.belowThreshold.totalSize),
                 },
                 skipRatio: {

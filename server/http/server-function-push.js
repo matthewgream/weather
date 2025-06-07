@@ -91,9 +91,7 @@ class PushNotificationManager {
     }
 
     async sendNotification(payload, options = {}) {
-        console.log(
-            `push: subscriptions notify request, title='${typeof payload === 'object' && payload.title ? payload.title : '-'}', body='${typeof payload === 'object' && payload.body ? payload.body : '-'}'`
-        );
+        console.log(`push: subscriptions notify request, title='${typeof payload === 'object' && payload.title ? payload.title : '-'}', body='${typeof payload === 'object' && payload.body ? payload.body : '-'}'`);
         const startTime = Date.now();
         const promises = this.subscriptions.map(async (subscription, index) => {
             try {
@@ -145,15 +143,11 @@ class PushNotificationManager {
         return {
             subscriptions: {
                 count: this.subscriptions.length,
-                lastUpdated: fs.existsSync(path.join(this.options.dataDir, this.options.subscriptionsFile))
-                    ? fs.statSync(path.join(this.options.dataDir, this.options.subscriptionsFile)).mtime.toISOString()
-                    : undefined,
+                lastUpdated: fs.existsSync(path.join(this.options.dataDir, this.options.subscriptionsFile)) ? fs.statSync(path.join(this.options.dataDir, this.options.subscriptionsFile)).mtime.toISOString() : undefined,
             },
             vapidKeys: {
                 exists: Boolean(this.vapidKeys),
-                lastUpdated: fs.existsSync(path.join(this.options.dataDir, this.options.vapidKeyFile))
-                    ? fs.statSync(path.join(this.options.dataDir, this.options.vapidKeyFile)).mtime.toISOString()
-                    : undefined,
+                lastUpdated: fs.existsSync(path.join(this.options.dataDir, this.options.vapidKeyFile)) ? fs.statSync(path.join(this.options.dataDir, this.options.vapidKeyFile)).mtime.toISOString() : undefined,
             },
             status: {
                 enabled: true,
@@ -161,10 +155,7 @@ class PushNotificationManager {
             },
             history: this.notificationHistory,
             performance: {
-                averageSendTime:
-                    this.notificationHistory.length > 0
-                        ? this.notificationHistory.reduce((sum, item) => sum + item.duration, 0) / this.notificationHistory.length
-                        : 0,
+                averageSendTime: this.notificationHistory.length > 0 ? this.notificationHistory.reduce((sum, item) => sum + item.duration, 0) / this.notificationHistory.length : 0,
             },
         };
     }

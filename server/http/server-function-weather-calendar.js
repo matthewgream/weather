@@ -3,14 +3,14 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const helpers = require('./server-function-weather-helpers.js');
+//const helpers = require('./server-function-weather-helpers.js');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function interpretCalendar(results, situation, data, data_previous, store, _options) {
+    const { month, hour, hourDecimal, daylight, season, location } = situation;
     const { temp, cloudCover, humidity } = data;
-    const { minutes, month, hour, daylight, season } = situation;
 
     if (!store.calendar)
         store.calendar = {
@@ -21,10 +21,6 @@ function interpretCalendar(results, situation, data, data_previous, store, _opti
             seasonTransitions: [], // XXX unused
         };
 
-    const currentHourDecimal = hour + minutes / 60;
-
-    const daylightPhase = helpers.getDaylightPhase(currentHourDecimal, daylight);
-
     if (temp !== undefined) {
         // Summer daylight phenomena (May-July)
         if (month >= 5 && month <= 7) {
@@ -34,15 +30,15 @@ function interpretCalendar(results, situation, data, data_previous, store, _opti
             }
             if (daylight.sunriseDecimal < 4.5) {
                 if (hour < 7 && daylight.isDaytime) results.phenomena.push('early sunrise period');
-                if (hour >= 3 && hour < 5 && daylightPhase === 'civil_dawn') results.phenomena.push('pre-dawn brightness beginning');
+                if (hour >= 3 && hour < 5 && daylight.phase === 'civil_dawn') results.phenomena.push('pre-dawn brightness beginning');
             }
             if (daylight.sunsetDecimal > 21) {
-                if (hour > Math.floor(daylight.sunsetDecimal) && daylightPhase === 'civil_twilight') {
+                if (hour > Math.floor(daylight.sunsetDecimal) && daylight.phase === 'civil_twilight') {
                     results.phenomena.push('lingering twilight');
-                    if (month === 6 && situation.location.latitude > 60) results.phenomena.push('near-white night conditions'); // eslint-disable-line max-depth
+                    if (month === 6 && location.latitude > 60) results.phenomena.push('near-white night conditions'); // eslint-disable-line max-depth
                 }
             }
-            if (situation.location.latitude > 63) {
+            if (location.latitude > 63) {
                 if (daylight.daylightHours > 23) {
                     results.phenomena.push('midnight sun period');
                     store.calendar.consecutiveBrightNights++;
@@ -67,14 +63,14 @@ function interpretCalendar(results, situation, data, data_previous, store, _opti
                 results.phenomena.push('cold winter daylight');
                 if (temp < -15 && hour >= 11 && hour <= 13) results.phenomena.push('midday still frigid');
             }
-            if (situation.location.latitude > 66) {
+            if (location.latitude > 66) {
                 if (daylight.daylightHours < 1) results.phenomena.push('polar night - sun remains below horizon');
                 else if (daylight.daylightHours < 3) results.phenomena.push('polar twilight period');
             }
         }
 
         // Twilight phenomena (all seasons)
-        switch (daylightPhase) {
+        switch (daylight.phase) {
             case 'civil_twilight':
                 results.phenomena.push('civil twilight');
                 if (cloudCover !== undefined && cloudCover < 30) results.phenomena.push('clear twilight sky');
@@ -92,7 +88,7 @@ function interpretCalendar(results, situation, data, data_previous, store, _opti
 
         // Temperature-related time patterns
         if (temp < 3) {
-            const hoursSinceSunrise = currentHourDecimal - daylight.sunriseDecimal;
+            const hoursSinceSunrise = hourDecimal - daylight.sunriseDecimal;
             if (hoursSinceSunrise > 0 && hoursSinceSunrise < 3) {
                 results.phenomena.push('morning chill');
                 if (temp < 0 && humidity > 80) results.phenomena.push('frost likely on surfaces');
@@ -104,8 +100,8 @@ function interpretCalendar(results, situation, data, data_previous, store, _opti
         }
 
         // Dawn and dusk temperature changes
-        const nearSunrise = Math.abs(currentHourDecimal - daylight.sunriseDecimal) < 0.5,
-            nearSunset = Math.abs(currentHourDecimal - daylight.sunsetDecimal) < 0.5;
+        const nearSunrise = Math.abs(hourDecimal - daylight.sunriseDecimal) < 0.5,
+            nearSunset = Math.abs(hourDecimal - daylight.sunsetDecimal) < 0.5;
         if (nearSunrise) {
             results.phenomena.push('sunrise period');
             if (month >= 9 && month <= 3 && temp < 0) results.phenomena.push('coldest time of day');
@@ -260,14 +256,15 @@ function handleAutumnPhenomena(results, situation, data, store) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function handleSpecialDates(results, situation, data, _store) {
-    const { month, day, daylight } = situation;
+    const { month, day, daylight, location } = situation;
+    const { temp, cloudCover } = data;
 
     // Midsummer proximity (around June 21-24)
     if (month === 6 && day >= 19 && day <= 25) {
         results.phenomena.push('midsummer period');
         if (day >= 21 && day <= 24) {
             results.phenomena.push('peak midsummer celebration time');
-            if (situation.location.latitude > 60) results.phenomena.push('traditional white night festivities');
+            if (location.latitude > 60) results.phenomena.push('traditional white night festivities');
         }
     }
 
@@ -280,7 +277,7 @@ function handleSpecialDates(results, situation, data, _store) {
     // Crayfish season (August)
     if (month === 8 && day >= 8) {
         results.phenomena.push('crayfish season');
-        if (data.temp > 15 && data.cloudCover < 50) results.phenomena.push('good conditions for outdoor crayfish party');
+        if (temp > 15 && cloudCover < 50) results.phenomena.push('good conditions for outdoor crayfish party');
     }
 }
 

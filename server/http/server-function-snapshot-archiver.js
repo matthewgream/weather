@@ -30,13 +30,7 @@ function initialise(app, prefix, options) {
     const directorySnapshot = path.join(directory, 'snapshots');
     const directoryTimelapse = path.join(directory, 'timelapse');
 
-    const {
-        SnapshotThumbnailsManager,
-        SnapshotDirectoryManager,
-        SnapshotContentsManager,
-        SnapshotTimelapseManager,
-        getThumbnailData,
-    } = require('./server-function-snapshot.js');
+    const { SnapshotThumbnailsManager, SnapshotDirectoryManager, SnapshotContentsManager, SnapshotTimelapseManager, getThumbnailData } = require('./server-function-snapshot.js');
     const snapshotThumbnailsManager = new SnapshotThumbnailsManager({ size: THUMBNAIL_CACHE_SIZE, time: THUMBNAIL_CACHE_TIME });
     const snapshotDirectoryManager = new SnapshotDirectoryManager({ directory: directorySnapshot });
     const snapshotContentsManager = new SnapshotContentsManager({ directory: directorySnapshot });
@@ -57,9 +51,7 @@ function initialise(app, prefix, options) {
     }
     function getTimelapseListOfFiles() {
         return {
-            entries: snapshotTimelapseManager
-                .getListOfFiles()
-                .map(({ file }) => ({ dateCode: file.slice(10, 18), file, dateFormatted: getFormattedDate(file.slice(10, 18)) })),
+            entries: snapshotTimelapseManager.getListOfFiles().map(({ file }) => ({ dateCode: file.slice(10, 18), file, dateFormatted: getFormattedDate(file.slice(10, 18)) })),
         };
     }
     function getSnapshotFilename(file) {

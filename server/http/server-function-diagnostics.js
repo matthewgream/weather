@@ -189,9 +189,7 @@ class DiagnosticsManager {
                                 const locationUrl = new URL(locationOriginal, proxyConfig.target);
                                 if (locationOriginal.startsWith('/') || locationUrl.origin === new URL(proxyConfig.target).origin) {
                                     const locationNew = locationUrl.pathname + locationUrl.search + locationUrl.hash;
-                                    proxyRes.headers.location = locationNew.startsWith(targetPath)
-                                        ? locationNew.replace(targetPath, proxyPath)
-                                        : proxyPath + locationNew;
+                                    proxyRes.headers.location = locationNew.startsWith(targetPath) ? locationNew.replace(targetPath, proxyPath) : proxyPath + locationNew;
                                 }
                             } catch (e) {
                                 console.error(`diagnostics:proxy: ${name}: error parsing redirect:`, e);
@@ -275,8 +273,7 @@ class DiagnosticsManager {
         if (typeof value === 'boolean') return value ? '<span class="good">Enabled</span>' : '<span class="warning">Disabled</span>';
         if (value instanceof Date) return value.toISOString();
         if (typeof value === 'object') return '<pre>' + JSON.stringify(value, undefined, 2) + '</pre>';
-        if (typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://')))
-            return `<a href="${value}" target="_blank">${value}</a>`;
+        if (typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://'))) return `<a href="${value}" target="_blank">${value}</a>`;
         return value.toString();
     }
     _formatUptime(ms) {

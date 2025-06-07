@@ -134,8 +134,7 @@ function interpretTemperature(results, situation, data, data_previous, store, _o
     if (Math.abs(change1h) > 5) {
         results.phenomena.push(`rapid temperature ${change1h > 0 ? 'rise' : 'drop'}: ${Math.abs(change1h).toFixed(1)}°C/hour`);
         if (change1h < -5 && temp < 5) results.alerts.push('flash freeze possible');
-    } else if (Math.abs(change6h) > 10)
-        results.phenomena.push(`significant temperature ${change6h > 0 ? 'rise' : 'drop'}: ${Math.abs(change6h).toFixed(1)}°C in 6 hours`);
+    } else if (Math.abs(change6h) > 10) results.phenomena.push(`significant temperature ${change6h > 0 ? 'rise' : 'drop'}: ${Math.abs(change6h).toFixed(1)}°C in 6 hours`);
     if (variance6hAgo > 4) results.phenomena.push('unstable temperature conditions');
 
     const diurnalRange = max24h - min24h;
@@ -261,8 +260,7 @@ function interpretPressure(results, situation, data, data_previous, store, _opti
     if (Math.abs(change1h) > 3) {
         results.alerts.push(`rapid pressure ${change1h > 0 ? 'rise' : 'drop'}: ${Math.abs(change1h).toFixed(1)} hPa/hour`);
         store.pressure.rapidChanges.push({ timestamp, change: change1h });
-    } else if (Math.abs(change3h) > 5)
-        results.phenomena.push(`significant pressure ${change3h > 0 ? 'rise' : 'drop'}: ${Math.abs(change3h).toFixed(1)} hPa in 3 hours`);
+    } else if (Math.abs(change3h) > 5) results.phenomena.push(`significant pressure ${change3h > 0 ? 'rise' : 'drop'}: ${Math.abs(change3h).toFixed(1)} hPa in 3 hours`);
 
     if (store.pressure.trend === 'falling') {
         if (change3h < -5) {
@@ -430,8 +428,7 @@ function interpretHumidity(results, situation, data, data_previous, store, _opti
     } else if (diurnalRange < 10) results.phenomena.push('stable humidity levels');
 
     if (store.humidity.consecutiveDryHours > 24) results.phenomena.push(`prolonged dry conditions: ${Math.round(store.humidity.consecutiveDryHours)} hours`);
-    if (store.humidity.consecutiveHumidHours > 12)
-        results.phenomena.push(`prolonged humid conditions: ${Math.round(store.humidity.consecutiveHumidHours)} hours`);
+    if (store.humidity.consecutiveHumidHours > 12) results.phenomena.push(`prolonged humid conditions: ${Math.round(store.humidity.consecutiveHumidHours)} hours`);
     if (store.humidity.currentDryStreak > 0 && humidity < 30) results.phenomena.push(`ongoing dry spell: ${Math.round(store.humidity.currentDryStreak)} hours`);
     if (humidity < 30 && store.humidity.consecutiveDryHours > 24) {
         results.phenomena.push('prolonged dry air - hydration important');
@@ -648,7 +645,7 @@ function interpretWind(results, situation, data, data_previous, store, _options)
 
 function interpretClouds(results, situation, data, data_previous, store, _options) {
     const { timestamp, cloudCover, temp, humidity, pressure, solarRad, rainRate } = data;
-    const { month, hour, date, daylight, dewPoint } = situation;
+    const { month, hour, date, daylight, dewPoint, location } = situation;
 
     if (cloudCover === undefined) return;
 
@@ -685,7 +682,7 @@ function interpretClouds(results, situation, data, data_previous, store, _option
             if (previousTimestamp) timeDiff = Math.min((timestamp - previousTimestamp) / 3600000, 3); // Cap at 3 hours
             if (timestamp > sixHoursAgo && cloudCover6hAgo === undefined) cloudCover6hAgo = entry.cloudCover;
             const entryDate = new Date(timestamp),
-                entryDaylight = helpers.getDaylightHours(situation.location.latitude, situation.location.longitude, entryDate);
+                entryDaylight = helpers.getDaylightHours(entryDate, location.latitude, location.longitude);
             if (entryDaylight.isDaytime) {
                 daytimeSum += entry.cloudCover;
                 daytimeCount++;
@@ -708,7 +705,7 @@ function interpretClouds(results, situation, data, data_previous, store, _option
     if (cloudCover < 10) {
         results.conditions.push('clear sky');
         if (daylight.isDaytime) results.phenomena.push('full sunshine');
-        else if (situation.location.lightPollution === 'low') results.phenomena.push('excellent stargazing conditions');
+        else if (location.lightPollution === 'low') results.phenomena.push('excellent stargazing conditions');
     } else if (cloudCover < 30) {
         results.conditions.push('mostly clear');
         if (daylight.isDaytime) results.phenomena.push('mostly sunny');
@@ -760,7 +757,7 @@ function interpretClouds(results, situation, data, data_previous, store, _option
         if (cloudCover < 20) {
             const moonPhase = helpers.getLunarPhase(date);
             if (moonPhase < 0.2 || moonPhase > 0.8) results.phenomena.push('dark skies - good for astronomy');
-        } else if (cloudCover > 80 && situation.location.lightPollution !== 'low') results.phenomena.push('cloud reflection of urban lights');
+        } else if (cloudCover > 80 && location.lightPollution !== 'low') results.phenomena.push('cloud reflection of urban lights');
     }
 
     if (cloudCover > 80) {
@@ -1311,8 +1308,7 @@ function interpretRadiation(results, situation, data, data_previous, store, _opt
     if (store.radiation.baseline !== undefined && radiationValue > store.radiation.baseline * 2) {
         store.radiation.anomalyCount++;
         store.radiation.lastAnomaly = timestamp;
-        if (radiationValue > store.radiation.baseline * 3)
-            results.phenomena.push(`radiation ${(radiationValue / store.radiation.baseline).toFixed(1)}x above baseline`);
+        if (radiationValue > store.radiation.baseline * 3) results.phenomena.push(`radiation ${(radiationValue / store.radiation.baseline).toFixed(1)}x above baseline`);
     }
 
     if (radiationValue > 30) {
@@ -1341,8 +1337,7 @@ function interpretRadiation(results, situation, data, data_previous, store, _opt
 
     if (radiationValue > 25 && radiationValue <= 40) if (month >= 11 || month <= 2) results.phenomena.push('typical winter indoor radon accumulation');
 
-    if (store.radiation.anomalyCount > 5 && store.radiation.lastAnomaly && timestamp - store.radiation.lastAnomaly < 3600000)
-        results.alerts.push('sustained elevated radiation - investigate source');
+    if (store.radiation.anomalyCount > 5 && store.radiation.lastAnomaly && timestamp - store.radiation.lastAnomaly < 3600000) results.alerts.push('sustained elevated radiation - investigate source');
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

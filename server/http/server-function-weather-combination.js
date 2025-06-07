@@ -180,12 +180,8 @@ function interpretCombination(results, situation, data, data_previous, store, _o
     const auroraPotential = getAuroraPotential(location.latitude, month);
     if (auroraPotential.potential !== 'very low') {
         const moonPhase = helpers.getLunarPhase(date);
-        if (auroraPotential.visible)
-            results.phenomena.push(
-                `aurora borealis likely visible (best time: ${auroraPotential.bestTime}${cloudCover !== undefined && cloudCover < 30 && moonPhase < 0.3 ? ', with good visbility' : ''})`
-            );
-        else if (auroraPotential.potential === 'high' || auroraPotential.potential === 'very high')
-            results.phenomena.push('potential for aurora activity (if dark enough)');
+        if (auroraPotential.visible) results.phenomena.push(`aurora borealis likely visible (best time: ${auroraPotential.bestTime}${cloudCover !== undefined && cloudCover < 30 && moonPhase < 0.3 ? ', with good visbility' : ''})`);
+        else if (auroraPotential.potential === 'high' || auroraPotential.potential === 'very high') results.phenomena.push('potential for aurora activity (if dark enough)');
     }
 }
 
