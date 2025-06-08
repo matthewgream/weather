@@ -12,6 +12,7 @@ const constants = {
     LUNAR_RADIUS_KM: 1737.4,
     DEGREES_TO_RADIANS: Math.PI / 180,
     RADIANS_TO_DEGREES: 180 / Math.PI,
+    DAYS_PER_YEAR: 365.25,
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -30,9 +31,13 @@ function __dateToJulianDateUTC(date) {
         year = year - 1;
         month = month + 12;
     }
-    const a = Math.floor(year / 100),
+    let a = 0,
+        b = 0;
+    if (year > 1582 || (year === 1582 && month > 10) || (year === 1582 && month === 10 && day >= 15)) {
+        a = Math.floor(year / 100);
         b = 2 - a + Math.floor(a / 4);
-    const jd = Math.floor(365.25 * (year + 4716)) + Math.floor(30.6001 * (month + 1)) + day + b - 1524.5;
+    }
+    const jd = Math.floor(constants.DAYS_PER_YEAR * (year + 4716)) + Math.floor(30.6001 * (month + 1)) + day + b - 1524.5;
     return jd + (hour + minute / 60 + second / 3600) / 24;
 }
 const jdCache = new Map();
@@ -50,8 +55,8 @@ function juliandDateToDateUTC(jd) {
         f = jd + 0.5 - z;
     const A = z < 2299161 ? z : z + 1 + Math.floor((z - 1867216.25) / 36524.25) - Math.floor(Math.floor((z - 1867216.25) / 36524.25) / 4),
         B = A + 1524,
-        C = Math.floor((B - 122.1) / 365.25),
-        D = Math.floor(365.25 * C),
+        C = Math.floor((B - 122.1) / constants.DAYS_PER_YEAR),
+        D = Math.floor(constants.DAYS_PER_YEAR * C),
         E = Math.floor((B - D) / 30.6001);
     const day = B - D - Math.floor(30.6001 * E) + f,
         month = E < 14 ? E - 1 : E - 13,
@@ -81,6 +86,15 @@ function normalizeAngle(angle) {
 
 function azimuthToCardinal(azimuth) {
     return ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'][Math.round(((azimuth + 22.5) % 360) / 45) % 8];
+}
+
+function isSameDay(a, b) {
+    if (a === undefined || b === undefined) return false;
+    return a.getDate() == b.getDate() && a.getMonth() == b.getMonth() && a.getFullYear() == b.getFullYear();
+}
+
+function daysBetween(a, b) {
+    return a ? Math.floor((b - a) / constants.MILLISECONDS_PER_DAY) : 999;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -413,13 +427,20 @@ function isNearEquinox(date = new Date(), hemisphere = 'northern', daysWindow = 
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const crossQuarterDatesCache = {};
+const crossQuarterDatesCache = {},
+    crossQuarterDatesCacheMax = 10;
 function isNearCrossQuarter(date = new Date(), hemisphere = 'northern', daysWindow = 7) {
     const year = date.getFullYear();
     const yearsToCheck = [year];
     if (date.getMonth() === 0) yearsToCheck.push(year - 1);
     if (date.getMonth() === 11) yearsToCheck.push(year + 1);
     for (const y of yearsToCheck) if (!crossQuarterDatesCache[y]) crossQuarterDatesCache[y] = getCrossQuarterDates(y);
+    if (Object.keys(crossQuarterDatesCache).length > crossQuarterDatesCacheMax)
+        delete crossQuarterDatesCache[
+            Object.keys(crossQuarterDatesCache)
+                .map(Number)
+                .sort((a, b) => a - b)[0]
+        ];
     for (const y of yearsToCheck)
         for (const item of crossQuarterDatesCache[y]) {
             const days = (item.date - date) / constants.MILLISECONDS_PER_DAY;
@@ -518,6 +539,60 @@ function calculateMoonsetAzimuth(lunarTimes, location) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+function calculateLimitingMagnitude(lunarBrightness, lightPollution, humidity, targetAltitude = 90) {
+    let limitingMagnitude = 6.5; // Theoretical best
+    // Moon phase adjustment
+    limitingMagnitude -= (lunarBrightness / 100) * 3.5; // Loses ~3.5 magnitudes at full moon
+    // Light pollution adjustment
+    const lightPollutionLimiters = {
+        high: 3.5,
+        medium: 2,
+        low: 0.5,
+    };
+    if (lightPollutionLimiters[lightPollution] !== undefined) limitingMagnitude -= lightPollutionLimiters[lightPollution];
+    // Humidity adjustment
+    if (humidity !== undefined) {
+        if (humidity > 80) limitingMagnitude -= 0.5;
+        else if (humidity > 60) limitingMagnitude -= 0.2;
+    }
+    // Atmospheric extinction (magnitude loss per airmass)
+    const airmass = 1 / Math.sin((Math.max(10, targetAltitude) * Math.PI) / 180);
+    limitingMagnitude -= 0.3 * (airmass - 1); // ~0.3 mag/airmass extinction
+    return limitingMagnitude;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+function isRadiantVisible(radiantCoordinates, radiantName, date, latitude, longitude) {
+    const radiant = radiantCoordinates[radiantName];
+    if (!radiant) return { visible: true }; // Default to visible if unknown
+    // Calculate local sidereal time
+    const lst = localSiderealTime(dateToJulianDateUTC(date), longitude) / 15; // Convert to hours
+    // Calculate hour angle
+    let ha = lst - radiant.ra;
+    if (ha < -12) ha += 24;
+    if (ha > 12) ha -= 24;
+    // Calculate altitude of radiant
+    const latRad = (latitude * Math.PI) / 180,
+        decRad = (radiant.dec * Math.PI) / 180,
+        haRad = (ha * 15 * Math.PI) / 180;
+    const altitude = (Math.asin(Math.sin(latRad) * Math.sin(decRad) + Math.cos(latRad) * Math.cos(decRad) * Math.cos(haRad)) * 180) / Math.PI;
+    // Radiant is usefully visible if above 20° altitude
+    return {
+        visible: altitude > 20,
+        altitude,
+    };
+}
+
+function isRadiantFavorable(radiantDeclinations, radiantName, latitude) {
+    // Radiant is favorable if it can reach >30° altitude
+    return 90 - Math.abs(latitude - (radiantDeclinations[radiantName] || 0)) > 30;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 function getSolarPosition(date, latitude, longitude, includeRefraction = false) {
     const jd = dateToJulianDateUTC(date),
         T = (jd - 2451545) / 36525,
@@ -562,11 +637,15 @@ function getSolarPosition(date, latitude, longitude, includeRefraction = false) 
     let altitude = Math.asin(Math.sin(latRad) * Math.sin(deltaRad) + Math.cos(latRad) * Math.cos(deltaRad) * Math.cos(Hrad)) * constants.RADIANS_TO_DEGREES;
     if (includeRefraction && altitude > -1) {
         // Bennetts formula for atmospheric refraction
+        // const P = pressure / 1013.25, T = (temperature + 273.15) / 283.15;
+        // const refractionMinutes = altitude > 15 ? (P / T) * 0.97 / Math.tan(altitude * constants.DEGREES_TO_RADIANS) : (P / T) * 1.02 / Math.tan((altitude + 10.3 / (altitude + 5.11)) * constants.DEGREES_TO_RADIANS);
         const refractionMinutes = altitude > 15 ? 0.97 / Math.tan(altitude * constants.DEGREES_TO_RADIANS) : 1.02 / Math.tan((altitude + 10.3 / (altitude + 5.11)) * constants.DEGREES_TO_RADIANS);
         altitude += refractionMinutes / 60;
     }
     const azimuth = normalizeAngle(Math.atan2(Math.sin(Hrad), Math.cos(Hrad) * Math.sin(latRad) - Math.tan(deltaRad) * Math.cos(latRad)) * constants.RADIANS_TO_DEGREES + 180);
-    // Equation of time in minutes, note: This gives ET in the convention where positive = sundial ahead of clock
+    // Equation of time in minutes
+    // Convention: positive = sundial ahead of clock (sun crosses meridian before mean solar noon)
+    // This is opposite to some astronomical software which uses negative = sundial ahead
     const equationOfTime = 4 * (L0 - alpha); // Convert to minutes (4 minutes per degree)
     // Solar noon calculation
     const noon = 12 - equationOfTime / 60 - longitude / 15;
@@ -733,7 +812,9 @@ function getLunarPosition(date, latitude, longitude, includeParallax = true) {
     const epsilon = 23.439291 - 0.0130042 * T;
     const omega = normalizeAngle(125.04452 - 1934.136261 * T);
     const omegaRad = omega * constants.DEGREES_TO_RADIANS;
-    const deltaPsi = -0.00569 - 0.00478 * Math.sin(omegaRad); // Nutation in longitude
+    const L_sun = normalizeAngle(280.4665 + 36000.7698 * T);
+    const L_moon = normalizeAngle(218.3165 + 481267.8813 * T);
+    const deltaPsi = -0.00569 - 0.00478 * Math.sin(omegaRad) - 0.00039 * Math.sin(2 * L_sun * constants.DEGREES_TO_RADIANS) - 0.00024 * Math.sin(2 * L_moon * constants.DEGREES_TO_RADIANS);
     const deltaEpsilon = 0.00256 * Math.cos(omegaRad); // Nutation in obliquity
     const epsilonTrue = epsilon + deltaEpsilon;
     const epsilonTrueRad = epsilonTrue * constants.DEGREES_TO_RADIANS;
@@ -904,6 +985,8 @@ function getLunarApsis(date) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // Zodiac signs start at these ecliptic longitudes
+// Note: These are tropical zodiac signs (Western astrology), not sidereal
+// The boundaries are fixed relative to the vernal equinox, not the stars
 const zodiacSigns = [
     { sign: 'Aries', symbol: '♈', start: 0, meaning: 'good for new beginnings and initiatives' },
     { sign: 'Taurus', symbol: '♉', start: 30, meaning: 'good for financial planning and material goals' },
@@ -1080,6 +1163,8 @@ function getVenusPosition(date, latitude, longitude) {
     const jd = dateToJulianDateUTC(date),
         T = (jd - 2451545) / 36525;
     // Venus orbital elements
+    // NOTE: This calculation uses mean elements and doesn't account for planetary perturbations
+    // For high-precision applications, use JPL ephemerides or VSOP87 theory
     // const L = normalizeAngle(181.979801 + 58519.2130302 * T);
     const M = normalizeAngle(50.416444 + 58517.8038999 * T);
     const a = 0.72333; // AU
@@ -1165,6 +1250,9 @@ const geomagneticBaseActivity = {
 
 function getGeomagneticActivity(month, year) {
     // Solar cycle is ~11 years, maximum around 2025, 2036, etc.
+    // NOTE: This is a simplified model. Real geomagnetic activity is highly variable
+    // and depends on solar wind conditions, coronal mass ejections, and other factors.
+    // For accurate predictions, use NOAA space weather data.
     const solarCyclePhase = (((year - 2025) % 11) + 11) % 11;
     const solarMultiplier = 1 + 0.5 * Math.cos((solarCyclePhase * 2 * Math.PI) / 11);
     return geomagneticBaseActivity[month] * solarMultiplier;
@@ -1190,6 +1278,8 @@ function calculateHeatIndex(temp, humidity) {
     let heatIndexF = 0.5 * (tempF + 61 + (tempF - 68) * 1.2 + humidity * 0.094); // Simplified heat index formula
     if (tempF >= 80) {
         // Use more precise formula if hot enough
+        // Rothfusz regression coefficients for heat index calculation
+        // Based on Steadman's 1979 table
         heatIndexF =
             -42.379 +
             2.04901523 * tempF +
@@ -1286,7 +1376,8 @@ function isEventCooldown(store, category, eventId, cooldownDays = 365) {
 
 function pruneEvents(store, daysAgo = 30) {
     const now = Date.now();
-    if (!store.events || store.eventsCleanedUp > now - constants.MILLISECONDS_PER_DAY) return;
+    const CLEANUP_INTERVAL = 60 * 60 * 1000;
+    if (!store.events || store.eventsCleanedUp > now - CLEANUP_INTERVAL) return;
     const expiry = now - daysAgo * constants.MILLISECONDS_PER_DAY;
     Object.entries(store.events).forEach(([category, events]) => {
         Object.entries(events)
@@ -1338,11 +1429,16 @@ function formatTime(hours, minutes) {
 module.exports = {
     constants,
     //
+    normalizeAngle,
+    //
     getDST,
     getDaylightHours,
     getDaylight,
     getSeason,
     daysIntoYear,
+    isSameDay,
+    daysBetween,
+    //
     dateToJulianDateUTC,
     juliandDateToDateUTC,
     //
@@ -1361,6 +1457,9 @@ module.exports = {
     calculateAngularSeparation,
     calculateMoonriseAzimuth,
     calculateMoonsetAzimuth,
+    calculateLimitingMagnitude,
+    isRadiantVisible,
+    isRadiantFavorable,
     //
     getSolarPosition,
     getSolarLongitude,
