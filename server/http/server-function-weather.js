@@ -109,6 +109,11 @@ const PRUNE_INTERVAL = 5 * 60 * 1000;
 
 function getWeatherInterpretation(data, options = {}) {
     // XXX should persist the cache and reload it ... maybe also the store ...
+
+    // minimal requirements
+    const { timestamp, temp, humidity, pressure } = data;
+    if (timestamp === undefined || temp === undefined || humidity === undefined || pressure === undefined) return undefined;
+
     if (weatherCachePrunned + PRUNE_INTERVAL < Date.now()) {
         const expiration = data.timestamp - CACHE_DURATION;
         Object.keys(weatherCache)

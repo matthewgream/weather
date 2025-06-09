@@ -74,9 +74,8 @@ function checkGreenFlash({ results, situation, data }) {
 
     // green flash: // Ideal conditions: stable air, low humidity variation
     const sunRiseOrSet = isNearSunriseOrSet(daylight, hourDecimal, 0.25);
-    if (sunRiseOrSet && location.horizonClear && pressure !== undefined && windSpeed !== undefined)
-        if (pressure > 1015 && windSpeed < 5)
-            results.phenomena.push(`green flash: possible at ${sunRiseOrSet} (watch upper edge)` + (pressure !== undefined && pressure > 1020 ? ' (green rim may be visible with binoculars even without flash)' : ''));
+    if (sunRiseOrSet && location.horizonClear && windSpeed !== undefined)
+        if (pressure > 1015 && windSpeed < 5) results.phenomena.push(`green flash: possible at ${sunRiseOrSet} (watch upper edge)` + (pressure > 1020 ? ' (green rim may be visible with binoculars even without flash)' : ''));
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -100,7 +99,7 @@ function checkAtmosphericShadowBands({ results, situation, data }) {
     const { windSpeed, temp, pressure } = data;
 
     // Shadow bands can occur during extreme atmospheric turbulence
-    if (pressure !== undefined && windSpeed !== undefined && temp !== undefined && solar.position.altitude > 0 && solar.position.altitude < 20) {
+    if (windSpeed !== undefined && solar.position.altitude > 0 && solar.position.altitude < 20) {
         const turbulenceIndex = Math.abs(pressure - 1013) / 10 + windSpeed / 10;
         if (turbulenceIndex > 3 && Math.abs(temp - 20) > 10) results.phenomena.push('optics: shadow bands possible (atmospheric turbulence)');
     }
@@ -155,10 +154,10 @@ function interpretLunarPhase({ results, situation, data, store }) {
 
         // Visibility
         if (cloudCover !== undefined) {
-            if (cloudCover < 30) results.phenomena.push('moon: viewing conditions clear' + (temp !== undefined && temp < -5 && humidity !== undefined && humidity < 50 ? ' (crisp light)' : ''));
+            if (cloudCover < 30) results.phenomena.push('moon: viewing conditions clear' + (temp < -5 && humidity < 50 ? ' (crisp light)' : ''));
             else if (cloudCover < 70) results.phenomena.push('moon: partially visible through clouds');
             else results.phenomena.push('moon: obscured by clouds');
-            if (cloudCover < 40 && snowDepth !== undefined && snowDepth > 50) results.phenomena.push('moon: illuminating snow landscape' + (temp !== undefined && temp < -10 ? ' (sparkling crystals)' : ''));
+            if (cloudCover < 40 && snowDepth !== undefined && snowDepth > 50) results.phenomena.push('moon: illuminating snow landscape' + (temp < -10 ? ' (sparkling crystals)' : ''));
         }
 
         // Name
@@ -303,7 +302,7 @@ function interpretLunarVisibility({ results, situation, data }) {
         results.phenomena.push(`moon: horizontal parallax ${Math.round(((((3600 * 180) / Math.PI) * (helpers.constants.LUNAR_MEAN_DISTANCE_KM / lunar.distance.distance)) / 3600) * 10) / 10}° (appears shifted at horizon)`);
 
     // Moon dogs (paraselenae)
-    if (lunar.phase > 0.4 && lunar.position.altitude > 20 && lunar.position.altitude < 40 && temp !== undefined && temp < -10)
+    if (lunar.phase > 0.4 && lunar.position.altitude > 20 && lunar.position.altitude < 40 && temp < -10)
         if (cloudCover !== undefined && cloudCover > 20 && cloudCover < 60) results.phenomena.push('moon: moon dogs possible (bright spots beside moon)');
 }
 
@@ -371,6 +370,44 @@ function checkTwilightPhenomena({ results, situation, data }) {
 
     // Purple light/twilight arch
     if (twilight && solar.position.altitude < -4 && solar.position.altitude > -8 && cloudCover !== undefined && cloudCover < 30) results.phenomena.push('twilight: purple light visible (volcanic/stratospheric aerosols)');
+
+    switch (daylight.phase) {
+        case 'civil_dusk':
+            results.phenomena.push('civil twilight');
+            if (cloudCover !== undefined && cloudCover < 30) results.phenomena.push('clear twilight sky');
+            break;
+        case 'nautical_dusk':
+            results.phenomena.push('nautical twilight - stars becoming visible');
+            break;
+        case 'astronomical_dusk':
+            results.phenomena.push('astronomical twilight - deep dusk');
+            break;
+        case 'civil_dawn':
+            results.phenomena.push('civil dawn - morning twilight');
+            break;
+    }
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+function checkSunriseSunsetConditions({ results, situation, data }) {
+    const { daylight, hourDecimal, month } = situation;
+    const { temp, cloudCover } = data;
+
+    const nearSunrise = Math.abs(hourDecimal - daylight.sunriseDecimal) < 0.5;
+    const nearSunset = Math.abs(hourDecimal - daylight.sunsetDecimal) < 0.5;
+
+    if (nearSunrise) {
+        results.phenomena.push('sunrise period');
+        if (month >= 9 || month <= 3) {
+            if (temp < 0) results.phenomena.push('coldest time of day');
+        }
+    } else if (nearSunset) {
+        results.phenomena.push('sunset period');
+        if (cloudCover !== undefined && cloudCover < 50) {
+            results.phenomena.push('potential for colorful sunset');
+        }
+    }
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -474,7 +511,27 @@ function interpretSolstice({ results, situation, data }) {
         if (lunar.phase >= 0.48 && lunar.phase <= 0.52) results.phenomena.push('winter solstice full moon' + (cloudCover !== undefined && cloudCover < 40 ? ' (cold moon illuminating snow)' : ''));
 
         // Temperature-related solstice phenomena
-        if (temp !== undefined && temp < -10 && Math.abs(solsticeInfo.days) <= 7) results.phenomena.push('deep winter cold near solstice');
+        if (temp < -10 && Math.abs(solsticeInfo.days) <= 7) results.phenomena.push('deep winter cold near solstice');
+    }
+
+    if (!store.astronomy.daylightTracking) store.astronomy.daylightTracking = { consecutiveBrightNights: 0, consecutiveDarkDays: 0 };
+
+    if (location.latitude > 63 && daylight.daylightHours > 23) {
+        store.astronomy.daylightTracking.consecutiveBrightNights++;
+        if (store.astronomy.daylightTracking.consecutiveBrightNights > 7) {
+            results.phenomena.push(`${store.astronomy.daylightTracking.consecutiveBrightNights} consecutive midnight sun days`);
+        }
+    } else if (location.latitude > 63) {
+        store.astronomy.daylightTracking.consecutiveBrightNights = 0;
+    }
+
+    if (location.latitude > 60 && daylight.daylightHours < 5) {
+        store.astronomy.daylightTracking.consecutiveDarkDays++;
+        if (store.astronomy.daylightTracking.consecutiveDarkDays > 7) {
+            results.phenomena.push(`${store.astronomy.daylightTracking.consecutiveDarkDays} consecutive minimal daylight days`);
+        }
+    } else if (location.latitude > 60) {
+        store.astronomy.daylightTracking.consecutiveDarkDays = 0;
     }
 }
 
@@ -523,7 +580,7 @@ function interpretViewingConditions({ results, situation, data, data_previous })
     const { date, hour, location } = situation;
     const { timestamp, temp, windSpeed, pressure, humidity, cloudCover } = data;
 
-    if (temp !== undefined && data_previous?.length > 1 && data_previous[1].temp !== undefined) {
+    if (data_previous?.length > 1) {
         const tempChange = Math.abs(temp - data_previous[1].temp),
             jetStreamEffect = windSpeed !== undefined && windSpeed > 15 ? 2 : 0,
             thermalEffect = hour >= 12 && hour <= 16 ? 1 : 0;
@@ -533,7 +590,7 @@ function interpretViewingConditions({ results, situation, data, data_previous })
         else if (seeingIndex < 4) results.phenomena.push('viewing: good for astronomy');
         else if (seeingIndex > 6) results.phenomena.push('viewing: poor (heavy twinkling)');
         // Scintillation index
-        if (windSpeed !== undefined && windSpeed > 10 && pressure !== undefined && Math.abs(pressure - 1013) > 10) results.phenomena.push('viewing: strong scintillation (colorful twinkling)');
+        if (windSpeed !== undefined && windSpeed > 10 && Math.abs(pressure - 1013) > 10) results.phenomena.push('viewing: strong scintillation (colorful twinkling)');
         if (data_previous?.length >= 3) {
             const pressureTrend = pressure - data_previous[2].pressure;
             if (Math.abs(pressureTrend) > 5) results.phenomena.push(`viewing: rapidly ${pressureTrend > 0 ? 'improving' : 'degrading'} conditions`);
@@ -556,18 +613,18 @@ function interpretViewingConditions({ results, situation, data, data_previous })
     // const events = eventsLoad(store, 'astronomy');
     const isClearNight = cloudCover !== undefined && cloudCover < 20 && (hour >= 22 || hour <= 2);
     if (isClearNight) {
-    //     if (!helpers.isSameDay(events.events.lastClearNight, date)) {
-    //         events.streaks.currentClearNights++;
-    //         if (events.streaks.currentClearNights > events.streaks.longestClearStreak) events.streaks.longestClearStreak = events.streaks.currentClearNights;
-    //         events.yearly.clearNights++;
-    //         events.events.lastClearNight = date;
-    //     }
-    //     if (events.streaks.longestClearStreak >= 7) results.phenomena.push(`record clear night streak: ${events.streaks.longestClearStreak} nights`);
-    // } else if (cloudCover !== undefined && cloudCover > 50 && events.streaks.currentClearNights > 0) {
-    //     events.streaks.currentClearNights = 0;
+        //     if (!helpers.isSameDay(events.events.lastClearNight, date)) {
+        //         events.streaks.currentClearNights++;
+        //         if (events.streaks.currentClearNights > events.streaks.longestClearStreak) events.streaks.longestClearStreak = events.streaks.currentClearNights;
+        //         events.yearly.clearNights++;
+        //         events.events.lastClearNight = date;
+        //     }
+        //     if (events.streaks.longestClearStreak >= 7) results.phenomena.push(`record clear night streak: ${events.streaks.longestClearStreak} nights`);
+        // } else if (cloudCover !== undefined && cloudCover > 50 && events.streaks.currentClearNights > 0) {
+        //     events.streaks.currentClearNights = 0;
     }
 
-    const isPerfectViewing = cloudCover !== undefined && cloudCover < 10 && humidity !== undefined && humidity < 70 && windSpeed !== undefined && windSpeed < 3 && temp !== undefined && Math.abs(temp - 10) < 15 && (hour >= 22 || hour <= 2);
+    const isPerfectViewing = cloudCover !== undefined && cloudCover < 10 && humidity < 70 && windSpeed !== undefined && windSpeed < 3 && Math.abs(temp - 10) < 15 && (hour >= 22 || hour <= 2);
     if (isPerfectViewing) {
         // if (!helpers.isSameDay(events.events.lastPerfectViewing, date)) {
         //     if (helpers.daysBetween(events.events.lastPerfectViewing, date) > 30) results.alerts.push('exceptional viewing conditions tonight - rare clarity');
@@ -589,28 +646,22 @@ function interpretAtmosphericOptics({ results, situation, data }) {
     if (cloudCover !== undefined && cloudCover > 20 && cloudCover < 80)
         if (solar.position.altitude > 0 && solar.position.altitude < 60) results.phenomena.push('optics: 22° halo possible (ice crystals)' + (solar.position.altitude > 0 && solar.position.altitude < 22 ? ', sundogs likely' : ''));
     // 46-degree halo (larger, rarer)
-    if (cloudCover !== undefined && cloudCover > 10 && cloudCover < 60 && temp !== undefined && temp < -5)
-        if (solar.position.altitude > 10 && solar.position.altitude < 50) results.phenomena.push('optics: 46° halo possible (large ring, rare)');
+    if (cloudCover !== undefined && cloudCover > 10 && cloudCover < 60 && temp < -5) if (solar.position.altitude > 10 && solar.position.altitude < 50) results.phenomena.push('optics: 46° halo possible (large ring, rare)');
 
     // Light pillars
-    if (temp !== undefined && temp < 0 && humidity !== undefined && humidity > 85 && windSpeed !== undefined && windSpeed < 3)
-        if (!daylight.isDaytime && location.lightPollution !== 'low') results.phenomena.push('optics: light pillars possible (ground lights in ice crystals)');
+    if (temp < 0 && humidity > 85 && windSpeed !== undefined && windSpeed < 3) if (!daylight.isDaytime && location.lightPollution !== 'low') results.phenomena.push('optics: light pillars possible (ground lights in ice crystals)');
 
     // Circumzenithal arc
-    if (cloudCover !== undefined && cloudCover > 10 && cloudCover < 50 && temp !== undefined && temp < -5)
-        if (solar.position.altitude > 5 && solar.position.altitude < 32.2) results.phenomena.push('optics: circumzenithal arc possible (rainbow at zenith)');
+    if (cloudCover !== undefined && cloudCover > 10 && cloudCover < 50 && temp < -5) if (solar.position.altitude > 5 && solar.position.altitude < 32.2) results.phenomena.push('optics: circumzenithal arc possible (rainbow at zenith)');
 
     // Polar Stratospheric Clouds (nacreous clouds)
-    if ((location.latitude > 55 && temp !== undefined && temp < -20 && month >= 11) || month <= 2)
-        if (solar.position.altitude < -1 && solar.position.altitude > -6) results.phenomena.push('optics: polar stratospheric clouds possible (iridescent colors)');
+    if ((location.latitude > 55 && temp < -20 && month >= 11) || month <= 2) if (solar.position.altitude < -1 && solar.position.altitude > -6) results.phenomena.push('optics: polar stratospheric clouds possible (iridescent colors)');
 
     // Upper tangent arc (touches top of 22° halo)
-    if (cloudCover !== undefined && cloudCover > 20 && cloudCover < 60 && temp !== undefined && temp < -10)
-        if (solar.position.altitude > 15 && solar.position.altitude < 30) results.phenomena.push('optics: upper tangent arc likely (V-shape above sun)');
+    if (cloudCover !== undefined && cloudCover > 20 && cloudCover < 60 && temp < -10) if (solar.position.altitude > 15 && solar.position.altitude < 30) results.phenomena.push('optics: upper tangent arc likely (V-shape above sun)');
 
     // Parhelic circle (horizontal white circle through sun)
-    if (cloudCover !== undefined && cloudCover > 10 && cloudCover < 40 && temp !== undefined && temp < -15)
-        if (solar.position.altitude > 20 && solar.position.altitude < 40) results.phenomena.push("optics: parhelic circle possible (white band at sun's height)");
+    if (cloudCover !== undefined && cloudCover > 10 && cloudCover < 40 && temp < -15) if (solar.position.altitude > 20 && solar.position.altitude < 40) results.phenomena.push("optics: parhelic circle possible (white band at sun's height)");
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -717,14 +768,13 @@ function interpretStars({ results, situation, data }) {
     const { month, hour, lunar } = situation;
     const { cloudCover, humidity } = data;
 
-    if (lunar.position.ra !== undefined && lunar.position.dec !== undefined)
-        starsTable.forEach((star) => {
-            const separation = helpers.calculateAngularSeparation(lunar.position.ra, lunar.position.dec, star.ra, star.dec);
-            if (separation < 0.25) {
-                if (separation > 0.2 && separation < 0.25) results.phenomena.push(`stars: grazing occultation of ${star.name} - extremely rare! (multiple disappearances)`);
-                else results.phenomena.push(`stars: moon occults ${star.name} tonight - rare event`);
-            }
-        });
+    starsTable.forEach((star) => {
+        const separation = helpers.calculateAngularSeparation(lunar.position.ra, lunar.position.dec, star.ra, star.dec);
+        if (separation < 0.25) {
+            if (separation > 0.2 && separation < 0.25) results.phenomena.push(`stars: grazing occultation of ${star.name} - extremely rare! (multiple disappearances)`);
+            else results.phenomena.push(`stars: moon occults ${star.name} tonight - rare event`);
+        }
+    });
 
     if (cloudCover !== undefined && cloudCover < 30 && (hour >= 22 || hour <= 2)) {
         const recommendations = [];
@@ -738,7 +788,7 @@ function interpretStars({ results, situation, data }) {
             recommendations.push('stars: Scorpius and Sagittarius rich star fields');
         }
         // Condition-specific recommendations
-        if (humidity !== undefined && humidity < 50) recommendations.push('stars: excellent transparency for faint objects');
+        if (humidity < 50) recommendations.push('stars: excellent transparency for faint objects');
         if (recommendations.length > 0) results.phenomena.push(`stars: tonight's targets: ${recommendations.join(', ')}`);
         if (month >= 11 || month <= 1) results.phenomena.push('stars: color contrasts visible - compare orange Betelgeuse with blue Rigel');
     }
@@ -1279,11 +1329,11 @@ function checkAurora({ results, situation, data }) {
     // Condition circumstances
     if (results.phenomena.some((p) => p.includes('aurora'))) {
         if (snowDepth !== undefined && snowDepth > 20) results.phenomena.push('aurora: brightness enhanced (snow reflection)');
-        if (temp !== undefined && temp < -20 && humidity !== undefined && humidity < 50) results.phenomena.push('aurora: lower border sharp (cold dry air)');
-        if (temp !== undefined && temp < -30 && humidity !== undefined && humidity < 30 && location.elevation > 200) results.phenomena.push('aurora: sounds possible - rare! (crackling/hissing)');
+        if (temp < -20 && humidity < 50) results.phenomena.push('aurora: lower border sharp (cold dry air)');
+        if (temp < -30 && humidity < 30 && location.elevation > 200) results.phenomena.push('aurora: sounds possible - rare! (crackling/hissing)');
 
         // Aurora photography conditions
-        if (temp !== undefined && temp < -10 && humidity !== undefined && humidity < 60) results.phenomena.push('aurora: excellent photography conditions (low humidity, cold air)');
+        if (temp < -10 && humidity < 60) results.phenomena.push('aurora: excellent photography conditions (low humidity, cold air)');
 
         // Moon interference
         if (lunar.position.altitude > 0) {
@@ -1518,6 +1568,7 @@ function interpretTwilightPhenomena(results, situation, data, data_previous, sto
     checkTwilightPhenomena(package); // Belt of Venus, Earth's shadow
     checkZodiacalLight(package); // Zodiacal light/gegenschein
     checkAirglow(package); // Upper atmosphere glow
+    checkSunriseSunsetConditions(package);
 }
 function interpretSeasonalPhenomena(results, situation, data, data_previous, store) {
     const package = { results, situation, data, data_previous, store };
