@@ -1,4 +1,3 @@
-// XXX review
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -6,20 +5,11 @@
 //const helpers = require('./server-function-weather-helpers.js');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------`------------------------------------------------------------------
 
-function interpretCalendar(results, situation, data, data_previous, store, _options) {
-    const { month, hour, hourDecimal, daylight, season, location } = situation;
+function interpretCalendar(results, situation, data, _data_previous, store, _options) {
+    const { month, hour, hourDecimal, daylight, location } = situation;
     const { temp, cloudCover, humidity } = data;
-
-    if (!store.calendar)
-        store.calendar = {
-            lastSunrise: undefined, // XXX unused
-            lastSunset: undefined, // XXX unused
-            consecutiveDarkDays: 0, // XXX unused
-            consecutiveBrightNights: 0, // XXX unused
-            seasonTransitions: [], // XXX unused
-        };
 
     if (temp !== undefined) {
         // Summer daylight phenomena (May-July)
@@ -110,36 +100,15 @@ function interpretCalendar(results, situation, data, data_previous, store, _opti
             if (cloudCover !== undefined && cloudCover < 50) results.phenomena.push('potential for colorful sunset');
         }
     }
-
-    // Diurnal patterns
-    handleDiurnalPatterns(results, situation, data, data_previous, store);
-
-    // Seasonal interpretations with Nordic specifics
-    if (temp !== undefined && season)
-        switch (season) {
-            case 'winter':
-                handleWinterPhenomena(results, situation, data, store);
-                break;
-            case 'summer':
-                handleSummerPhenomena(results, situation, data, store);
-                break;
-            case 'spring':
-                handleSpringPhenomena(results, situation, data, store);
-                break;
-            case 'autumn':
-                handleAutumnPhenomena(results, situation, data, store);
-                break;
-        }
-
-    // Special date-based phenomena
-    handleSpecialDates(results, situation, data, store);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function handleWinterPhenomena(results, situation, data, _store) {
+function handleWinterPhenomena(results, situation, data) {
+    const { daylight, month, hour, season } = situation;
     const { temp } = data;
-    const { daylight, month, hour } = situation;
+
+    if (temp === undefined || season !== 'winter') return;
 
     if (temp > 5) {
         results.phenomena.push('unusually mild winter day');
@@ -169,9 +138,11 @@ function handleWinterPhenomena(results, situation, data, _store) {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function handleSummerPhenomena(results, situation, data, _store) {
+function handleSummerPhenomena(results, situation, data) {
+    const { daylight, hour, season } = situation;
     const { temp, humidity } = data;
-    const { daylight, hour } = situation;
+
+    if (temp === undefined || season !== 'summer') return;
 
     if (temp < 12) {
         results.phenomena.push('cool summer day');
@@ -202,9 +173,11 @@ function handleSummerPhenomena(results, situation, data, _store) {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function handleSpringPhenomena(results, situation, data, store) {
+function handleSpringPhenomena(results, situation, data, _data_previous, store) {
+    const { month, hour, daylight, season } = situation;
     const { temp, rainRate, snowDepth } = data;
-    const { month, hour, daylight } = situation;
+
+    if (temp === undefined || season !== 'spring') return;
 
     switch (month) {
         case 3:
@@ -228,9 +201,11 @@ function handleSpringPhenomena(results, situation, data, store) {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function handleAutumnPhenomena(results, situation, data, store) {
+function handleAutumnPhenomena(results, situation, data, _data_previous, store) {
+    const { month, hour, daylight, season } = situation;
     const { temp, rainRate, windSpeed, humidity } = data;
-    const { month, hour, daylight } = situation;
+
+    if (temp === undefined || season !== 'autumn') return;
 
     switch (month) {
         case 9:
@@ -255,7 +230,7 @@ function handleAutumnPhenomena(results, situation, data, store) {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function handleSpecialDates(results, situation, data, _store) {
+function handleSpecialDates(results, situation, data) {
     const { month, day, daylight, location } = situation;
     const { temp, cloudCover } = data;
 
@@ -283,7 +258,7 @@ function handleSpecialDates(results, situation, data, _store) {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function handleDiurnalPatterns(results, situation, data, data_previous, _store) {
+function handleDiurnalPatterns(results, situation, data, data_previous) {
     const { timestamp, temp } = data;
     const { hour } = situation;
 
@@ -324,9 +299,16 @@ function calculateDaylightChange(situation, store) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-module.exports = function (_options) {
+module.exports = function ({ store }) {
+    if (!store.calendar) store.calendar = { consecutiveBrightNights : 0, consecutiveDarkDays : 0};
     return {
         interpretCalendar,
+        handleDiurnalPatterns,
+        handleWinterPhenomena,
+        handleSummerPhenomena,
+        handleSpringPhenomena,
+        handleAutumnPhenomena,
+        handleSpecialDates,
     };
 };
 

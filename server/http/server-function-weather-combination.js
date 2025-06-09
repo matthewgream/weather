@@ -188,7 +188,7 @@ function interpretCombination(results, situation, data, data_previous, store, _o
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-module.exports = function (_options) {
+module.exports = function () {
     return {
         interpretCombination,
     };

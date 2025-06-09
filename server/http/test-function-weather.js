@@ -5,7 +5,6 @@
 
 const weatherOptions = { debug: true, solarEclipse: { daysAhead: 512 }, lunarEclipse: { daysAhead: 512 }, suppress: { stable: true } };
 const weatherTopics = ['weather/branna', 'sensors/radiation'];
-const weatherModule = require('./server-function-weather.js')(weatherOptions);
 const weatherServer = process.argv[2] || 'mqtt://localhost';
 const weatherLocation = {
     elevation: 135,
@@ -26,6 +25,7 @@ const weatherLocation = {
     hemisphere: 'northern',
     timezone: 'Europe/Stockholm',
 };
+const weatherModule = require('./server-function-weather.js')(weatherLocation, weatherOptions);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -66,7 +66,7 @@ function weatherProcess() {
         const conditionsData = snapshot['weather/branna'],
             radiationData = snapshot['sensors/radiation'];
         console.error(`weather: [${new Date().toISOString()}] process, snapshot:`, snapshot);
-        const interpretation = weatherModule.getWeatherInterpretation(weatherLocation, {
+        const interpretation = weatherModule.getWeatherInterpretation({
             timestamp: Date.now(),
             temp: conditionsData.temp,
             humidity: conditionsData.humidity,

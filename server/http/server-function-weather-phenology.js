@@ -424,7 +424,7 @@ function interpretPhenology(results, situation, data, data_previous, store, _opt
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-module.exports = function (_options) {
+module.exports = function () {
     return {
         interpretCultivation,
         interpretWildNature,

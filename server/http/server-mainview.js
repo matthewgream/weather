@@ -147,13 +147,12 @@ console.log(`Loaded '/' using 'server-mainview' && data/vars`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const weather_module = require('./server-function-weather.js')({ debug: false });
+const weather_module = require('./server-function-weather.js')(configData.LOCATION, { debug: false });
 function getWeatherInterpretation(vars) {
     try {
         const varsConditions = vars['weather/branna'] || {},
             varsRadiation = vars['sensors/radiation'] || {};
         const results = weather_module.getWeatherInterpretation(
-            configData.LOCATION,
             {
                 timestamp: Date.now(),
                 temp: varsConditions.temp,

@@ -67,34 +67,37 @@ function juliandDateToDateUTC(jd) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+function normalizeAngle(angle) {
+    return ((angle % 360) + 360) % 360;
+}
+function degToRad(deg) {
+    return (deg * Math.PI) / 180;
+}
+function radToDeg(rad) {
+    return (rad * 180) / Math.PI;
+}
+
 function normalizeTime(time) {
     if (time < 0) return time + 24;
     return time >= 24 ? time - 24 : time;
 }
-
 function isLeapYear(year) {
     return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
 }
-
 function daysIntoYear(date = new Date()) {
     return (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - Date.UTC(date.getFullYear(), 0, 0)) / constants.MILLISECONDS_PER_DAY;
-}
-
-function normalizeAngle(angle) {
-    return ((angle % 360) + 360) % 360;
-}
-
-function azimuthToCardinal(azimuth) {
-    return ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'][Math.round(((azimuth + 22.5) % 360) / 45) % 8];
 }
 
 function isSameDay(a, b) {
     if (a === undefined || b === undefined) return false;
     return a.getDate() == b.getDate() && a.getMonth() == b.getMonth() && a.getFullYear() == b.getFullYear();
 }
-
 function daysBetween(a, b) {
     return a ? Math.floor((b - a) / constants.MILLISECONDS_PER_DAY) : 999;
+}
+
+function azimuthToCardinal(azimuth) {
+    return ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'][Math.round(((azimuth + 22.5) % 360) / 45) % 8];
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -269,7 +272,7 @@ function getCrossQuarterDates(year) {
         let testDate = approxDates[target.lon];
         let prevLon = undefined;
         // Search within ±10 days for exact crossing
-        for (let offset = -10; offset <= 10; offset++) {
+        for (let offset = -12; offset <= 12; offset++) {
             const date = new Date(testDate.getTime() + offset * constants.MILLISECONDS_PER_DAY);
             const lon = getSolarLongitude(dateToJulianDateUTC(date));
             if (prevLon !== undefined) {
@@ -580,7 +583,7 @@ function isRadiantVisible(radiantCoordinates, radiantName, date, latitude, longi
     const altitude = (Math.asin(Math.sin(latRad) * Math.sin(decRad) + Math.cos(latRad) * Math.cos(decRad) * Math.cos(haRad)) * 180) / Math.PI;
     // Radiant is usefully visible if above 20° altitude
     return {
-        visible: altitude > 20,
+        visible: altitude > 10,
         altitude,
     };
 }
@@ -660,7 +663,7 @@ function getSolarPosition(date, latitude, longitude, includeRefraction = false) 
         equationOfTime,
         noon: noon < 0 ? noon + 24 : noon >= 24 ? noon - 24 : noon, // Local Mean Solar Noon
         apparentNoon: (noon + equationOfTime / 60) % 24, // Local Apparent Solar Noon (sundial noon)
-        angularDiameter: constants.SOLAR_ANGULAR_DIAMETER_BASE / R,
+        angularDiameter: 2 * Math.atan(constants.SOLAR_RADIUS_KM / (R * constants.ASTRONOMICAL_UNIT_KM)) * constants.RADIANS_TO_DEGREES,
         // XXX compability items to be deprecated
         longitude: apparentLongitude, // Ecliptic longitude
         latitude: 0, // Sun's ecliptic latitude is always ~0
@@ -690,8 +693,8 @@ function getSolarSituation(date, latitude, longitude) {
         position,
         altitudeRadians: altitudeRad,
         isGoldenHour: position.altitude > 0 && position.altitude < 10,
-        isBlueHour: position.altitude > -6 && position.altitude < 0,
-        shadowMultiplier: position.altitude > 0.5 ? 1 / Math.tan(altitudeRad) : position.altitude > 0.1 ? 100 : Infinity,
+        isBlueHour: position.altitude > -6 && position.altitude < -4,
+        shadowMultiplier: position.altitude > 0.1 ? Math.min(1 / Math.tan(Math.max(altitudeRad, 0.1 * constants.DEGREES_TO_RADIANS)), 100) : Infinity,
         constants,
     };
 }
@@ -749,7 +752,7 @@ function getLunarDistance(date = new Date()) {
     const apsis = getLunarApsis(date);
     return {
         distance,
-        isSupermoon: distance < 361863 && Math.abs(phase - 0.5) < 0.02,
+        isSupermoon: distance < 361863 && Math.abs(phase - 0.5) < 0.034,
         isSuperNewMoon: distance < 361863 && (phase < 0.02 || phase > 0.98),
         isMicromoon: distance > 405000 && Math.abs(phase - 0.5) < 0.02,
         isPerigee: Math.abs(apsis.daysToPerigee) < 1,
@@ -880,6 +883,7 @@ function __getLunarTimes(date, latitude, longitude) {
         midnightPosition = getLunarPosition(startOfDay, latitude, longitude);
     const minAlt = Math.min(noonPosition.altitude, midnightPosition.altitude),
         maxAlt = Math.max(noonPosition.altitude, midnightPosition.altitude);
+    // eslint-disable-next-line unicorn/no-null
     if (minAlt > moonHorizon) return { rise: null, set: null }; // Always visible
     if (maxAlt < moonHorizon) return { rise: undefined, set: undefined }; // Never visible
 
@@ -1233,34 +1237,6 @@ function getVenusPosition(date, latitude, longitude) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const geomagneticBaseActivity = {
-    0: 1.5,
-    1: 2,
-    2: 2.5,
-    3: 2.8,
-    4: 1.8,
-    5: 1.5,
-    6: 1.2,
-    7: 1.5,
-    8: 2.8,
-    9: 3,
-    10: 2.5,
-    11: 2,
-};
-
-function getGeomagneticActivity(month, year) {
-    // Solar cycle is ~11 years, maximum around 2025, 2036, etc.
-    // NOTE: This is a simplified model. Real geomagnetic activity is highly variable
-    // and depends on solar wind conditions, coronal mass ejections, and other factors.
-    // For accurate predictions, use NOAA space weather data.
-    const solarCyclePhase = (((year - 2025) % 11) + 11) % 11;
-    const solarMultiplier = 1 + 0.5 * Math.cos((solarCyclePhase * 2 * Math.PI) / 11);
-    return geomagneticBaseActivity[month] * solarMultiplier;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
 function calculateDewPoint(temp, humidity) {
     // Magnus-Tetens formula
     if (humidity <= 0 || humidity > 100) return temp; // Invalid humidity
@@ -1430,6 +1406,8 @@ module.exports = {
     constants,
     //
     normalizeAngle,
+    degToRad,
+    radToDeg,
     //
     getDST,
     getDaylightHours,
@@ -1477,8 +1455,6 @@ module.exports = {
     //
     getVenusElongation,
     getVenusPosition,
-    //
-    getGeomagneticActivity,
     //
     addEvent,
     getEvents,
