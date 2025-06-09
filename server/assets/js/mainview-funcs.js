@@ -1,32 +1,6 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function isNumber(inputVal) {
-    var oneDecimal = false,
-        inputStr = '' + String(inputVal);
-    for (var i = 0; i < inputStr.length; i++) {
-        const oneChar = inputStr.charAt(i);
-        if (i === 0 && (oneChar === '-' || oneChar === '+')) continue;
-        if (oneChar === '.' && !oneDecimal) {
-            oneDecimal = true;
-            continue;
-        }
-        if (oneChar < '0' || oneChar > '9') return false;
-    }
-    return true;
-}
-function radToDeg(angleRad) {
-    return (180 * angleRad) / Math.PI;
-}
-function degToRad(angleDeg) {
-    return (Math.PI * angleDeg) / 180;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-const isLeapYear = (yr) => (yr % 4 === 0 && yr % 100 !== 0) || yr % 400 === 0;
-
 function __jdFromYMDHMS(ymdhms) {
     let { year, month, day, hour, minute, second } = ymdhms;
     if (month <= 2) {
@@ -66,6 +40,7 @@ function __jdToDate(jd) {
     const ymd = __jdToYMD(jd);
     return new Date(Date.UTC(ymd.year, ymd.month - 1, ymd.day, 0, 0, 0));
 }
+const isLeapYear = (yr) => (yr % 4 === 0 && yr % 100 !== 0) || yr % 400 === 0;
 function __jdToDoy(jd) {
     const ymd = __jdToYMD(jd);
     return Math.floor((275 * ymd.month) / 9) - (isLeapYear(ymd.year) ? 1 : 2) * Math.floor((ymd.month + 9) / 12) + ymd.day - 30;
@@ -77,26 +52,52 @@ function __jdTimeCentury(jd) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+let lastCachedYear, lastSundayOfMarch, lastSundayOfOctober;
 // eslint-disable-next-line no-unused-vars
 function getDST(date = new Date()) {
-    if (date.getMonth() > 10 || date.getMonth() < 2) return false; // November to February
-    if (date.getMonth() > 3 && date.getMonth() < 9) return true; // April to September
-    const lastDayOfMarch = new Date(date.getFullYear(), 2, 31);
-    while (lastDayOfMarch.getMonth() > 2) lastDayOfMarch.setDate(lastDayOfMarch.getDate() - 1);
-    const lastSundayOfMarch = new Date(lastDayOfMarch);
-    while (lastSundayOfMarch.getDay() !== 0) lastSundayOfMarch.setDate(lastSundayOfMarch.getDate() - 1);
-    lastSundayOfMarch.setHours(2, 0, 0, 0); // 02:00 CET
-    const lastDayOfOctober = new Date(date.getFullYear(), 9, 31);
-    while (lastDayOfOctober.getMonth() > 9) lastDayOfOctober.setDate(lastDayOfOctober.getDate() - 1);
-    const lastSundayOfOctober = new Date(lastDayOfOctober);
-    while (lastSundayOfOctober.getDay() !== 0) lastSundayOfOctober.setDate(lastSundayOfOctober.getDate() - 1);
-    lastSundayOfOctober.setHours(3, 0, 0, 0); // 03:00 CEST
+    const year = date.getFullYear(),
+        month = date.getMonth();
+    if (month > 10 || month < 2) return false; // November to February
+    if (month > 3 && month < 9) return true; // April to September
+    if (!lastCachedYear || lastCachedYear !== year) {
+        const lastDayOfMarch = new Date(year, 2, 31);
+        while (lastDayOfMarch.getMonth() > 2) lastDayOfMarch.setDate(lastDayOfMarch.getDate() - 1);
+        lastSundayOfMarch = new Date(lastDayOfMarch);
+        while (lastSundayOfMarch.getDay() !== 0) lastSundayOfMarch.setDate(lastSundayOfMarch.getDate() - 1);
+        lastSundayOfMarch.setHours(2, 0, 0, 0); // 02:00 CET
+        const lastDayOfOctober = new Date(year, 9, 31);
+        while (lastDayOfOctober.getMonth() > 9) lastDayOfOctober.setDate(lastDayOfOctober.getDate() - 1);
+        lastSundayOfOctober = new Date(lastDayOfOctober);
+        while (lastSundayOfOctober.getDay() !== 0) lastSundayOfOctober.setDate(lastSundayOfOctober.getDate() - 1);
+        lastSundayOfOctober.setHours(3, 0, 0, 0); // 03:00 CEST
+        lastCachedYear = year;
+    }
     return date >= lastSundayOfMarch && date < lastSundayOfOctober;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+function isNumber(inputVal) {
+    var oneDecimal = false,
+        inputStr = '' + String(inputVal);
+    for (var i = 0; i < inputStr.length; i++) {
+        const oneChar = inputStr.charAt(i);
+        if (i === 0 && (oneChar === '-' || oneChar === '+')) continue;
+        if (oneChar === '.' && !oneDecimal) {
+            oneDecimal = true;
+            continue;
+        }
+        if (oneChar < '0' || oneChar > '9') return false;
+    }
+    return true;
+}
+function radToDeg(angleRad) {
+    return (180 * angleRad) / Math.PI;
+}
+function degToRad(angleDeg) {
+    return (Math.PI * angleDeg) / 180;
+}
 function formatDate(date, minutes) {
     return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 0, minutes, (minutes - Math.floor(minutes)) * 60));
 }

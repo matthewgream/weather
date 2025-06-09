@@ -1,16 +1,39 @@
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+const FILTER_CATEGORIES_DISPLAY = ['aircraft', 'astronomy'];
+const FILTER_CATEGORIES_ALERTS = ['weather', ...FILTER_CATEGORIES_DISPLAY];
+const STORAGE_KEY_FILTERS_ALERTS = 'weather-prefs-filter-alerts';
+
+function preferencesLoadFilters(key, categories) {
+    try {
+        const stored = localStorage.getItem(key);
+        if (stored) return JSON.parse(stored);
+    } catch (e) {
+        console.error(`prefs: failed to load, key=${key}:`, e);
+    }
+    return Object.fromEntries(categories.map((category) => [category, true]));
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 self.addEventListener('install', (_) => {
     self.skipWaiting();
     console.log('push: service-worker installed');
 });
+
 self.addEventListener('activate', (_) => {
     console.log('push: service-worker activated');
     return self.clients.claim();
 });
+
 self.addEventListener('push', (event) => {
     console.log('push: service-worker notification received:', event);
     let notification = {
         title: 'Weather Alert',
         body: 'New weather alert',
+        category: 'general', // default category
     };
     try {
         if (event.data) {
@@ -24,6 +47,11 @@ self.addEventListener('push', (event) => {
             notification.body = event.data.text();
             console.log('push: notification data fallback text:', notification.body);
         }
+    }
+    const filters = preferencesLoadFilters(STORAGE_KEY_FILTERS_ALERTS, FILTER_CATEGORIES_ALERTS);
+    if (notification.category && filters[notification.category] !== undefined && !filters[notification.category]) {
+        console.log('push: notification filtered out for category:', notification.category);
+        return;
     }
     const icon = '/static/images/weather-icon.png';
     const badge = '/static/images/weather-badge.png';
@@ -50,6 +78,7 @@ self.addEventListener('push', (event) => {
             })
     );
 });
+
 self.addEventListener('notificationclick', (event) => {
     console.log('push: notification acknowledged');
     event.notification.close();
@@ -66,9 +95,11 @@ self.addEventListener('notificationclick', (event) => {
             })
     );
 });
+
 self.addEventListener('error', (event) => {
     console.error('push: service-worker error:', event);
 });
+
 self.addEventListener('message', (event) => {
     console.log('push: service-worker message:', event.data);
     if (event.data.type === 'test-notification')
@@ -79,3 +110,6 @@ self.addEventListener('message', (event) => {
             requireInteraction: true,
         });
 });
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------

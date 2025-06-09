@@ -7,3 +7,4 @@ package-lock.json
 [sS]ecrets*
 *.key
 *.secrets
+.temporary

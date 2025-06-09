@@ -1,7 +1,7 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-/* global getDST, SolarCalc */
+/* global getDST, SolarCalc, configurationInit, notificationsInit, displayIsEnabled */
 
 let timezone;
 
@@ -352,7 +352,9 @@ function createSectionDataSummary(data_location, vars) {
             .map(([flight, alerts]) => `${flight} ${alerts.join(', ')}`)
             .join('; ');
         summary.push('');
-        summary.push(`<span style="font-size:90%;line-height:1.3em;display: inline-block;"><span style="font-weight:bold;">Aircraft:</span> ${text}.</span>`);
+        summary.push(
+            `<div class="type-aircraft" style="display: ${displayIsEnabled('aircraft') ? 'block' : 'none'}"><span style="font-size:90%;line-height:1.3em;display: inline-block;"><span style="font-weight:bold;">Aircraft:</span> ${text}.</span></div>`
+        );
     }
 
     ////
@@ -522,7 +524,7 @@ function createSectionLinks(links) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function createHeader() {
-    return `<div class="alerts-switch">&nbsp;</div>`;
+    return `<div class="config-selector" style="display: flex; align-items: center;"></div>`;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -583,6 +585,13 @@ function create(vars, data) {
     document.querySelector('#weather-dashboard').innerHTML = [createHeader(), createBanner(time), createSectionData(conf.location_data, vars), createSectionCamera(data), createSectionTime(time), createSectionLinks(links)].join('');
     schedule(vars);
 }
+
+document.addEventListener('DOMContentLoaded', async () => {
+    //setTimeout(async () => {
+    await notificationsInit();
+    configurationInit();
+    //}, 1000)
+});
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------

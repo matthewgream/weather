@@ -120,20 +120,6 @@ h2 {
     cursor: pointer;
     position: relative;
 }
-.alerts-switch {
-    text-align: left;
-    font-size: var(--font-size-sm);
-    margin-bottom: 0.95rem;
-    font-style: italic;
-}
-.alerts-switch a {
-    color: var(--primary-color);
-    text-decoration: none;
-    cursor: pointer;
-}
-.alerts-switch a:hover {
-    text-decoration: underline;
-}
 .text-summary {
     line-height: 1.3;
     margin-bottom: var(--spacing-md);
@@ -215,32 +201,33 @@ h2 {
 .snaps-nav-link:hover {
     text-decoration: underline;
 }
-.alerts-links {
+.config-selector {
+    text-align: left;
+    font-size: var(--font-size-sm);
+    margin-bottom: 0.95rem;
+    font-style: italic;
     display: flex;
     align-items: center;
 }
-.alerts-links a {
-    display: inline-block;
+.config-selector a {
+    color: var(--primary-color);
     text-decoration: none;
-    margin-right: 5px;
-}
-.alerts-links a:hover {
-    text-decoration: underline;
-}
-.alerts-switch {
-    display: flex;
-    align-items: center;
-}
-.alerts-switch a {
-    display: inline-block;
-    text-decoration: none;
-}
-.alerts-switch a:hover {
-    text-decoration: underline;
-}
-.alerts-toggle {
-    margin-left: 0px;
     cursor: pointer;
+    display: inline-block;
+    text-decoration: none;
+}
+.config-selector a:hover {
+    text-decoration: underline;
+}
+.config-selector {
+    font-style: italic;
+    text-decoration: none;
+}
+.config-selector:hover {
+    text-decoration: underline;
+}
+.config-selector-panel label:hover {
+    background-color: #f0f4f8;
 }
 @media (max-width: 480px) {
     .dashboard {
