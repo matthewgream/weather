@@ -2,6 +2,8 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const helpers = require('./server-function-weather-helpers.js');
+const toolsFormat = require('./server-function-weather-tools-format.js');
+const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
 
 const config = {
     equinoxLookaheadDays: 14,
@@ -39,12 +41,12 @@ function interpretSolarConditions({ results, situation, data }) {
     // Solar noon
     if (Math.abs(hourDecimal - solar.position.noon) < 0.25)
         results.phenomena.push(
-            `sun: noon at ${helpers.formatTime(Math.floor(solar.position.noon), Math.round((solar.position.noon % 1) * 60))} (offset: ${Math.round(solar.position.equationOfTime)} min, altitude ${helpers.formatAltitude(solar.position.altitude)})`
+            `sun: noon at ${toolsFormat.formatTimeFromHM(Math.floor(solar.position.noon), Math.round((solar.position.noon % 1) * 60))} (offset: ${Math.round(solar.position.equationOfTime)} min, altitude ${toolsFormat.formatAltitude(solar.position.altitude)})`
         );
 
     // Solar position
     if (solar.position.altitude > 0) {
-        results.phenomena.push(`sun: ${helpers.formatPosition(solar.position.altitude, solar.position.azimuth, solar.position.direction)}`);
+        results.phenomena.push(`sun: ${toolsFormat.formatPosition(solar.position.altitude, solar.position.azimuth, solar.position.direction)}`);
         // Special conditions
         if (solar.position.altitude > 50) results.phenomena.push('sun: high angle overhead');
         else if (solar.isGoldenHour) results.phenomena.push('sun: golden hour' + (solar.position.altitude < 2 ? ' (transitioning to blue hour)' : ''));
@@ -129,16 +131,16 @@ function interpretLunarPhase({ results, situation, data, store }) {
         results.phenomena.push('moon: full tonight');
 
         // const events = eventsLoad(store, 'astronomy');
-        // if (helpers.addEvent(store, 'lunar', `full_moon_${year}_${month}`, 'Full moon', 48)) {
+        // if (toolsEvents.addEvent(store, 'lunar', `full_moon_${year}_${month}`, 'Full moon', 48)) {
         //     events.yearly.fullMoons++;
         //     // Track if it's a supermoon
         //     if (lunar.distance.isSupermoon) {
-        //         helpers.addEvent(store, 'lunar', `supermoon_${year}_${month}`, 'Supermoon', 48);
+        //         toolsEvents.addEvent(store, 'lunar', `supermoon_${year}_${month}`, 'Supermoon', 48);
         //         eventsAdd(store, 'lastSupermoon', date);
         //     }
         //     // Track if it's a blue moon
         //     if (month === store.astronomy.firstFullMoonMonth && day !== store.astronomy.firstFullMoonDay) {
-        //         helpers.addEvent(store, 'lunar', `blue_moon_${year}_${month}`, 'Blue moon', 48);
+        //         toolsEvents.addEvent(store, 'lunar', `blue_moon_${year}_${month}`, 'Blue moon', 48);
         //         eventsAdd(store, 'lastBlueMoon', date);
         //     }
         // }
@@ -162,7 +164,7 @@ function interpretLunarPhase({ results, situation, data, store }) {
 
         // Name
         if ((month === 8 || month === 9 || (month === 10 && day <= 7)) && lunar.phase >= 0.48 && lunar.phase <= 0.52) {
-            const equinoxInfo = helpers.isNearEquinox(date, location.hemisphere, 15);
+            const equinoxInfo = toolsAstronomy.isNearEquinox(date, location.hemisphere, 15);
             if (equinoxInfo.near && equinoxInfo.type === 'autumn equinox') results.phenomena.push('harvest moon - closest full moon to autumn equinox' + (hour >= 17 && hour <= 20 ? ' (moon rising near sunset for several nights)' : ''));
             else results.phenomena.push(`moon: ${lunar.name}`);
         } else results.phenomena.push(`moon: ${lunar.name}`);
@@ -229,7 +231,7 @@ function interpretLunarPosition({ results, situation }) {
 
     // Lunar Position
     if (lunar.position.altitude > 0) {
-        results.phenomena.push(`moon: ${helpers.formatPosition(lunar.position.altitude, lunar.position.azimuth, lunar.position.direction)}`);
+        results.phenomena.push(`moon: ${toolsFormat.formatPosition(lunar.position.altitude, lunar.position.azimuth, lunar.position.direction)}`);
         const maxAltitude = 90 - Math.abs(location.latitude - lunar.position.dec);
         if (lunar.position.altitude > 60 && lunar.position.altitude > maxAltitude - 10) results.phenomena.push('moon: near zenith - excellent viewing');
         else if (lunar.position.altitude < 10) results.phenomena.push('moon: low on horizon');
@@ -253,7 +255,7 @@ function interpretLunarVisibility({ results, situation, data }) {
     const { cloudCover, rainRate, temp } = data;
 
     // Lunar Visibility
-    results.phenomena.push(`moon: ${helpers.formatPercentage(lunar.brightness)} illuminated`);
+    results.phenomena.push(`moon: ${toolsFormat.formatPercentage(lunar.brightness)} illuminated`);
 
     if (lunar.phase >= 0.48 && lunar.phase <= 0.52) {
         if (lunar.position.altitude > 0) results.phenomena.push('moon: full moon visible now');
@@ -299,7 +301,7 @@ function interpretLunarVisibility({ results, situation, data }) {
     if (lunar.position.altitude > 0 && lunar.position.altitude < 5 && lunar.phase > 0.4) results.phenomena.push('moon: atmospheric dispersion may separate colors at limb');
 
     if (lunar.distance.isSupermoon || lunar.distance.isPerigee)
-        results.phenomena.push(`moon: horizontal parallax ${Math.round(((((3600 * 180) / Math.PI) * (helpers.constants.LUNAR_MEAN_DISTANCE_KM / lunar.distance.distance)) / 3600) * 10) / 10}° (appears shifted at horizon)`);
+        results.phenomena.push(`moon: horizontal parallax ${Math.round(((((3600 * 180) / Math.PI) * (lunar.constants.LUNAR_MEAN_DISTANCE_KM / lunar.distance.distance)) / 3600) * 10) / 10}° (appears shifted at horizon)`);
 
     // Moon dogs (paraselenae)
     if (lunar.phase > 0.4 && lunar.position.altitude > 20 && lunar.position.altitude < 40 && temp < -10)
@@ -313,10 +315,9 @@ function interpretLunarEvents({ results, situation }) {
 
     // Lunar Times
     if (lunar.times.rise || lunar.times.set) {
-        const times = [];
-        if (lunar.times.rise) times.push(`rises ${lunar.times.rise.toTimeString().slice(0, 5)} at ${Math.round(helpers.calculateMoonriseAzimuth(lunar.times, location))}°`);
-        if (lunar.times.set) times.push(`sets ${lunar.times.set.toTimeString().slice(0, 5)} at ${Math.round(helpers.calculateMoonsetAzimuth(lunar.times, location))}°`);
-        if (times.length > 0) results.phenomena.push(`moon: ${times.join(' & ')}`);
+        const textRises = lunar.times.rise ? `rises ${toolsFormat.formatTimeFromDate(lunar.times.rise, location.timezone)} at ${Math.round(toolsAstronomy.calculateMoonriseAzimuth(lunar.times, location))}°` : '',
+            textSets = lunar.times.set ? `sets ${toolsFormat.formatTimeFromDate(lunar.times.set, location.timezone)} at ${Math.round(toolsAstronomy.calculateMoonsetAzimuth(lunar.times, location))}°` : '';
+        results.phenomena.push(`moon: ${textRises}${textRises && textSets ? ' and ' : ''}${textSets}`);
     }
 
     // Moon's declination varies ±28.5° (more than Sun's ±23.5°)
@@ -454,10 +455,10 @@ function interpretEquinox({ results, situation, data }) {
     const { date, location } = situation;
     const { windSpeed } = data;
 
-    const equinoxInfo = helpers.isNearEquinox(date, location.hemisphere, config.equinoxLookaheadDays);
+    const equinoxInfo = toolsAstronomy.isNearEquinox(date, location.hemisphere, config.equinoxLookaheadDays);
     if (!equinoxInfo.near) return;
 
-    results.phenomena.push(helpers.formatProximity(equinoxInfo.type, equinoxInfo.days));
+    results.phenomena.push(toolsFormat.formatProximity(equinoxInfo.type, equinoxInfo.days));
 
     // Daylight change rate
     const changeRate = location.latitude > 50 ? ` (${Math.round(Math.abs(Math.sin((location.latitude * Math.PI) / 180)) * 4)} min/day)` : '';
@@ -470,14 +471,14 @@ function interpretEquinox({ results, situation, data }) {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretSolstice({ results, situation, data }) {
+function interpretSolstice({ results, situation, data, _data_previous, store }) {
     const { date, hour, location, daylight, lunar } = situation;
     const { cloudCover, temp } = data;
 
-    const solsticeInfo = helpers.isNearSolstice(date, location.hemisphere, config.solsticeLookaheadDays);
+    const solsticeInfo = toolsAstronomy.isNearSolstice(date, location.hemisphere, config.solsticeLookaheadDays);
     if (!solsticeInfo.near) return;
 
-    results.phenomena.push(helpers.formatProximity(solsticeInfo.type, solsticeInfo.days));
+    results.phenomena.push(toolsFormat.formatProximity(solsticeInfo.type, solsticeInfo.days));
 
     if (solsticeInfo.type === 'longest day') {
         // Summer solstice phenomena
@@ -540,10 +541,10 @@ function interpretSolstice({ results, situation, data }) {
 function interpretCrossQuarter({ results, situation }) {
     const { date, hour, location, daylight } = situation;
 
-    const crossQuarterInfo = helpers.isNearCrossQuarter(date, location.hemisphere, config.crossquarterLookaheadDays);
+    const crossQuarterInfo = toolsAstronomy.isNearCrossQuarter(date, location.hemisphere, config.crossquarterLookaheadDays);
     if (!crossQuarterInfo.near) return;
 
-    const crossQuarterText = helpers.formatProximity(crossQuarterInfo.type, crossQuarterInfo.days);
+    const crossQuarterText = toolsFormat.formatProximity(crossQuarterInfo.type, crossQuarterInfo.days);
 
     // Add cultural context for cross-quarter days
     let context;
@@ -577,7 +578,7 @@ function interpretWhiteNights({ results, situation }) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function interpretViewingConditions({ results, situation, data, data_previous }) {
-    const { date, hour, location } = situation;
+    const { hour, location } = situation;
     const { timestamp, temp, windSpeed, pressure, humidity, cloudCover } = data;
 
     if (data_previous?.length > 1) {
@@ -613,7 +614,7 @@ function interpretViewingConditions({ results, situation, data, data_previous })
     // const events = eventsLoad(store, 'astronomy');
     const isClearNight = cloudCover !== undefined && cloudCover < 20 && (hour >= 22 || hour <= 2);
     if (isClearNight) {
-        //     if (!helpers.isSameDay(events.events.lastClearNight, date)) {
+        //     if (!toolsEvents.isSameDay(events.events.lastClearNight, date)) {
         //         events.streaks.currentClearNights++;
         //         if (events.streaks.currentClearNights > events.streaks.longestClearStreak) events.streaks.longestClearStreak = events.streaks.currentClearNights;
         //         events.yearly.clearNights++;
@@ -715,7 +716,7 @@ function interpretPlanets({ results, situation, data }) {
     const nextOpposition = planetsTable.marsOppositions.find((d) => d > date);
     if (nextOpposition) {
         const daysToOpposition = Math.floor((nextOpposition - date) / helpers.constants.MILLISECONDS_PER_DAY);
-        if (Math.abs(daysToOpposition) < 30) results.phenomena.push(helpers.formatProximity('planets: Mars opposition', daysToOpposition) + ' (all night visibility)');
+        if (Math.abs(daysToOpposition) < 30) results.phenomena.push(toolsFormat.formatProximity('planets: Mars opposition', daysToOpposition) + ' (all night visibility)');
         // if (Math.abs(daysToOpposition) < 60) {
         //     if (Math.abs(daysToOpposition) < 30)
         //         results.phenomena.push('planets: Mars in retrograde motion (moving westward against stars)');
@@ -748,7 +749,7 @@ function interpretPlanets({ results, situation, data }) {
         } else if (month >= 9 && month <= 11 && hour >= 5 && hour <= 7) results.phenomena.push('planets: Mercury may be visible low in east before sunrise (best morning apparition)');
 
         // Venus
-        const venusData = helpers.getVenusElongation(date);
+        const venusData = toolsAstronomy.getVenusElongation(date);
         if (venusData.elongation > 15) {
             // Venus visible when >15° from Sun
             const bestTime = venusData.visibility === 'evening' ? `after sunset (${venusData.direction} sky)` : `before sunrise (${venusData.direction} sky)`;
@@ -758,7 +759,7 @@ function interpretPlanets({ results, situation, data }) {
         }
         // Venus shadow
         if (venusData.elongation > 30 && venusData.elongation < 47)
-            if (helpers.getVenusPosition(date, location.latitude, location.longitude).altitude > 20 && lunar.phase < 0.2) results.phenomena.push('planets: Venus bright enough to cast shadows');
+            if (toolsAstronomy.getVenusPosition(date, location.latitude, location.longitude).altitude > 20 && lunar.phase < 0.2) results.phenomena.push('planets: Venus bright enough to cast shadows');
     }
 }
 
@@ -769,7 +770,7 @@ function interpretStars({ results, situation, data }) {
     const { cloudCover, humidity } = data;
 
     starsTable.forEach((star) => {
-        const separation = helpers.calculateAngularSeparation(lunar.position.ra, lunar.position.dec, star.ra, star.dec);
+        const separation = toolsAstronomy.calculateAngularSeparation(lunar.position.ra, lunar.position.dec, star.ra, star.dec);
         if (separation < 0.25) {
             if (separation > 0.2 && separation < 0.25) results.phenomena.push(`stars: grazing occultation of ${star.name} - extremely rare! (multiple disappearances)`);
             else results.phenomena.push(`stars: moon occults ${star.name} tonight - rare event`);
@@ -813,7 +814,7 @@ function interpretComets({ results, situation }) {
         const yearsUntilReturn = (nextPerihelion - date) / (helpers.constants.DAYS_PER_YEAR * helpers.constants.MILLISECONDS_PER_DAY);
         if (yearsUntilReturn < 1 && yearsUntilReturn > 0) {
             const daysUntil = Math.round(yearsUntilReturn * helpers.constants.DAYS_PER_YEAR);
-            if (daysUntil < 30 && comet.magnitude < 10) results.phenomena.push(helpers.formatProximity(`comets: ${comet.name} perihelion`, daysUntil) + (comet.magnitude < 6 ? ' (naked eye)' : ' (binoculars)'));
+            if (daysUntil < 30 && comet.magnitude < 10) results.phenomena.push(toolsFormat.formatProximity(`comets: ${comet.name} perihelion`, daysUntil) + (comet.magnitude < 6 ? ' (naked eye)' : ' (binoculars)'));
         }
     });
 }
@@ -942,7 +943,7 @@ function interpretMeteors({ results, situation, data }) {
     });
 
     currentShowers.forEach((shower) => {
-        const radiant = helpers.isRadiantVisible(radiantCoordinates, shower.radiant, date, location.latitude, location.longitude);
+        const radiant = toolsAstronomy.isRadiantVisible(radiantCoordinates, shower.radiant, date, location.latitude, location.longitude);
         if (!radiant.visible) return; // Skip this shower if radiant is below horizon
         let text = `meteors: ${shower.name}`;
         const showerPeakMonth = shower.peakMonth === undefined ? shower.month : shower.peakMonth,
@@ -955,7 +956,7 @@ function interpretMeteors({ results, situation, data }) {
         } else if (month === shower.month) daysFromPeak = shower.peak - day;
         if (isPeakDay) {
             // const events = eventsLoad(store, 'astronomy');
-            // if (helpers.addEvent(store, 'meteor', `${shower.name}_${year}`, `${shower.name} peak`, 24)) {
+            // if (toolsEvents.addEvent(store, 'meteor', `${shower.name}_${year}`, `${shower.name} peak`, 24)) {
             //     events.yearly.meteorShowers++;
             //     // Track if viewing conditions are good
             //     if (cloudCover !== undefined && cloudCover < 30 && (lunar.phase <= 0.25 || lunar.phase >= 0.75)) {
@@ -963,7 +964,7 @@ function interpretMeteors({ results, situation, data }) {
             //         // Check for exceptional shower
             //         if (shower.name === 'Perseids' || shower.name === 'Geminids')
             //             if (cloudCover < 10 && lunar.phase < 0.1)
-            //                 helpers.addEvent(store, 'exceptional', `perfect_${shower.name}_${year}`, 'Perfect meteor shower viewing', 72);
+            //                 toolsEvents.addEvent(store, 'exceptional', `perfect_${shower.name}_${year}`, 'Perfect meteor shower viewing', 72);
             //     }
             // }
 
@@ -978,10 +979,10 @@ function interpretMeteors({ results, situation, data }) {
             }
             if (shower.name === 'Geminids' || shower.name === 'Perseids') text += ` (increased fireball activity expected)`;
             if (shower.name === 'Leonids') if (daysFromPeak !== undefined && Math.abs(daysFromPeak) < 1) text += ` (Earth crossing dense stream filaments: outbursts possible)`;
-        } else if (daysFromPeak !== undefined && Math.abs(daysFromPeak) <= 2) text += ' ' + helpers.formatProximity('peak', daysFromPeak);
+        } else if (daysFromPeak !== undefined && Math.abs(daysFromPeak) <= 2) text += ' ' + toolsFormat.formatProximity('peak', daysFromPeak);
         else return;
         if (shower.name === 'Perseids' || shower.name === 'Leonids') if (daysFromPeak !== undefined && Math.abs(daysFromPeak) < 1) text += ` (Earth crossing dense stream filaments: outbursts possible)`;
-        if (helpers.isRadiantFavorable(radiantDeclinations, shower.radiant, location.latitude)) text += ' [favorable at this latitude]';
+        if (toolsAstronomy.isRadiantFavorable(radiantDeclinations, shower.radiant, location.latitude)) text += ' [favorable at this latitude]';
         if (radiant.altitude !== undefined) {
             if (radiant.altitude > 60) text += ' [radiant near zenith - optimal viewing]';
             else if (radiant.altitude > 40) text += ' [radiant well-placed]';
@@ -997,7 +998,7 @@ function interpretMeteors({ results, situation, data }) {
         if (currentShowers.length > 0 && (hour >= 22 || hour <= 4)) {
             if (month >= 8 || month <= 2) results.phenomena.push('meteors: viewing ideal with long dark nights');
             else if (month >= 5 && month <= 7 && daylight.astronomicalDuskDecimal && daylight.astronomicalDawnDecimal)
-                results.phenomena.push(`meteors: viewing window ${helpers.formatTime(Math.floor(daylight.astronomicalDuskDecimal), 0)}-${helpers.formatTime(Math.floor(daylight.astronomicalDawnDecimal), 0)}`);
+                results.phenomena.push(`meteors: viewing window ${toolsFormat.formatTimeFromHM(Math.floor(daylight.astronomicalDuskDecimal))} to ${toolsFormat.formatTimeFromHM(Math.floor(daylight.astronomicalDawnDecimal))}`);
         }
 
     // Fireball season (autumn increase)
@@ -1041,7 +1042,7 @@ function interpretDeepSky({ results, situation, data }) {
     if ((cloudCover !== undefined && cloudCover > 20) || daylight.isDaytime) return;
 
     // Calculate limiting magnitude based on conditions
-    const limitingMagnitude = helpers.calculateLimitingMagnitude(lunar.brightness, location.lightPolution, humidity, 45); // Use 45° as typical observing altitude
+    const limitingMagnitude = toolsAstronomy.calculateLimitingMagnitude(lunar.brightness, location.lightPolution, humidity, 45); // Use 45° as typical observing altitude
 
     // Circumpolar objects for high latitude
     if (location.latitude > 55) {
@@ -1062,7 +1063,7 @@ function interpretDeepSky({ results, situation, data }) {
     else results.phenomena.push('deep sky: viewing poor - only brightest objects visible');
 
     // Calculate current sidereal time to determine what's visible
-    const lst = helpers.localSiderealTime(helpers.dateToJulianDateUTC(date), location.longitude) / 15; // Convert to hours
+    const lst = toolsAstronomy.localSiderealTime(helpers.dateToJulianDateUTC(date), location.longitude) / 15; // Convert to hours
     // Filter visible DSOs
     const visibleDSOs = deepskyTable.filter((dso) => {
         // Check if magnitude is visible
@@ -1303,12 +1304,12 @@ function checkAurora({ results, situation, data }) {
     }
 
     // const events = eventsLoad(store, 'astronomy');
-    // if (kpThresholds >= 3 && helpers.isEventCooldown(store, 'aurora', 'alert', 7)) {
-    //     helpers.addEvent(store, 'aurora', 'alert', `Aurora alert (Kp ${activity.toFixed(1)}+)`, 24);
+    // if (kpThresholds >= 3 && toolsEvents.isEventCooldown(store, 'aurora', 'alert', 7)) {
+    //     toolsEvents.addEvent(store, 'aurora', 'alert', `Aurora alert (Kp ${activity.toFixed(1)}+)`, 24);
     //     events.yearly.auroraAlerts++;
     //     // Track actual sightings based on conditions
     //     if (cloudCover !== undefined && cloudCover < 30 && !daylight.isDaytime) {
-    //         if (helpers.addEvent(store, 'aurora', `sighting_${year}_${month}_${day}`, 'Aurora potentially visible', 24)) {
+    //         if (toolsEvents.addEvent(store, 'aurora', `sighting_${year}_${month}_${day}`, 'Aurora potentially visible', 24)) {
     //             events.yearly.auroraSightings++;
     //             eventsAdd(store, 'lastAuroraVisible', date);
     //         }
@@ -1317,8 +1318,8 @@ function checkAurora({ results, situation, data }) {
 
     // Equinox enhancement
     // Use actual equinox dates from the year
-    const springEquinox = helpers.daysIntoYear(helpers.getEquinoxSolstice(year, 0)),
-        autumnEquinox = helpers.daysIntoYear(helpers.getEquinoxSolstice(year, 2));
+    const springEquinox = helpers.daysIntoYear(toolsAstronomy.getEquinoxSolstice(year, 0)),
+        autumnEquinox = helpers.daysIntoYear(toolsAstronomy.getEquinoxSolstice(year, 2));
     const daysFromEquinox = Math.min(Math.abs(helpers.daysIntoYear(date) - springEquinox), Math.abs(helpers.daysIntoYear(date) - autumnEquinox));
     if (daysFromEquinox < 27) results.phenomena.push('aurora: equinoctial enhancement active');
 
@@ -1521,10 +1522,10 @@ function checkTides({ results, situation }) {
 //     const { cloudCover } = data;
 
 //     // Get active events
-//     const lunarEvents = helpers.getEvents(store, 'lunar');
-//     const meteorEvents = helpers.getEvents(store, 'meteor');
-//     const auroraEvents = helpers.getEvents(store, 'aurora');
-//     const exceptionalEvents = helpers.getEvents(store, 'exceptional');
+//     const lunarEvents = toolsEvents.getEvents(store, 'lunar');
+//     const meteorEvents = toolsEvents.getEvents(store, 'meteor');
+//     const auroraEvents = toolsEvents.getEvents(store, 'aurora');
+//     const exceptionalEvents = toolsEvents.getEvents(store, 'exceptional');
 
 //     // Add alerts for new events
 //     exceptionalEvents.filter(e => e.isNew).forEach(e => {
@@ -1543,58 +1544,58 @@ function checkTides({ results, situation }) {
 //     auroraEvents.filter(e => e.isNew && e.message.includes('alert')).forEach(e => {
 //         results.alerts.push(`🌌 ${e.message}`);
 //     });
-//     helpers.pruneEvents(store);
+//     toolsEvents.pruneEvents(store);
 // }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function interpretSolarPhenomena(results, situation, data, data_previous, store) {
-    const package = { results, situation, data, data_previous, store };
-    interpretSolarConditions(package); // Sun position and immediate effects
-    checkGreenFlash(package); // Sunset/sunrise flash
-    checkCrepuscularRays(package); // Sunset/sunrise rays
-    checkAtmosphericShadowBands(package); // Non-eclipse shadow bands
+    const parameters = { results, situation, data, data_previous, store };
+    interpretSolarConditions(parameters); // Sun position and immediate effects
+    checkGreenFlash(parameters); // Sunset/sunrise flash
+    checkCrepuscularRays(parameters); // Sunset/sunrise rays
+    checkAtmosphericShadowBands(parameters); // Non-eclipse shadow bands
 }
 function interpretLunarPhenomena(results, situation, data, data_previous, store) {
-    const package = { results, situation, data, data_previous, store };
-    interpretLunarPhase(package);
-    interpretLunarPosition(package);
-    interpretLunarVisibility(package);
-    interpretLunarEvents(package);
+    const parameters = { results, situation, data, data_previous, store };
+    interpretLunarPhase(parameters);
+    interpretLunarPosition(parameters);
+    interpretLunarVisibility(parameters);
+    interpretLunarEvents(parameters);
 }
 function interpretTwilightPhenomena(results, situation, data, data_previous, store) {
-    const package = { results, situation, data, data_previous, store };
-    checkTwilightPhenomena(package); // Belt of Venus, Earth's shadow
-    checkZodiacalLight(package); // Zodiacal light/gegenschein
-    checkAirglow(package); // Upper atmosphere glow
-    checkSunriseSunsetConditions(package);
+    const parameters = { results, situation, data, data_previous, store };
+    checkTwilightPhenomena(parameters); // Belt of Venus, Earth's shadow
+    checkZodiacalLight(parameters); // Zodiacal light/gegenschein
+    checkAirglow(parameters); // Upper atmosphere glow
+    checkSunriseSunsetConditions(parameters);
 }
 function interpretSeasonalPhenomena(results, situation, data, data_previous, store) {
-    const package = { results, situation, data, data_previous, store };
-    interpretEquinox(package); // Seasonal markers
-    interpretSolstice(package); // Seasonal extremes
-    interpretCrossQuarter(package); // Traditional calendar
-    interpretWhiteNights(package); // Seasonal twilight effects
+    const parameters = { results, situation, data, data_previous, store };
+    interpretEquinox(parameters); // Seasonal markers
+    interpretSolstice(parameters); // Seasonal extremes
+    interpretCrossQuarter(parameters); // Traditional calendar
+    interpretWhiteNights(parameters); // Seasonal twilight effects
 }
 function interpretAtmosphericPhenomena(results, situation, data, data_previous, store) {
-    const package = { results, situation, data, data_previous, store };
-    interpretAtmosphericOptics(package);
-    interpretViewingConditions(package);
+    const parameters = { results, situation, data, data_previous, store };
+    interpretAtmosphericOptics(parameters);
+    interpretViewingConditions(parameters);
 }
 function interpretCelestialPhenomena(results, situation, data, data_previous, store) {
-    const package = { results, situation, data, data_previous, store };
-    interpretOrbitingBodies(package); // ISS, satellites
-    interpretPlanets(package); // Planetary positions
-    interpretStars(package); // Star visibility and occultations
-    interpretComets(package); // Comet approaches
-    interpretMeteors(package); // Meteor showers
-    interpretDeepSky(package); // Deep sky object visibility
+    const parameters = { results, situation, data, data_previous, store };
+    interpretOrbitingBodies(parameters); // ISS, satellites
+    interpretPlanets(parameters); // Planetary positions
+    interpretStars(parameters); // Star visibility and occultations
+    interpretComets(parameters); // Comet approaches
+    interpretMeteors(parameters); // Meteor showers
+    interpretDeepSky(parameters); // Deep sky object visibility
 }
 function interpretLocationPhenomena(results, situation, data, data_previous, store) {
-    const package = { results, situation, data, data_previous, store };
-    checkAurora(package); // Aurora predictions
-    checkTides(package); // Tidal effects
+    const parameters = { results, situation, data, data_previous, store };
+    checkAurora(parameters); // Aurora predictions
+    checkTides(parameters); // Tidal effects
 }
 function processAstronomicalEvents(/*results, situation, data, data_previous, store*/) {
     //const package = {results, situation, data, data_previous, store};

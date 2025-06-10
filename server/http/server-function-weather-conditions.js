@@ -3,7 +3,8 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const helpers = require('./server-function-weather-helpers.js');
+// const helpers = require('./server-function-weather-helpers.js');
+const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
 
 /* XXX for each
 function hasSignificantDataGap(sortedEntries, maxGapHours = 3) {
@@ -644,8 +645,8 @@ function interpretWind(results, situation, data, data_previous, store, _options)
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function interpretClouds(results, situation, data, data_previous, store, _options) {
+    const { month, hour, daylight, dewPoint, location, lunar } = situation;
     const { timestamp, cloudCover, temp, humidity, pressure, solarRad, rainRate } = data;
-    const { month, hour, date, daylight, dewPoint, location } = situation;
 
     if (cloudCover === undefined) return;
 
@@ -682,7 +683,7 @@ function interpretClouds(results, situation, data, data_previous, store, _option
             if (previousTimestamp) timeDiff = Math.min((timestamp - previousTimestamp) / 3600000, 3); // Cap at 3 hours
             if (timestamp > sixHoursAgo && cloudCover6hAgo === undefined) cloudCover6hAgo = entry.cloudCover;
             const entryDate = new Date(timestamp),
-                entryDaylight = helpers.getDaylightHours(entryDate, location.latitude, location.longitude);
+                entryDaylight = toolsAstronomy.getDaylightHours(entryDate, location.latitude, location.longitude);
             if (entryDaylight.isDaytime) {
                 daytimeSum += entry.cloudCover;
                 daytimeCount++;
@@ -755,8 +756,7 @@ function interpretClouds(results, situation, data, data_previous, store, _option
     }
     if (!daylight.isDaytime) {
         if (cloudCover < 20) {
-            const moonPhase = helpers.getLunarPhase(date);
-            if (moonPhase < 0.2 || moonPhase > 0.8) results.phenomena.push('dark skies - good for astronomy');
+            if (lunar.phase < 0.2 || lunar.phase > 0.8) results.phenomena.push('dark skies - good for astronomy');
         } else if (cloudCover > 80 && location.lightPollution !== 'low') results.phenomena.push('cloud reflection of urban lights');
     }
 

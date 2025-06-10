@@ -4,6 +4,14 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const helpers = require('./server-function-weather-helpers.js');
+const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
+
+function degToRad(deg) {
+    return (deg * Math.PI) / 180;
+}
+function radToDeg(rad) {
+    return (rad * 180) / Math.PI;
+}
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -63,8 +71,8 @@ const LUNAR_ECLIPSE_LIMIT = 17; // Maximum angular distance from node for any ec
  */
 function calculateLunarEclipseShadowCone(solarDistance, lunarDistance) {
     // Sun's angular radius as seen from Earth (in degrees) and Earth's angular radius as seen from Moon
-    const solarAngularRadius = helpers.radToDeg(Math.asin(696000 / (solarDistance * helpers.constants.ASTRONOMICAL_UNIT_KM))),
-        earthAngularRadius = helpers.radToDeg(Math.asin(helpers.constants.EARTH_RADIUS_KM / (lunarDistance * helpers.constants.EARTH_RADIUS_KM)));
+    const solarAngularRadius = radToDeg(Math.asin(696000 / (solarDistance * toolsAstronomy.constants.ASTRONOMICAL_UNIT_KM))),
+        earthAngularRadius = radToDeg(Math.asin(toolsAstronomy.constants.EARTH_RADIUS_KM / (lunarDistance * toolsAstronomy.constants.EARTH_RADIUS_KM)));
     // Umbral radius at Moon's distance (in Earth radii)
     const umbralRadius = 1.02 * (1.2848 + 0.0001 * lunarDistance) - solarAngularRadius * (lunarDistance / 60.2666);
     // Penumbral radius at Moon's distance (in Earth radii)
@@ -93,7 +101,7 @@ function calculateLunarEclipseParameters(lunarPos, solarPos) {
     // Convert separation to Earth radii at Moon's distance
     const separationEarthRadii = (separation * lunarPos.distance) / 60.2666;
     // Moon's angular radius (in degrees)
-    const lunarRadius = helpers.radToDeg(Math.asin(helpers.constants.LUNAR_RADIUS_KM / (lunarPos.distance * helpers.constants.EARTH_RADIUS_KM)));
+    const lunarRadius = radToDeg(Math.asin(toolsAstronomy.constants.LUNAR_RADIUS_KM / (lunarPos.distance * toolsAstronomy.constants.EARTH_RADIUS_KM)));
     const lunarRadiusEarthRadii = (lunarRadius * lunarPos.distance) / 60.2666;
     // Check eclipse type
     let type = 'none';
@@ -170,11 +178,11 @@ function calculateLunarEclipseGreatestMoment(jd, lunarPos, solarPos, latitude, l
     for (let i = 0; i < 10; i++) {
         const jdBefore = jd - step,
             jdAfter = jd + step;
-        const lunarBefore = helpers.getLunarPosition(helpers.juliandDateToDateUTC(jdBefore), latitude, longitude),
-            solarBefore = helpers.getSolarPosition(helpers.juliandDateToDateUTC(jdBefore), latitude, longitude),
+        const lunarBefore = toolsAstronomy.getLunarPosition(helpers.juliandDateToDateUTC(jdBefore), latitude, longitude),
+            solarBefore = toolsAstronomy.getSolarPosition(helpers.juliandDateToDateUTC(jdBefore), latitude, longitude),
             sepBefore = calculateLunarEclipseMinimumSeparation(lunarBefore, solarBefore);
-        const lunarAfter = helpers.getLunarPosition(helpers.juliandDateToDateUTC(jdAfter), latitude, longitude),
-            solarAfter = helpers.getSolarPosition(helpers.juliandDateToDateUTC(jdAfter), latitude, longitude),
+        const lunarAfter = toolsAstronomy.getLunarPosition(helpers.juliandDateToDateUTC(jdAfter), latitude, longitude),
+            solarAfter = toolsAstronomy.getSolarPosition(helpers.juliandDateToDateUTC(jdAfter), latitude, longitude),
             sepAfter = calculateLunarEclipseMinimumSeparation(lunarAfter, solarAfter);
 
         if (sepBefore < minSeparation) {
@@ -225,7 +233,7 @@ function calculateLunarEclipseVisibility(eclipse, latitude, longitude) {
 
     for (const point of checkPoints) {
         if (point.time) {
-            const { altitude } = helpers.getLunarPosition(point.time, latitude, longitude),
+            const { altitude } = toolsAstronomy.getLunarPosition(point.time, latitude, longitude),
                 visible = altitude > -0.5;
             visibility.phases[point.name] = {
                 time: point.time,
@@ -259,7 +267,7 @@ function calculateLunarEclipseVisibility(eclipse, latitude, longitude) {
 }
 
 function calculateLunarEclipseVisibilityRegions(eclipse, latitude, longitude) {
-    const solarPos = helpers.getSolarPosition(eclipse.date, latitude, longitude),
+    const solarPos = toolsAstronomy.getSolarPosition(eclipse.date, latitude, longitude),
         antiSolarLon = (solarPos.longitude + 180) % 360;
 
     const regions = [
@@ -299,19 +307,19 @@ function precomputeLunarEclipses(startDate, endDate, latitude, longitude) {
     let jd = jdStart;
     while (jd <= jdEnd) {
         // Check if near full lunar (within 2%)
-        const lunarPhase = helpers.getLunarPhase(date);
+        const lunarPhase = toolsAstronomy.getLunarPhase(date);
         if (lunarPhase >= 0.48 && lunarPhase <= 0.52) {
-            const lunarPos = helpers.getLunarPosition(date, latitude, longitude),
-                solarPos = helpers.getSolarPosition(date, latitude, longitude);
+            const lunarPos = toolsAstronomy.getLunarPosition(date, latitude, longitude),
+                solarPos = toolsAstronomy.getSolarPosition(date, latitude, longitude);
 
             // Check node distance
-            const nodeDistance = helpers.calculateNodeDistance(jd, lunarPos.longitude);
+            const nodeDistance = toolsAstronomy.calculateNodeDistance(jd, lunarPos.longitude);
             if (nodeDistance <= LUNAR_ECLIPSE_LIMIT) {
                 // Potential eclipse - find exact greatest eclipse moment
                 const greatestJd = calculateLunarEclipseGreatestMoment(jd, lunarPos, solarPos, latitude, longitude);
                 const greatestDate = helpers.juliandDateToDateUTC(greatestJd);
-                const lunarAtGreatest = helpers.getLunarPosition(greatestDate, latitude, longitude);
-                const solarAtGreatest = helpers.getSolarPosition(greatestDate, latitude, longitude);
+                const lunarAtGreatest = toolsAstronomy.getLunarPosition(greatestDate, latitude, longitude);
+                const solarAtGreatest = toolsAstronomy.getSolarPosition(greatestDate, latitude, longitude);
 
                 // Calculate eclipse parameters
                 const params = calculateLunarEclipseParameters(lunarAtGreatest, solarAtGreatest);
@@ -324,7 +332,7 @@ function precomputeLunarEclipses(startDate, endDate, latitude, longitude) {
                         penumbralMagnitude: params.penumbralMagnitude,
                         contacts,
                         danjonScale: calculateLunarEclipseDanjonScale(params.magnitude, params.separationEarthRadii),
-                        lunarDistance: lunarAtGreatest.distance * helpers.constants.EARTH_RADIUS_KM,
+                        lunarDistance: lunarAtGreatest.distance * toolsAstronomy.constants.EARTH_RADIUS_KM,
                         duration: {
                             total: contacts.p4 ? (contacts.p4.getTime() - contacts.p1.getTime()) / (60 * 1000) : 0,
                             partial: contacts.u4 ? (contacts.u4.getTime() - contacts.u1.getTime()) / (60 * 1000) : 0,
@@ -542,9 +550,9 @@ const SOLAR_ECLIPSE_LIMIT = 18.5; // Maximum angular distance from node for any 
  */
 function calculateSolarEclipseAngularDiameters(lunarDistance, solarDistance) {
     // Moon's angular diameter (in degrees)
-    const lunarAngularDiameter = helpers.radToDeg(2 * Math.asin(helpers.constants.LUNAR_RADIUS_KM / (lunarDistance * helpers.constants.EARTH_RADIUS_KM)));
+    const lunarAngularDiameter = radToDeg(2 * Math.asin(toolsAstronomy.constants.LUNAR_RADIUS_KM / (lunarDistance * toolsAstronomy.constants.EARTH_RADIUS_KM)));
     // Sun's angular diameter (in degrees)
-    const solarAngularDiameter = helpers.radToDeg(2 * Math.asin(helpers.constants.SOLAR_RADIUS_KM / (solarDistance * helpers.constants.ASTRONOMICAL_UNIT_KM)));
+    const solarAngularDiameter = radToDeg(2 * Math.asin(toolsAstronomy.constants.SOLAR_RADIUS_KM / (solarDistance * toolsAstronomy.constants.ASTRONOMICAL_UNIT_KM)));
     return { lunarAngularDiameter, solarAngularDiameter };
 }
 
@@ -552,16 +560,16 @@ function calculateSolarEclipseAngularDiameters(lunarDistance, solarDistance) {
  * Calculate the angular separation between Moon and Sun: More accurate than the original implementation
  */
 function calculateSolarEclipseAngularSeparation(lunarPos, solarPos) {
-    const lunarLonRad = helpers.degToRad(lunarPos.longitude),
-        lunarLatRad = helpers.degToRad(lunarPos.latitude);
-    const solarLonRad = helpers.degToRad(solarPos.longitude),
-        solarLatRad = helpers.degToRad(solarPos.latitude);
+    const lunarLonRad = degToRad(lunarPos.longitude),
+        lunarLatRad = degToRad(lunarPos.latitude);
+    const solarLonRad = degToRad(solarPos.longitude),
+        solarLatRad = degToRad(solarPos.latitude);
     // Use the haversine formula for better accuracy at small distances
     const dLon = lunarLonRad - solarLonRad,
         dLat = lunarLatRad - solarLatRad;
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(solarLatRad) * Math.cos(lunarLatRad) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return helpers.radToDeg(c);
+    return radToDeg(c);
 }
 
 /**
@@ -572,19 +580,19 @@ function calculateSolarEclipseBesselianElements(lunarPos, solarPos) {
     const shadowLon = helpers.normalizeAngle(solarPos.longitude + 180),
         shadowLat = -solarPos.latitude;
     // Distance from Earth center to shadow axis
-    const { lunarAngularDiameter, solarAngularDiameter } = calculateSolarEclipseAngularDiameters(lunarPos.distance * helpers.constants.EARTH_RADIUS_KM, solarPos.distance);
+    const { lunarAngularDiameter, solarAngularDiameter } = calculateSolarEclipseAngularDiameters(lunarPos.distance * toolsAstronomy.constants.EARTH_RADIUS_KM, solarPos.distance);
     // Shadow cone angles
     const f1 = (solarAngularDiameter - lunarAngularDiameter) / 2, // Penumbral cone angle
         f2 = (solarAngularDiameter + lunarAngularDiameter) / 2; // Umbral cone angle
     return {
-        x: lunarPos.distance * Math.cos(helpers.degToRad(lunarPos.latitude)) * Math.cos(helpers.degToRad(lunarPos.longitude - shadowLon)),
-        y: lunarPos.distance * Math.cos(helpers.degToRad(lunarPos.latitude)) * Math.sin(helpers.degToRad(lunarPos.longitude - shadowLon)),
-        z: lunarPos.distance * Math.sin(helpers.degToRad(lunarPos.latitude)),
-        d: helpers.degToRad(shadowLat),
-        f1: helpers.degToRad(f1),
-        f2: helpers.degToRad(f2),
-        l1: (f1 * lunarPos.distance * helpers.constants.EARTH_RADIUS_KM) / helpers.constants.ASTRONOMICAL_UNIT_KM, // Penumbral shadow radius
-        l2: (f2 * lunarPos.distance * helpers.constants.EARTH_RADIUS_KM) / helpers.constants.ASTRONOMICAL_UNIT_KM, // Umbral shadow radius
+        x: lunarPos.distance * Math.cos(degToRad(lunarPos.latitude)) * Math.cos(degToRad(lunarPos.longitude - shadowLon)),
+        y: lunarPos.distance * Math.cos(degToRad(lunarPos.latitude)) * Math.sin(degToRad(lunarPos.longitude - shadowLon)),
+        z: lunarPos.distance * Math.sin(degToRad(lunarPos.latitude)),
+        d: degToRad(shadowLat),
+        f1: degToRad(f1),
+        f2: degToRad(f2),
+        l1: (f1 * lunarPos.distance * toolsAstronomy.constants.EARTH_RADIUS_KM) / toolsAstronomy.constants.ASTRONOMICAL_UNIT_KM, // Penumbral shadow radius
+        l2: (f2 * lunarPos.distance * toolsAstronomy.constants.EARTH_RADIUS_KM) / toolsAstronomy.constants.ASTRONOMICAL_UNIT_KM, // Umbral shadow radius
     };
 }
 
@@ -593,7 +601,7 @@ function calculateSolarEclipseBesselianElements(lunarPos, solarPos) {
  */
 function calculateSolarEclipseParameters(lunarPos, solarPos) {
     const angularSeparation = calculateSolarEclipseAngularSeparation(lunarPos, solarPos);
-    const { lunarAngularDiameter, solarAngularDiameter } = calculateSolarEclipseAngularDiameters(lunarPos.distance * helpers.constants.EARTH_RADIUS_KM, solarPos.distance);
+    const { lunarAngularDiameter, solarAngularDiameter } = calculateSolarEclipseAngularDiameters(lunarPos.distance * toolsAstronomy.constants.EARTH_RADIUS_KM, solarPos.distance);
     // Basic magnitude calculation
     const magnitude = calculateSolarEclipseMagnitude(angularSeparation, lunarAngularDiameter, solarAngularDiameter);
     if (magnitude <= 0) return { type: 'none', magnitude: 0 };
@@ -641,9 +649,9 @@ function calculateSolarEclipseObscuration(angularSeparation, lunarDiameter, sola
     if (magnitude <= 0) return 0;
     if (magnitude >= 1) return 1;
     // Convert to radians for calculation
-    const sep = helpers.degToRad(angularSeparation),
-        rm = helpers.degToRad(lunarDiameter / 2),
-        rs = helpers.degToRad(solarDiameter / 2);
+    const sep = degToRad(angularSeparation),
+        rm = degToRad(lunarDiameter / 2),
+        rs = degToRad(solarDiameter / 2);
     if (sep >= rm + rs) return 0;
     // Area of intersection calculation
     const x = (sep * sep + rs * rs - rm * rm) / (2 * sep),
@@ -669,11 +677,11 @@ function calculateSolarEclipsePath(params) {
     const pathType = type === 'total' ? 'totality' : 'annularity';
     // Calculate path width (simplified)
     const shadowRadius = type === 'total' ? Math.abs(besselian.l2) : Math.abs(besselian.l1 - besselian.l2);
-    const width = (2 * shadowRadius * helpers.constants.EARTH_RADIUS_KM) / 1000; // Convert to km
+    const width = (2 * shadowRadius * toolsAstronomy.constants.EARTH_RADIUS_KM) / 1000; // Convert to km
     // Calculate central line coordinates (simplified)
     // In reality, this requires complex calculations involving Earth's rotation
-    const latitude = helpers.radToDeg(Math.asin(besselian.z / Math.hypot(besselian.x * besselian.x + besselian.y * besselian.y + besselian.z * besselian.z)));
-    const longitude = helpers.normalizeAngle(helpers.radToDeg(Math.atan2(besselian.y, besselian.x)));
+    const latitude = radToDeg(Math.asin(besselian.z / Math.hypot(besselian.x * besselian.x + besselian.y * besselian.y + besselian.z * besselian.z)));
+    const longitude = helpers.normalizeAngle(radToDeg(Math.atan2(besselian.y, besselian.x)));
     return {
         hasPath: true,
         pathType,
@@ -711,11 +719,11 @@ function calculateSolarEclipseConjunction(jd, lunarPos, solarPos, latitude, long
             jdAfter = jd + step;
         const dateBefore = helpers.juliandDateToDateUTC(jdBefore),
             dateAfter = helpers.juliandDateToDateUTC(jdAfter);
-        const lunarBefore = helpers.getLunarPosition(dateBefore, latitude, longitude),
-            solarBefore = helpers.getSolarPosition(dateBefore, latitude, longitude),
+        const lunarBefore = toolsAstronomy.getLunarPosition(dateBefore, latitude, longitude),
+            solarBefore = toolsAstronomy.getSolarPosition(dateBefore, latitude, longitude),
             elongBefore = Math.abs(helpers.normalizeAngle(lunarBefore.longitude - solarBefore.longitude));
-        const lunarAfter = helpers.getLunarPosition(dateAfter, latitude, longitude),
-            solarAfter = helpers.getSolarPosition(dateAfter, latitude, longitude),
+        const lunarAfter = toolsAstronomy.getLunarPosition(dateAfter, latitude, longitude),
+            solarAfter = toolsAstronomy.getSolarPosition(dateAfter, latitude, longitude),
             elongAfter = Math.abs(helpers.normalizeAngle(lunarAfter.longitude - solarAfter.longitude));
         const elongCurrent = Math.abs(helpers.normalizeAngle(lunarPos.longitude - solarPos.longitude));
         if (elongBefore < elongCurrent) {
@@ -768,7 +776,7 @@ function calculateSolarEclipseVisibility(eclipse, latitude, longitude) {
         }
     } else if (eclipse.type === 'partial') {
         // Partial eclipses visible over large area: Simplified visibility check
-        const { altitude } = helpers.getSolarPosition(eclipse.date, latitude, longitude);
+        const { altitude } = toolsAstronomy.getSolarPosition(eclipse.date, latitude, longitude);
         if (altitude > -0.5) {
             visibility.visible = true;
             visibility.type = 'partial';
@@ -791,19 +799,19 @@ function precomputeSolarEclipses(startDate, endDate, latitude, longitude) {
     const date = helpers.juliandDateToDateUTC(jd);
     while (jd <= jdEnd) {
         // Check if near new moon (within 3%)
-        const lunarPhase = helpers.getLunarPhase(date);
+        const lunarPhase = toolsAstronomy.getLunarPhase(date);
         if (lunarPhase >= 0.97 || lunarPhase <= 0.03) {
-            const lunarPos = helpers.getLunarPosition(date, latitude, longitude),
-                solarPos = helpers.getSolarPosition(date, latitude, longitude);
+            const lunarPos = toolsAstronomy.getLunarPosition(date, latitude, longitude),
+                solarPos = toolsAstronomy.getSolarPosition(date, latitude, longitude);
 
             // Check if Moon is near a node
-            const nodeDistance = helpers.calculateNodeDistance(jd, lunarPos.longitude);
+            const nodeDistance = toolsAstronomy.calculateNodeDistance(jd, lunarPos.longitude);
             if (nodeDistance <= SOLAR_ECLIPSE_LIMIT) {
                 // Find exact moment of conjunction
                 const conjunctionJd = calculateSolarEclipseConjunction(jd, lunarPos, solarPos, latitude, longitude);
                 const conjunctionDate = helpers.juliandDateToDateUTC(conjunctionJd);
-                const lunarAtConj = helpers.getLunarPosition(conjunctionDate, latitude, longitude);
-                const solarAtConj = helpers.getSolarPosition(conjunctionDate, latitude, longitude);
+                const lunarAtConj = toolsAstronomy.getLunarPosition(conjunctionDate, latitude, longitude);
+                const solarAtConj = toolsAstronomy.getSolarPosition(conjunctionDate, latitude, longitude);
 
                 // Calculate eclipse parameters
                 const params = calculateSolarEclipseParameters(lunarAtConj, solarAtConj);
@@ -816,8 +824,8 @@ function precomputeSolarEclipses(startDate, endDate, latitude, longitude) {
                         gamma: params.gamma,
                         duration: calculateSolarEclipseDuration(params),
                         path: calculateSolarEclipsePath(params),
-                        lunarDistance: lunarAtConj.distance * helpers.constants.EARTH_RADIUS_KM,
-                        solarDistance: solarAtConj.distance * helpers.constants.ASTRONOMICAL_UNIT_KM,
+                        lunarDistance: lunarAtConj.distance * toolsAstronomy.constants.EARTH_RADIUS_KM,
+                        solarDistance: solarAtConj.distance * toolsAstronomy.constants.ASTRONOMICAL_UNIT_KM,
                         diameterRatio: params.diameterRatio,
                     });
 

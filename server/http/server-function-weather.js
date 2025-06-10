@@ -1,7 +1,139 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+const fs = require('fs');
+const path = require('path');
+
 const helpers = require('./server-function-weather-helpers.js');
+const toolsCalculators = require('./server-function-weather-tools-calculators.js');
+const toolsEvents = require('./server-function-weather-tools-events.js');
+const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
+
+function mergeObjects(defaults, provided) {
+    const merged = structuredClone(defaults);
+    Object.keys(provided).forEach((key) => {
+        merged[key] = typeof provided[key] === 'object' && !Array.isArray(provided[key]) ? { ...merged[key], ...provided[key] } : provided[key];
+    });
+    return merged;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+const DEFAULT_OPTIONS = {
+    data: {
+        gateInterval: 5 * helpers.constants.MILLISECONDS_PER_SECOND, // 5 seconds - minimum time between cache updates
+    },
+    storage: {
+        pruneInterval: 5 * helpers.constants.MILLISECONDS_PER_MINUTE, // 5 minutes
+        evictionTimeDuration: 31 * helpers.constants.MILLISECONDS_PER_DAY, // 31 days
+        evictionSizeThreshold: 0.8, // evict when cache is 80% of max size
+        evictionSizePercent: 0.2, // evict 20% of cache
+        maxCacheSize: 10 * 1024 * 1024, // 10MB default
+        statsInterval: 15 * helpers.constants.MILLISECONDS_PER_MINUTE, // 15 minutes
+        persistence: [
+            {
+                type: 'shm',
+                enabled: true,
+                path: '/dev/shm/persist/weather-storage.json',
+                interval: 5 * helpers.constants.MILLISECONDS_PER_MINUTE, // 5 minutes
+                maxAge: 2 * helpers.constants.MILLISECONDS_PER_HOUR, // 2 hours
+            },
+            {
+                type: 'file',
+                enabled: true,
+                path: '/opt/weather/server/data/persist/weather-storage.json',
+                interval: 30 * helpers.constants.MILLISECONDS_PER_MINUTE, // 30 minutes
+                maxAge: 7 * helpers.constants.MILLISECONDS_PER_DAY, // 7 days
+            },
+        ],
+    },
+    compute: {
+        astronomicalCalculationInterval: 5 * helpers.constants.MILLISECONDS_PER_MINUTE, // 5 minutes
+    },
+};
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+function __storageFileSave(filepath, data) {
+    try {
+        const dir = path.dirname(filepath);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(filepath, JSON.stringify(data), 'utf8');
+        return true;
+    } catch (e) {
+        console.error(`weather: storage failed to save to '${filepath}':`, e);
+        return false;
+    }
+}
+
+function __storageFileLoad(filepath) {
+    try {
+        if (fs.existsSync(filepath)) {
+            const data = fs.readFileSync(filepath, 'utf8');
+            return JSON.parse(data);
+        }
+    } catch (e) {
+        console.error(`weather: storage failed to load from '${filepath}':`, e);
+    }
+    return undefined;
+}
+
+function __storagePerisist(options, storable) {
+    if (!options?.persistence) return;
+    const now = Date.now();
+    const storageContent = {
+        timestamp: now,
+        storable,
+    };
+    options.persistence
+        .filter((level) => level.enabled && level.path)
+        .forEach((level) => {
+            const lastKey = `last${level.type}Save`;
+            if (options?.forced || !level[lastKey] || now - level[lastKey] > level.interval)
+                if (__storageFileSave(level.path, storageContent)) {
+                    level[lastKey] = now;
+                    if (options.debug) console.error(`weather: storage persisted - to ${level.type}; path=${level.path}, size=${Math.floor(fs.statSync(level.path).size / 1024)}KB${options?.forced ? ', forced=true' : ''}`);
+                }
+        });
+}
+
+function __storageRestore(options) {
+    if (options?.persistence)
+        for (const level of options.persistence) {
+            if (!level.enabled || !level.path) continue;
+            const data = __storageFileLoad(level.path);
+            if (data && data.storable) {
+                const age = Date.now() - data.timestamp,
+                    maxAge = level.maxAge || 86400000;
+                if (age < maxAge) {
+                    if (options.debug) console.error(`weather: storage restored - from ${level.type}; path=${level.path}, age=${Math.round(age / 60000)}m, size=${Math.floor(fs.statSync(level.path).size / 1024)}KB`);
+                    return data.storable;
+                }
+            }
+        }
+    return {};
+}
+
+let storageCallback;
+function storageSave(options) {
+    if (storageCallback) __storagePerisist(options.storage, storageCallback());
+}
+function storageLoad(options) {
+    if (options.debug) options.storage.debug = options.debug;
+    return __storageRestore(options.storage);
+}
+function storageBind(_options, callback) {
+    storageCallback = callback;
+}
+let storageExited = false;
+function storageExit(options) {
+    if (!storageExited) {
+        storageExited = true;
+        if (storageCallback) __storagePerisist({ ...options.storage, forced: true }, storageCallback());
+    }
+}
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -13,6 +145,7 @@ function joinand(items) {
     const lastItem = items.pop();
     return `${items.join(', ')}, and ${lastItem}`;
 }
+
 function __weatherDetails(results) {
     let details = '';
     if (results.conditions.length > 0) details = joinand([...new Set(results.conditions)]);
@@ -25,43 +158,147 @@ function __weatherDetails(results) {
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
-let __weatherSituationCache = {};
+let weatherLocation;
+let weatherOptions = {},
+    weatherInterpreters = {};
+let weatherData = {},
+    weatherStore = {};
+let weatherDataUpdated = 0;
+let weatherCacheSituation = {};
+let weatherCacheAstronomy = {};
+let weatherStoragePruned = Date.now();
+let weatherStorageStatsDisplayed = Date.now();
+
+function weatherStorageStats(options) {
+    let stats = [];
+
+    const cacheSize = JSON.stringify(weatherData).length,
+        cacheCount = Object.keys(weatherData).length;
+    stats.push(`cache: ${cacheCount} entries, ~${Math.floor(cacheSize / 1024)}KB`);
+
+    const storeSize = JSON.stringify(weatherStore).length,
+        storeCount = Object.keys(weatherStore).length;
+    stats.push(`store: ${storeCount} entries, ~${Math.floor(storeSize / 1024)}KB`);
+
+    stats.push(`astro: ${Math.round((Date.now() - weatherCacheAstronomy.cachedAstronomy.getTime()) / 60000)}min old`);
+
+    if (options.storage?.persistence)
+        stats = [...stats, ...options.storage.persistence.filter((level) => level.enabled && level.lastSave).map((level) => `persist[${level.type}]: saved ${Math.round((Date.now() - level.lastSave) / 60000)}min ago`)];
+
+    console.error(`weather: storage stats - ${stats.join('; ')}`);
+}
+
+function weatherStoragePrune(options, now) {
+    // Evict on time
+    let evictedOnTime = 0;
+    const expiration = now - options.storage.evictionTimeDuration;
+    Object.keys(weatherData)
+        .filter((ts) => Number.parseInt(ts) < expiration)
+        .forEach((ts) => {
+            delete weatherData[ts];
+            evictedOnTime++;
+        });
+
+    // Evict on size
+    let evictedOnSize = 0;
+    if (JSON.stringify(weatherData).length > options.storage.maxCacheSize * options.storage.evictionSizeThreshold) {
+        const entries = Object.keys(weatherData);
+        entries
+            .sort((a, b) => Number.parseInt(a) - Number.parseInt(b))
+            .slice(0, Math.floor(entries.length * options.storage.evictionSizePercent))
+            .forEach((ts) => {
+                delete weatherData[ts];
+                evictedOnSize++;
+            });
+    }
+
+    if (evictedOnTime + evictedOnSize > 0 && options.debug) console.error(`weather: storage prune - evicted on-time=${evictedOnTime}, on-size=${evictedOnSize}`);
+
+    return evictedOnTime;
+}
+
+function weatherStorageManage(options) {
+    const now = Date.now();
+
+    // Prune periodically
+    if (now > weatherStoragePruned + options.storage.pruneInterval) {
+        weatherStoragePrune(options, now);
+        weatherStoragePruned = now;
+        storageSave(options);
+    }
+
+    // Stats periodically
+    if (now > weatherStorageStatsDisplayed + options.storage.statsInterval) {
+        weatherStorageStats(options);
+        weatherStorageStatsDisplayed = now;
+    }
+}
+
+function weatherStorageStartup(options) {
+    let storage;
+    if (options.storage?.persistence) {
+        console.error(`weather: storage persistence enabled`);
+        storage = storageLoad(options);
+        storageBind(options, () => ({ data: weatherData, store: weatherStore }));
+        options.storage.persistence.filter((level) => level.enabled && level.interval).forEach((level) => setInterval(() => storageSave(options), level.interval));
+        process.once('SIGINT', () => storageExit(options));
+        process.once('SIGTERM', () => storageExit(options));
+        process.once('beforeExit', () => storageExit(options));
+    }
+    weatherData = storage?.data || {};
+    weatherStore = storage?.store || {};
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
 function __weatherSituation(location, data, options) {
     const { temp, humidity, windSpeed, solarRad } = data;
-    const date = new Date();
+    const date = new Date(),
+        now = Date.now();
 
-    if (!__weatherSituationCache.cached || __weatherSituationCache.cached.getDate() !== date.getDate()) {
-        __weatherSituationCache = {
+    // Cache situation basics, daily
+    if (!weatherCacheSituation.cachedSituation || weatherCacheSituation.cachedSituation.getDate() !== date.getDate()) {
+        weatherCacheSituation = {
             location,
             year: date.getFullYear(),
             month: date.getMonth(),
             day: date.getDate(),
             daysIntoYear: helpers.daysIntoYear(date),
             season: helpers.getSeason(date, location.hemisphere),
-            lunar: helpers.getLunarSituation(date, location.latitude, location.longitude),
-            solar: helpers.getSolarSituation(date, location.latitude, location.longitude),
-            cached: date,
+            cachedSituation: date,
         };
-        if (options?.debug) console.error(`weather: situation cached: ${date.getFullYear()}/${date.getMonth().toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`);
+        if (options?.debug) console.error(`weather: cached situation: ${date.getFullYear()}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`);
+    }
+
+    // Cache astronomy, 5 minutes default
+    if (!weatherCacheAstronomy.cachedAstronomy || weatherCacheAstronomy.cachedAstronomy.getTime() < now - (options?.compute?.astronomicalCalculationInterval || 300000)) {
+        weatherCacheAstronomy = {
+            daylight: toolsAstronomy.getDaylightSituation(date, location.latitude, location.longitude),
+            lunar: toolsAstronomy.getLunarSituation(date, location.latitude, location.longitude),
+            solar: toolsAstronomy.getSolarSituation(date, location.latitude, location.longitude),
+            cachedAstronomy: date,
+        };
+        if (options?.debug) console.error(`weather: cached astronomy`);
     }
 
     return {
-        ...__weatherSituationCache,
+        ...weatherCacheSituation,
+        ...weatherCacheAstronomy,
         //
         date,
         minute: date.getMinutes(),
         hour: date.getHours(),
         hourDecimal: date.getHours() + date.getMinutes() / 60,
+        jd: helpers.dateToJulianDateUTC(date),
         //
-        daylight: helpers.getDaylight(date, location.latitude, location.longitude),
-        //
-        dewPoint: helpers.calculateDewPoint(temp, humidity),
-        windChill: helpers.calculateWindChill(temp, windSpeed),
-        heatIndex: helpers.calculateHeatIndex(temp, humidity),
-        feelsLike: helpers.calculateFeelsLike(temp, humidity, windSpeed),
-        comfort: helpers.calculateComfortLevel(temp, humidity, windSpeed, solarRad),
+        dewPoint: toolsCalculators.calculateDewPoint(temp, humidity),
+        windChill: toolsCalculators.calculateWindChill(temp, windSpeed),
+        heatIndex: toolsCalculators.calculateHeatIndex(temp, humidity),
+        feelsLike: toolsCalculators.calculateFeelsLike(temp, humidity, windSpeed),
+        comfort: toolsCalculators.calculateComfortLevel(temp, humidity, windSpeed, solarRad),
     };
 }
 
@@ -98,36 +335,29 @@ function getWeatherInterpretationImpl(interpreters, location, data, data_previou
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-let weatherLocation;
-let weatherOptions = {},
-    weatherInterpreters = {};
-const weatherCache = {},
-    weatherStore = {};
-const CACHE_DURATION = (24 + 1) * 60 * 60 * 1000; // 25 hours, for now
-let weatherCachePrunned = Date.now();
-const PRUNE_INTERVAL = 5 * 60 * 1000;
-
 function getWeatherInterpretation(data, options = {}) {
-    // XXX should persist the cache and reload it ... maybe also the store ...
+    options = mergeObjects(weatherOptions, options);
 
-    // minimal requirements
+    // require minimal variables
     const { timestamp, temp, humidity, pressure } = data;
     if (timestamp === undefined || temp === undefined || humidity === undefined || pressure === undefined) return undefined;
 
-    if (weatherCachePrunned + PRUNE_INTERVAL < Date.now()) {
-        const expiration = data.timestamp - CACHE_DURATION;
-        Object.keys(weatherCache)
-            .filter((timestamp) => timestamp < expiration)
-            .forEach((timestamp) => delete weatherCache[timestamp]);
-        weatherCachePrunned = Date.now();
-        console.error(
-            `weather: cache: count=${Object.keys(weatherCache).length}, size~=${Math.floor(JSON.stringify(weatherCache).length / 1024)}Kb; ` +
-                `store: count=${Object.keys(weatherStore).length}, size~=${Math.floor(JSON.stringify(weatherStore).length / 1024)}Kb`
-        );
+    // require minimal period
+    const now = Date.now();
+    if (now < weatherDataUpdated + options.data.gateInterval) {
+        if (options.debug) console.error(`weather: data gated - ${now - weatherDataUpdated}ms since last update`);
+        return undefined;
     }
-    weatherCache[data.timestamp] = data;
-    helpers.pruneEvents(weatherStore);
-    return getWeatherInterpretationImpl(weatherInterpreters, weatherLocation, data, weatherCache, weatherStore, { ...weatherOptions, ...options });
+    weatherData[timestamp] = data;
+    weatherDataUpdated = now;
+
+    // Manage data
+    weatherStorageManage(options);
+
+    // Prune events periodically
+    toolsEvents.pruneEvents(weatherStore);
+
+    return getWeatherInterpretationImpl(weatherInterpreters, weatherLocation, data, weatherData, weatherStore, options);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -135,11 +365,13 @@ function getWeatherInterpretation(data, options = {}) {
 
 function initialise(location, options) {
     weatherLocation = location;
-    weatherOptions = options;
+    weatherOptions = mergeObjects(DEFAULT_OPTIONS, options || {});
+    if (weatherOptions.debug) console.error(`weather: DEBUG ENABLED`);
+    weatherStorageStartup(weatherOptions);
     const parameters = { location: weatherLocation, store: weatherStore, options: weatherOptions };
     weatherInterpreters = {
         ...require('./server-function-weather-conditions.js')(parameters),
-        ...require('./server-function-weather-combination.js')(parameters),
+        ...require('./server-function-weather-combinations.js')(parameters),
         ...require('./server-function-weather-phenology.js')(parameters),
         ...require('./server-function-weather-calendar.js')(parameters),
         ...require('./server-function-weather-astronomy.js')(parameters),
