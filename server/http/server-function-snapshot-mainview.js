@@ -158,7 +158,7 @@ function initialise(app, prefix, directory, server) {
 
     //
 
-    app.get(prefix + '/thumb/:file', async (req, res) => {
+    app.get(prefix + '/thumb/:file(snapshot\\.jpg|snapshot_M\\d+\\.jpg)', async (req, res) => {
         const { file } = req.params;
         const width = Number.parseInt(req.query.w) || THUMBNAIL_WIDTH_SNAPSHOT;
         try {
