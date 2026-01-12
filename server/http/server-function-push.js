@@ -121,18 +121,16 @@ class PushNotificationManager {
         return stats;
     }
 
-    async notify(title, message) {
-        if (title && message === undefined) {
-            message = title;
-            title = undefined;
-        }
+    async notify({ title, message: body, category }) {
         const payload = {
             title: 'Weather Notification' + (title ? `: ${title}` : ''),
-            body: message,
+            body,
+	    category,
             timestamp: new Date().toISOString(),
         };
         const options = {
-            TTL: this.options.expiration || 5 * 60, // seconds
+            TTL: 5 * 60, // seconds
+            topic: category,
             // topic: 32 chars
             // urgency: very-low,low,normal,high
         };

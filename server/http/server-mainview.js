@@ -226,7 +226,7 @@ function __weatherAlerts_update(alerts) {
         .filter((alert) => !__weatherAlerts[alert])
         .forEach((alert) => {
             __weatherAlerts[alert] = now;
-            notifications.notify(alert);
+            notifications.notify({ message: alert });
         });
     Object.entries(__weatherAlerts)
         .filter(([alert, timestamp]) => !alerts.includes(alert) && timestamp < now - __weatherExpiry)
@@ -235,7 +235,7 @@ function __weatherAlerts_update(alerts) {
 
 const pending_variables = [];
 function receive_variables(topic, message) {
-    if (topic.startsWith('alert/')) notifications.notify(message.toString());
+    if (topic.startsWith('alert/')) notifications.notify({message: message.toString() });
     else pending_variables.push({ topic, vars: JSON.parse(message.toString()) });
 }
 function process_variables() {
@@ -296,7 +296,7 @@ if (configData.SOURCE_AIRCRAFT_ADSB_MQTT_SERVER) {
         onAlertInserted: (id, warn, flight, text) => {
             if (warn && text) {
                 alerts_active[id] = { flight, text, expiry: Date.now() + alerts_expiry };
-                notifications.notify('aircraft', `${flight}: ${text}`);
+                notifications.notify({title: 'aircraft', message: `${flight}: ${text}` });
                 alerts_update();
             }
         },
