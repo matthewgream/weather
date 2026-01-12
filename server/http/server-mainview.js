@@ -296,7 +296,7 @@ if (configData.SOURCE_AIRCRAFT_ADSB_MQTT_SERVER) {
         onAlertInserted: (id, warn, flight, text) => {
             if (warn && text) {
                 alerts_active[id] = { flight, text, expiry: Date.now() + alerts_expiry };
-                notifications.notify({title: 'aircraft', message: `${flight}: ${text}` });
+                notifications.notify({ title: 'aircraft', message: `${flight}: ${text}`, category: 'aircraft' });
                 alerts_update();
             }
         },
