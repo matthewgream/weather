@@ -235,7 +235,7 @@ function __weatherAlerts_update(alerts) {
 
 const pending_variables = [];
 function receive_variables(topic, message) {
-    if (topic.startsWith('alert/')) notifications.notify({message: message.toString() });
+    if (topic.startsWith('alert/')) notifications.notify({ message: message.toString() });
     else pending_variables.push({ topic, vars: JSON.parse(message.toString()) });
 }
 function process_variables() {

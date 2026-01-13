@@ -23,14 +23,14 @@ function getDaylightPhase(hourDecimal, daylight) {
     if (daylight.isDaytime) return 'day';
     if (daylight.isMidnightSun) return 'midnight_sun';
     if (daylight.isPolarNight) return 'polar_night';
-    if (daylight.astronomicalDawn === null || daylight.astronomicalDusk === null || daylight.astronomicalDawn === undefined || daylight.astronomicalDusk  === undefined) return 'white_night';
+    if (daylight.astronomicalDawnDecimal === null || daylight.astronomicalDuskDecimal === null || daylight.astronomicalDawnDecimal === undefined || daylight.astronomicalDuskDecimal === undefined) return 'white_night';
     const phases = [
-        { start: daylight.astronomicalDawn, end: daylight.nauticalDawn, phase: 'astronomical_dawn' },
-        { start: daylight.nauticalDawn, end: daylight.civilDawn, phase: 'nautical_dawn' },
-        { start: daylight.civilDawn, end: daylight.sunriseDecimal - 0.001, phase: 'civil_dawn' },
-        { start: daylight.sunsetDecimal, end: daylight.civilDusk, phase: 'civil_dusk' },
-        { start: daylight.civilDusk, end: daylight.nauticalDusk, phase: 'nautical_dusk' },
-        { start: daylight.nauticalDusk, end: daylight.astronomicalDusk, phase: 'astronomical_dusk' },
+        { start: daylight.astronomicalDawnDecimal, end: daylight.nauticalDawnDecimal, phase: 'astronomical_dawn' },
+        { start: daylight.nauticalDawnDecimal, end: daylight.civilDawnDecimal, phase: 'nautical_dawn' },
+        { start: daylight.civilDawnDecimal, end: daylight.sunriseDecimal - 0.001, phase: 'civil_dawn' },
+        { start: daylight.sunsetDecimal, end: daylight.civilDuskDecimal, phase: 'civil_dusk' },
+        { start: daylight.civilDuskDecimal, end: daylight.nauticalDuskDecimal, phase: 'nautical_dusk' },
+        { start: daylight.nauticalDuskDecimal, end: daylight.astronomicalDuskDecimal, phase: 'astronomical_dusk' },
     ];
     for (const { start, end, phase } of phases)
         if (start !== undefined && end !== undefined) {
@@ -185,17 +185,17 @@ function __getEquinoxSolstice(year, type) {
     ];
     let S = 0;
     for (let i = 0; i < 24; i++) S += A[i] * Math.cos((B[i] + C[i] * Y) * helpers.constants.DEGREES_TO_RADIANS);
-    return helpers.juliandDateToDateUTC(jd0 + 0.00001 * S + 365242.37404 * Y + 0.05169 * Y2 + -0.00411 * Y3 + -0.00057 * Y4);
+    return helpers.julianDateToDateUTC(jd0 + 0.00001 * S + 365242.37404 * Y + 0.05169 * Y2 + -0.00411 * Y3 + -0.00057 * Y4);
 }
-const equinoxSolsticeCache = new Map (),
+const equinoxSolsticeCache = new Map(),
     equinoxSolsticeCacheMax = 100;
 function getEquinoxSolstice(year, type) {
     const key = `${year}/${type}`;
-    if (!equinoxSolsticeCache.has (key)) {
-        equinoxSolsticeCache.set (key, __getEquinoxSolstice(year, type));
+    if (!equinoxSolsticeCache.has(key)) {
+        equinoxSolsticeCache.set(key, __getEquinoxSolstice(year, type));
         if (equinoxSolsticeCache.size > equinoxSolsticeCacheMax) equinoxSolsticeCache.delete(equinoxSolsticeCache.keys().next().value);
     }
-    return equinoxSolsticeCache.get (key);
+    return equinoxSolsticeCache.get(key);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -289,18 +289,17 @@ function isNearEquinox(date = new Date(), hemisphere = 'northern', daysWindow = 
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const crossQuarterDatesCache = new Map (),
+const crossQuarterDatesCache = new Map(),
     crossQuarterDatesCacheMax = 100;
 function isNearCrossQuarter(date = new Date(), hemisphere = 'northern', daysWindow = 7) {
     const year = date.getFullYear();
     const yearsToCheck = [year];
     if (date.getMonth() === 0) yearsToCheck.push(year - 1);
     if (date.getMonth() === 11) yearsToCheck.push(year + 1);
-    for (const y of yearsToCheck) if (!crossQuarterDatesCache.has (y)) crossQuarterDatesCache.set (y, getCrossQuarterDates(y));
-    while (crossQuarterDatesCache.size > crossQuarterDatesCacheMax)
-        crossQuarterDatesCache.delete (crossQuarterDatesCache.keys ().sort((a, b) => a - b)[0]);
+    for (const y of yearsToCheck) if (!crossQuarterDatesCache.has(y)) crossQuarterDatesCache.set(y, getCrossQuarterDates(y));
+    while (crossQuarterDatesCache.size > crossQuarterDatesCacheMax) crossQuarterDatesCache.delete([...crossQuarterDatesCache.keys()].sort((a, b) => a - b)[0]);
     for (const y of yearsToCheck)
-        for (const item of crossQuarterDatesCache.get (y)) {
+        for (const item of crossQuarterDatesCache.get(y)) {
             const days = (item.date - date) / helpers.constants.MILLISECONDS_PER_DAY;
             if (Math.abs(days) <= daysWindow)
                 return {
@@ -560,7 +559,8 @@ function __getLunarEclipticLongitudeForZodiac(jd) {
     const T = (jd - 2451545) / 36525;
     // Moon's mean longitude
     const L = helpers.normalizeAngle(218.316 + 13.176396 * (jd - 2451545));
-    // Moon's mean anomaly
+    // Moon's mean anomaly (note: variable named M but this is Moon's anomaly, not Sun's)
+    // TODO: The -0.186 term below should use Sun's mean anomaly for full accuracy
     const M = helpers.normalizeAngle(134.963 + 13.064993 * (jd - 2451545));
     // Moon's mean elongation
     const D = helpers.normalizeAngle(297.85 + 12.190749 * (jd - 2451545));
@@ -894,7 +894,7 @@ function getLunarApsis(date) {
     const daysSince = (date - lastPerigee) / helpers.constants.MILLISECONDS_PER_DAY;
     const cyclePosition = (((daysSince % anomalisticMonth) + anomalisticMonth) % anomalisticMonth) / anomalisticMonth;
     return {
-        daysToPerigee: cyclePosition < 0.5 ? cyclePosition * anomalisticMonth : (1 - cyclePosition) * anomalisticMonth,
+        daysToPerigee: (1 - cyclePosition) * anomalisticMonth,
         daysToApogee: cyclePosition < 0.5 ? (0.5 - cyclePosition) * anomalisticMonth : (1.5 - cyclePosition) * anomalisticMonth,
     };
 }
@@ -912,7 +912,7 @@ function getLunarZodiac(date = new Date()) {
         { sign: 'Cancer', symbol: '♋', start: 90, meaning: 'good for home and family matters' },
         { sign: 'Leo', symbol: '♌', start: 120, meaning: 'good for creative projects and self-expression' },
         { sign: 'Virgo', symbol: '♍', start: 150, meaning: 'good for health and organization goals' },
-        { sign: 'Libra', symbol: '♎', start: 180, meaning: 'good for relationsh and partnerships' },
+        { sign: 'Libra', symbol: '♎', start: 180, meaning: 'good for relationships and partnerships' },
         { sign: 'Scorpio', symbol: '♏', start: 210, meaning: 'good for transformation and deep changes' },
         { sign: 'Sagittarius', symbol: '♐', start: 240, meaning: 'good for travel and educational pursuits' },
         { sign: 'Capricorn', symbol: '♑', start: 270, meaning: 'good for career and long-term goals' },
@@ -1130,6 +1130,8 @@ module.exports = {
     //
     getDaylightSituation,
     //
+    getEquinoxSolstice,
+    getCrossQuarterDates,
     isNearSolstice,
     isNearEquinox,
     isNearCrossQuarter,
@@ -1156,6 +1158,7 @@ module.exports = {
     getLunarZodiac,
     getLunarSituation,
     getLunarFeaturesVisible,
+    getLunarApsis,
     //
     getVenusElongation,
     getVenusPosition,

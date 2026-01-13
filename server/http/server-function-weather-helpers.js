@@ -55,7 +55,7 @@ function dateToJulianDateUTC(date) {
     return jd;
 }
 
-function juliandDateToDateUTC(jd) {
+function julianDateToDateUTC(jd) {
     const z = Math.floor(jd + 0.5),
         f = jd + 0.5 - z;
     const A = z < 2299161 ? z : z + 1 + Math.floor((z - 1867216.25) / 36524.25) - Math.floor(Math.floor((z - 1867216.25) / 36524.25) / 4),
@@ -87,10 +87,11 @@ function daysIntoYear(date = new Date()) {
 
 function isSameDay(a, b) {
     if (a === undefined || b === undefined) return false;
-    return a.getDate() == b.getDate() && a.getMonth() == b.getMonth() && a.getFullYear() == b.getFullYear();
+    return a.getDate() === b.getDate() && a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
 }
 
 function daysBetween(a, b) {
+    // Returns 999 (large number) if a is falsy, so comparisons like `daysBetween(x, y) > N` work when x is undefined
     return a ? Math.floor((b - a) / constants.MILLISECONDS_PER_DAY) : 999;
 }
 
@@ -102,8 +103,9 @@ let lastCachedYear, lastSundayOfMarch, lastSundayOfOctober;
 function getDST(date = new Date()) {
     const year = date.getFullYear(),
         month = date.getMonth();
-    if (month > 10 || month < 2) return false; // November to February
-    if (month > 3 && month < 9) return true; // April to September
+    if (month >= 10 || month < 2) return false; // November through February: definitely not DST
+    if (month > 2 && month < 9) return true; // April through September: definitely DST
+    // March (2) and October (9) need exact date comparison
     if (!lastCachedYear || lastCachedYear !== year) {
         const lastDayOfMarch = new Date(year, 2, 31);
         while (lastDayOfMarch.getMonth() > 2) lastDayOfMarch.setDate(lastDayOfMarch.getDate() - 1);
@@ -168,7 +170,8 @@ module.exports = {
     normalizeTime,
     isLeapYear,
     dateToJulianDateUTC,
-    juliandDateToDateUTC,
+    julianDateToDateUTC,
+    juliandDateToDateUTC: julianDateToDateUTC, // deprecated alias (typo) - use julianDateToDateUTC
     getSeason,
 };
 

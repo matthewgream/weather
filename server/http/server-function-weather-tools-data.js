@@ -106,6 +106,32 @@ class RecentData {
             endTime = this.timestamp - endSecondsAgo * 1000;
         return this.entries.filter((e) => e._timestamp >= Math.min(startTime, endTime) && e._timestamp <= Math.max(startTime, endTime));
     }
+    sum(field) {
+        const values = this.entries.map((e) => e[field]).filter((v) => v !== undefined && v !== null);
+        return values.length > 0 ? values.reduce((a, b) => a + b, 0) : undefined;
+    }
+    count(predicate) {
+        return predicate ? this.entries.filter(predicate).length : this.entries.length;
+    }
+    delta(field) {
+        const first = this.oldest(field),
+            last = this.newest(field);
+        return first !== undefined && last !== undefined ? last - first : undefined;
+    }
+    rateOfChange(field) {
+        if (this.entries.length < 2) return undefined;
+        const d = this.delta(field);
+        if (d === undefined) return undefined;
+        const hours = (this.entries[this.entries.length - 1]._timestamp - this.entries[0]._timestamp) / (60 * 60 * 1000);
+        return hours > 0 ? d / hours : undefined;
+    }
+    trend(field, threshold = 0.1) {
+        const rate = this.rateOfChange(field);
+        if (rate === undefined) return undefined;
+        if (rate > threshold) return 'rising';
+        if (rate < -threshold) return 'falling';
+        return 'stable';
+    }
 }
 
 function getRecentData(data_previous, timestamp, hoursBack) {

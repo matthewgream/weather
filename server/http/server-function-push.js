@@ -91,7 +91,9 @@ class PushNotificationManager {
     }
 
     async sendNotification(payload, options = {}) {
-        console.log(`push: subscriptions notify request, title='${typeof payload === 'object' && payload.title ? payload.title : '-'}', body='${typeof payload === 'object' && payload.body ? payload.body : '-'}', category='${typeof payload === 'object' && payload.category ? payload.category : '-'}'`);
+        console.log(
+            `push: subscriptions notify request, title='${typeof payload === 'object' && payload.title ? payload.title : '-'}', body='${typeof payload === 'object' && payload.body ? payload.body : '-'}', category='${typeof payload === 'object' && payload.category ? payload.category : '-'}'`
+        );
 
         const startTime = Date.now();
         const promises = this.subscriptions.map(async (subscription, index) => {
@@ -126,7 +128,7 @@ class PushNotificationManager {
         const payload = {
             title: 'Weather Notification' + (title ? `: ${title}` : ''),
             body,
-	    category,
+            category,
             timestamp: new Date().toISOString(),
         };
         const options = {

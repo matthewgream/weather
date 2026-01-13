@@ -26,6 +26,7 @@ function addEvent(store, category, eventId, message, durationHours = 24) {
     return false;
 }
 
+// Note: marks events as shown (mutates store) - intentional for "show once" semantics
 function getEvents(store, category) {
     if (!store.events || !store.events[category]) return [];
     const now = Date.now(),
@@ -42,7 +43,8 @@ function getEvents(store, category) {
     return active;
 }
 
-function isEventCooldown(store, category, eventId, cooldownDays = 365) {
+// Returns true if event can be triggered (no recent event or cooldown expired)
+function canTrigger(store, category, eventId, cooldownDays = 365) {
     if (!store.events || !store.events[category] || !store.events[category][eventId]) return true;
     const now = Date.now(),
         event = store.events[category][eventId];
@@ -62,13 +64,28 @@ function pruneEvents(store, daysAgo = 30) {
     store.eventsCleanedUp = now;
 }
 
+function hasEvent(store, category, eventId) {
+    return !!(store.events && store.events[category] && store.events[category][eventId]);
+}
+
+function removeEvent(store, category, eventId) {
+    if (store.events && store.events[category] && store.events[category][eventId]) {
+        delete store.events[category][eventId];
+        return true;
+    }
+    return false;
+}
+
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 module.exports = {
     add: addEvent,
     get: getEvents,
-    isCooldown: isEventCooldown,
+    has: hasEvent,
+    remove: removeEvent,
+    canTrigger,
+    isCooldown: canTrigger, // deprecated alias - use canTrigger
     prune: pruneEvents,
 };
 

@@ -1,30 +1,30 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-// const helpers = require('./server-function-weather-helpers.js');#
+// const helpers = require('./server-function-weather-helpers.js');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function calculateDewPoint(temp, humidity) {
     // Magnus-Tetens formula
-    if (humidity <= 0 || humidity > 100) return temp; // Invalid humidity
-    if (temp < -50 || temp > 60) return temp; // Extreme temps
+    if (temp === undefined || temp === null || humidity === undefined || humidity === null) return undefined;
+    if (humidity <= 0 || humidity > 100) return undefined;
+    if (temp < -50 || temp > 60) return undefined;
     const a = 17.625,
         b = 243.04;
     const alpha = (a * temp) / (b + temp) + Math.log(humidity / 100);
     const dewPoint = (b * alpha) / (a - alpha);
-    return Number.isFinite(dewPoint) ? dewPoint : temp;
+    return Number.isFinite(dewPoint) ? dewPoint : undefined;
 }
 
 function calculateHeatIndex(temp, humidity) {
+    if (temp === undefined || temp === null || humidity === undefined || humidity === null) return undefined;
     if (temp < 20) return temp; // Only applicable for temps > 20°C
     const tempF = (temp * 9) / 5 + 32; // Convert to Fahrenheit for the standard formula
     let heatIndexF = 0.5 * (tempF + 61 + (tempF - 68) * 1.2 + humidity * 0.094); // Simplified heat index formula
     if (tempF >= 80) {
-        // Use more precise formula if hot enough
-        // Rothfusz regression coefficients for heat index calculation
-        // Based on Steadman's 1979 table
+        // Use more precise formula if hot enough, rothfusz regression coefficients for heat index calculation: based on Steadman's 1979 table
         heatIndexF =
             -42.379 +
             2.04901523 * tempF +
@@ -45,24 +45,30 @@ function calculateHeatIndex(temp, humidity) {
 
 function calculateWindChill(temp, windSpeed) {
     // Wind chill applies below 10°C AND with sufficient wind (greater than 4.8km/h)
+    if (temp === undefined || temp === null || windSpeed === undefined || windSpeed === null) return undefined;
     const windSpeedKmh = windSpeed * 3.6;
     if (temp >= 10 || windSpeedKmh < 4.8) return temp;
-    return 13.12 + 0.6215 * temp - 11.37 * (windSpeedKmh ? windSpeedKmh ** 0.16 : 0) + 0.3965 * temp * (windSpeedKmh ? windSpeedKmh ** 0.16 : 0); // Calculate wind chill using Environment Canada formula
+    // Environment Canada formula
+    const windPow = Math.pow(windSpeedKmh, 0.16);
+    return 13.12 + 0.6215 * temp - 11.37 * windPow + 0.3965 * temp * windPow;
 }
 
 function calculateFeelsLike(temp, humidity, windSpeed) {
+    if (temp === undefined || temp === null) return undefined;
     if (temp <= 10)
         // For cold conditions, use wind chill
-        return calculateWindChill(temp, windSpeed);
+        return calculateWindChill(temp, windSpeed) ?? temp;
     else if (temp >= 20)
         // For warm conditions, use heat index
-        return calculateHeatIndex(temp, humidity);
+        return calculateHeatIndex(temp, humidity) ?? temp;
     // For moderate conditions, just use the actual temperature
     else return temp;
 }
 
 function calculateComfortLevel(temp, humidity, windSpeed, solarRad) {
+    if (temp === undefined || temp === null || humidity === undefined || humidity === null) return 'unknown';
     const feelsLike = calculateFeelsLike(temp, humidity, windSpeed);
+    if (feelsLike === undefined) return 'unknown';
     if (feelsLike < -10 || feelsLike > 35) return 'very uncomfortable';
     if (feelsLike < 0 || feelsLike > 30) return 'uncomfortable';
     if ((temp > 20 && humidity > 80) || humidity < 20) return 'somewhat uncomfortable';
