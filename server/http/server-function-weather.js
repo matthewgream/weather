@@ -355,7 +355,7 @@ function getWeatherInterpretation(data, options = {}) {
     weatherStorageManage(options);
 
     // Prune events periodically
-    toolsEvents.pruneEvents(weatherStore);
+    toolsEvents.prune(weatherStore);
 
     return getWeatherInterpretationImpl(weatherInterpreters, weatherLocation, data, weatherData, weatherStore, options);
 }
@@ -370,12 +370,11 @@ function initialise(location, options) {
     weatherStorageStartup(weatherOptions);
     const parameters = { location: weatherLocation, store: weatherStore, options: weatherOptions };
     weatherInterpreters = {
-        ...require('./server-function-weather-conditions.js')(parameters),
-        ...require('./server-function-weather-combinations.js')(parameters),
-        ...require('./server-function-weather-phenology.js')(parameters),
-        ...require('./server-function-weather-calendar.js')(parameters),
-        ...require('./server-function-weather-astronomy.js')(parameters),
-        ...require('./server-function-weather-eclipses.js')(parameters),
+        ...require('./server-function-weather-module-conditions.js')(parameters),
+        ...require('./server-function-weather-module-phenology.js')(parameters),
+        ...require('./server-function-weather-module-calendar.js')(parameters),
+        ...require('./server-function-weather-module-astronomy.js')(parameters),
+        ...require('./server-function-weather-module-eclipses.js')(parameters),
     };
     console.error(
         `weather: loaded ${Object.keys(weatherInterpreters).length} interpreters: '${Object.keys(weatherInterpreters)

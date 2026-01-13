@@ -73,15 +73,16 @@ client.on('connect', () => {
 });
 
 client.on('message', (topic, message) => {
-    const t = Date.now() - startTime;
+    const timestamp = Date.now();
+    const offset = timestamp - startTime;
     let data;
     try {
         data = JSON.parse(message.toString());
     } catch {
         data = message.toString();
     }
-    buffer.push(JSON.stringify({ t, topic, data }));
-    if (++messageCount % 100 === 0) console.error(`recorder: ${messageCount} messages over ${formatDuration(t)}`);
+    buffer.push(JSON.stringify({ timestamp, offset, topic, data }));
+    if (++messageCount % 100 === 0) console.error(`recorder: ${messageCount} messages over ${formatDuration(offset)}`);
 });
 
 client.on('error', (err) => console.error(`recorder: MQTT error: ${err.message}`));

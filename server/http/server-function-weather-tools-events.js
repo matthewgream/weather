@@ -66,10 +66,10 @@ function pruneEvents(store, daysAgo = 30) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 module.exports = {
-    addEvent,
-    getEvents,
-    isEventCooldown,
-    pruneEvents,
+    add: addEvent,
+    get: getEvents,
+    isCooldown: isEventCooldown,
+    prune: pruneEvents,
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

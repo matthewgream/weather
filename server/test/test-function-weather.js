@@ -30,25 +30,19 @@ const weatherModule = require('server-function-weather.js')(weatherLocation, wea
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const weatherCache = {},
-    weatherQueue = [];
+let weatherCache = {};
 
 function weatherReceive(topic, data) {
     console.error(`weather: [${new Date().toISOString()}] receive, '${topic}'`);
-    weatherQueue.push({ topic, data });
+    weatherCache [topic] = data;
 }
-
 function weatherUpdated() {
-    if (weatherQueue.length === 0) return false;
-    while (weatherQueue.length > 0) {
-        const { topic, data } = weatherQueue.shift();
-        weatherCache[topic] = data;
-    }
-    return true;
+    return Boolean (weatherCache['weather/branna']);
 }
-
 function weatherSnapshot() {
-    return weatherTopics.every((topic) => weatherCache[topic]) ? Object.fromEntries(weatherTopics.map((topic) => [topic, { ...weatherCache[topic] }])) : undefined;
+    const cache = weatherCache;
+    weatherCache = {};
+    return weatherTopics.every((topic) => cache[topic]) ? Object.fromEntries(weatherTopics.map((topic) => [topic, { ...cache[topic] }])) : undefined;
 }
 
 function weatherProcess() {
@@ -65,9 +59,10 @@ function weatherProcess() {
     try {
         const conditionsData = snapshot['weather/branna'],
             radiationData = snapshot['sensors/radiation'];
-        console.error(`weather: [${new Date().toISOString()}] process, snapshot:`, snapshot);
+	const timestamp = conditionsData.timestamp || Date.now ();
+        console.error(`weather: [${new Date ().toISOString()}] process, snapshot <${new Date (timestamp).toISOString ()}>:`, snapshot);
         const interpretation = weatherModule.getWeatherInterpretation({
-            timestamp: Date.now(),
+            timestamp,
             temp: conditionsData.temp,
             humidity: conditionsData.humidity,
             pressure: conditionsData.baromrel,

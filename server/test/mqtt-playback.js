@@ -49,7 +49,7 @@ async function loadRecording() {
                 }
         });
         rl.on('close', () => {
-            messages.sort((a, b) => a.t - b.t);
+            messages.sort((a, b) => a.offset - b.offset);
             resolve();
         });
         rl.on('error', reject);
@@ -64,13 +64,12 @@ function scheduleNext() {
         process.exit(0);
     }
 
-    const msg = messages[messageIndex];
-    const delay = Math.max(0, msg.t / speed - (Date.now() - startTime));
+    const msg = messages[messageIndex ++];
+    const delay = Math.max(0, msg.offset / speed - (Date.now() - startTime));
 
     setTimeout(() => {
-        client.publish(msg.topic, typeof msg.data === 'string' ? msg.data : JSON.stringify(msg.data));
-        messageIndex++;
-        if (++publishedCount % 100 === 0) console.error(`player: ${publishedCount}/${messages.length} messages, original time: ${formatDuration(msg.t)}, playback time: ${formatDuration(Date.now() - startTime)}`);
+        client.publish(msg.topic, JSON.stringify({ timestamp: msg.timestamp, ...msg.data }));
+        if (++publishedCount % 100 === 0) console.error(`player: ${publishedCount}/${messages.length} messages, original offset: ${formatDuration(msg.offset)}, playback time: ${formatDuration(Date.now() - startTime)}`);
         scheduleNext();
     }, delay);
 }
@@ -97,8 +96,8 @@ async function main() {
     }
 
     console.error(`player: ${messages.length} messages loaded, topics: ${[...new Set(messages.map((m) => m.topic))].join(', ')}`);
-    console.error(`player: recording duration: ${formatDuration(messages[messages.length - 1].t)}`);
-    console.error(`player: estimated playback: ${formatDuration(messages[messages.length - 1].t / speed)}`);
+    console.error(`player: recording duration: ${formatDuration(messages[messages.length - 1].offset)}`);
+    console.error(`player: estimated playback: ${formatDuration(messages[messages.length - 1].offset / speed)}`);
 
     client = mqtt.connect(mqttServer);
     client.on('connect', () => {
