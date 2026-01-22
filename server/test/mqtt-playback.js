@@ -64,7 +64,7 @@ function scheduleNext() {
         process.exit(0);
     }
 
-    const msg = messages[messageIndex ++];
+    const msg = messages[messageIndex++];
     const delay = Math.max(0, msg.offset / speed - (Date.now() - startTime));
 
     setTimeout(() => {

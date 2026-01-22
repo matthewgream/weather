@@ -3,9 +3,11 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const weatherOptions = { debug: true, solarEclipse: { daysAhead: 512 }, lunarEclipse: { daysAhead: 512 }, suppress: { stable: true } };
-const weatherTopics = ['weather/branna', 'sensors/radiation'];
 const weatherServer = process.argv[2] || 'mqtt://localhost';
+const weatherConditionsTopic = 'weather/branna';
+const weatherSensorRadiationTopic = 'sensors/radiation';
+const weatherTopics = [weatherConditionsTopic, weatherSensorRadiationTopic];
+
 const weatherLocation = {
     elevation: 135,
     latitude: 59.662111722943266,
@@ -25,61 +27,48 @@ const weatherLocation = {
     hemisphere: 'northern',
     timezone: 'Europe/Stockholm',
 };
+
+const weatherOptions = { debug: true, solarEclipse: { daysAhead: 512 }, lunarEclipse: { daysAhead: 512 }, suppress: { stable: true } };
+
 const weatherModule = require('server-function-weather.js')(weatherLocation, weatherOptions);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-let weatherCache = {};
+let weatherSnapshot = {};
 
 function weatherReceive(topic, data) {
     console.error(`weather: [${new Date().toISOString()}] receive, '${topic}'`);
-    weatherCache [topic] = data;
-}
-function weatherUpdated() {
-    return Boolean (weatherCache['weather/branna']);
-}
-function weatherSnapshot() {
-    const cache = weatherCache;
-    weatherCache = {};
-    return weatherTopics.every((topic) => cache[topic]) ? Object.fromEntries(weatherTopics.map((topic) => [topic, { ...cache[topic] }])) : undefined;
+    weatherSnapshot[topic] = { ...data };
+    if (topic == weatherConditionsTopic) weatherProcess(weatherSnapshot);
 }
 
-function weatherProcess() {
-    if (!weatherUpdated()) {
-        console.error(`weather: [${new Date().toISOString()}] process, skipping - data not updated`);
-        return;
-    }
-    const snapshot = weatherSnapshot();
-    if (!snapshot) {
-        console.error(`weather: [${new Date().toISOString()}] process, skipping - data not available`);
-        return;
-    }
-
+function weatherProcess(snapshot) {
     try {
-        const conditionsData = snapshot['weather/branna'],
-            radiationData = snapshot['sensors/radiation'];
-	const timestamp = conditionsData.timestamp || Date.now ();
-        console.error(`weather: [${new Date ().toISOString()}] process, snapshot <${new Date (timestamp).toISOString ()}>:`, snapshot);
+        const dataConditions = snapshot[weatherConditionsTopic];
+        const dataSensorRadiation = snapshot[weatherSensorRadiationTopic] || {};
+        // assert (dataConditions);
+        const timestamp = dataConditions.timestamp || Date.now();
+        console.error(`weather: [${new Date().toISOString()}] process, snapshot <${new Date(timestamp).toISOString()}>:`, snapshot);
         const interpretation = weatherModule.getWeatherInterpretation({
             timestamp,
-            temp: conditionsData.temp,
-            humidity: conditionsData.humidity,
-            pressure: conditionsData.baromrel,
-            windSpeed: conditionsData.windspeed ? conditionsData.windspeed / 3.6 : undefined,
-            windGust: conditionsData.windgust ? conditionsData.windgust / 3.6 : undefined,
-            windDir: conditionsData.winddir,
-            solarRad: conditionsData.solarradiation,
-            solarUvi: conditionsData.uv,
-            rainRate: conditionsData.rainrate,
-            radiationCpm: radiationData.cpm,
-            radiationAcpm: radiationData.acpm,
-            radiationUsvh: radiationData.usvh,
+            temp: dataConditions.temp,
+            humidity: dataConditions.humidity,
+            pressure: dataConditions.baromrel,
+            windSpeed: dataConditions.windspeed ? dataConditions.windspeed / 3.6 : undefined,
+            windGust: dataConditions.windgust ? dataConditions.windgust / 3.6 : undefined,
+            windDir: dataConditions.winddir,
+            solarRad: dataConditions.solarradiation,
+            solarUvi: dataConditions.uv,
+            rainRate: dataConditions.rainrate,
+            radiationCpm: dataSensorRadiation.cpm,
+            radiationAcpm: dataSensorRadiation.acpm,
+            radiationUsvh: dataSensorRadiation.usvh,
             cloudCover: undefined,
             snowDepth: undefined,
             iceDepth: undefined,
         });
-        console.error(`weather: [${new Date().toISOString()}] process, response:`, interpretation);
+        console.error(`weather: [${new Date().toISOString()}] process, response: <<<`, interpretation, `>>>`);
     } catch (e) {
         console.error(`weather: [${new Date().toISOString()}] process, error:`, e);
     }
@@ -88,28 +77,9 @@ function weatherProcess() {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-let weatherInterval;
-function weatherProcessStart() {
-    if (weatherInterval) clearInterval(weatherInterval);
-    weatherInterval = setInterval(weatherProcess, 15 * 1000);
-    console.error(`weather: [${new Date().toISOString()}] process, started (15 seconds)`);
-}
-/*function weatherProcessStop() {
-    if (weatherInterval) {
-        clearInterval(weatherInterval);
-        weatherInterval = undefined;
-        console.error(`weather: [${new Date().toISOString()}] process, stopped`);
-    }
-}*/
-
-weatherProcessStart();
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
 const mqtt = require('mqtt');
 
-console.error(`mqtt: connect to '${weatherServer}'`);
+console.error(`mqtt: connect '${weatherServer}'`);
 const client = mqtt.connect(weatherServer, { clientId: 'test-weather-' + Math.random().toString(16).slice(2, 8) });
 
 client.on('connect', () => {
@@ -133,7 +103,7 @@ client.on('message', (topic, message) => {
     try {
         weatherReceive(topic, JSON.parse(message.toString()));
     } catch (e) {
-        console.error(`mqtt: weather_process '${topic}' error:`, e);
+        console.error(`mqtt: process '${topic}' error:`, e);
         console.error('message:', message.toString());
     }
 });
