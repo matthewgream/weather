@@ -198,6 +198,7 @@ class StatisticalAlgorithmsHelper {
         const result = StatisticalAlgorithms.exponentialMovingAverage(data, alpha, field);
         return result?.length > 0 ? result[result.length - 1].ema : undefined;
     }
+
     static linearRegressionWithFallback(data, xField, yField, criteria) {
         if (!data?.length) return undefined;
         // eslint-disable-next-line prefer-destructuring
@@ -325,11 +326,13 @@ class PeriodHelper {
             seconds: Number.parseFloat(match[6] || 0),
         };
     }
+
     static toMillis(duration) {
         const parsed = this.parse(duration);
         if (!parsed) return 0;
         return parsed.years * 365 * 24 * 60 * 60 * 1000 + parsed.months * 30 * 24 * 60 * 60 * 1000 + parsed.days * 24 * 60 * 60 * 1000 + parsed.hours * 60 * 60 * 1000 + parsed.minutes * 60 * 1000 + parsed.seconds * 1000;
     }
+
     static fromMillis(millis) {
         if (!millis || millis < 0) return 'PT0S';
         const days = Math.floor(millis / (24 * 60 * 60 * 1000));
@@ -349,13 +352,16 @@ class PeriodHelper {
         else if (!days) duration += 'T0S';
         return duration;
     }
+
     static isWithin(timestamp, period) {
         return Date.now() - timestamp <= this.toMillis(period);
     }
+
     static getBucket(timestamp, bucketSize) {
         const bucketMillis = this.toMillis(bucketSize);
         return Math.floor(timestamp / bucketMillis) * bucketMillis;
     }
+
     static getBuckets(period, bucketSize) {
         const bucketMillis = this.toMillis(bucketSize);
         const now = Date.now();
@@ -363,9 +369,11 @@ class PeriodHelper {
         for (let time = this.getBucket(now - this.toMillis(period), bucketSize); time <= now; time += bucketMillis) buckets.push(time);
         return buckets;
     }
+
     static add(duration1, duration2) {
         return this.fromMillis(this.toMillis(duration1) + this.toMillis(duration2));
     }
+    
     static format(duration) {
         const parsed = this.parse(duration);
         if (!parsed) return 'invalid';

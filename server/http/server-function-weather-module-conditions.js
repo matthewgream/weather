@@ -4,6 +4,7 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // const helpers = require('./server-function-weather-helpers.js');
+const { FormatHelper } = require('./server-function-weather-tools-format.js');
 const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
 const toolsData = require('./server-function-weather-tools-data.js');
 
@@ -134,17 +135,17 @@ function interpretTemperature(results, situation, data, data_previous, store, _o
     const change1h = temp1hAgo === undefined ? 0 : temp - temp1hAgo,
         change6h = temp6hAgo === undefined ? 0 : temp - temp6hAgo;
     if (Math.abs(change1h) > 5) {
-        results.phenomena.push(`rapid temperature ${change1h > 0 ? 'rise' : 'drop'}: ${Math.abs(change1h).toFixed(1)}°C/hour`);
+        results.phenomena.push(`rapid hourly temperature ${change1h > 0 ? 'rise' : 'drop'}: ${FormatHelper.temperatureToString(Math.abs(change1h))}`);
         if (change1h < -5 && temp < 5) results.alerts.push('flash freeze possible');
-    } else if (Math.abs(change6h) > 10) results.phenomena.push(`significant temperature ${change6h > 0 ? 'rise' : 'drop'}: ${Math.abs(change6h).toFixed(1)}°C in 6 hours`);
+    } else if (Math.abs(change6h) > 10) results.phenomena.push(`significant 6 hour temperature ${change6h > 0 ? 'rise' : 'drop'}: ${FormatHelper.temperatureToString(Math.abs(change6h))}`);
     if (variance6hAgo > 4) results.phenomena.push('unstable temperature conditions');
 
     const diurnalRange = max24h - min24h;
     if (diurnalRange > 20) {
-        results.phenomena.push(`extreme temperature variation: ${diurnalRange.toFixed(1)}°C range`);
+        results.phenomena.push(`extreme 24 hour temperature variation: ${FormatHelper.temperatureToString(diurnalRange)}`);
         if (month >= 4 && month <= 9) results.phenomena.push('continental climate effect');
     } else if (diurnalRange < 5) {
-        results.phenomena.push(`stable temperatures: only ${diurnalRange.toFixed(1)}°C variation`);
+        results.phenomena.push(`stable 24 hour temperature variation: ${FormatHelper.temperatureToString(diurnalRange)}`);
         if (humidity > 80) results.phenomena.push('maritime influence likely');
     }
 
@@ -153,7 +154,7 @@ function interpretTemperature(results, situation, data, data_previous, store, _o
         results.phenomena.push('first frost of the period');
     } else if (temp > 0 && min24h <= 0) results.phenomena.push('frost occurred in last 24 hours');
 
-    if (max7d - min7d > 30) results.phenomena.push(`extreme weekly temperature range: ${(max7d - min7d).toFixed(1)}°C`);
+    if (max7d - min7d > 30) results.phenomena.push(`extreme weekly temperature range: ${FormatHelper.temperatureToString(max7d - min7d)}`);
 
     const minHour = new Date(minTime24h).getHours(),
         maxHour = new Date(maxTime24h).getHours();
@@ -183,7 +184,7 @@ function interpretTemperature(results, situation, data, data_previous, store, _o
             results.phenomena.push('unseasonably cool for summer');
             if (temp < 5) results.alerts.push('unusual summer cold');
         }
-        if (hour >= 0 && hour <= 6 && min24h > 20) results.phenomena.push('tropical night (min temp > 20°C)');
+        if (hour >= 0 && hour <= 6 && min24h > 20) results.phenomena.push(`tropical night (min temp > ${FormatHelper.temperatureToString(20)})`);
     }
 
     if (location.elevation > 500 && temp < temp24hAgo - 5) results.phenomena.push('cold air pooling in valley possible');
@@ -260,9 +261,9 @@ function interpretPressure(results, situation, data, data_previous, store, _opti
     else if (adjustedPressure > 1025) results.conditions.push('stable high pressure');
 
     if (Math.abs(change1h) > 3) {
-        results.alerts.push(`rapid pressure ${change1h > 0 ? 'rise' : 'drop'}: ${Math.abs(change1h).toFixed(1)} hPa/hour`);
+        results.alerts.push(`rapid hourly pressure ${change1h > 0 ? 'rise' : 'drop'}: ${FormatHelper.pressureToString(Math.abs(change1h))}`);
         store.pressure.rapidChanges.push({ timestamp, change: change1h });
-    } else if (Math.abs(change3h) > 5) results.phenomena.push(`significant pressure ${change3h > 0 ? 'rise' : 'drop'}: ${Math.abs(change3h).toFixed(1)} hPa in 3 hours`);
+    } else if (Math.abs(change3h) > 5) results.phenomena.push(`significant 3 hour pressure ${change3h > 0 ? 'rise' : 'drop'}: ${FormatHelper.pressureToString (Math.abs(change3h))}`);
 
     if (store.pressure.trend === 'falling') {
         if (change3h < -5) {
@@ -274,14 +275,14 @@ function interpretPressure(results, situation, data, data_previous, store, _opti
         else if (change3h > 3) results.phenomena.push('rising pressure - improving weather');
     }
     if (Math.abs(change24h) > 10) {
-        results.phenomena.push(`significant 24h pressure ${change24h > 0 ? 'rise' : 'drop'}: ${Math.abs(change24h).toFixed(1)} hPa`);
+        results.phenomena.push(`significant 24 hour pressure ${change24h > 0 ? 'rise' : 'drop'}: ${FormatHelper.pressureToString (Math.abs(change24h))}`);
         if (change24h > 15) results.phenomena.push('strong high pressure building');
         else if (change24h < -15) results.phenomena.push('deepening low pressure system');
     }
 
     const range24h = max24h - min24h;
     if (range24h > 20) {
-        results.phenomena.push(`extreme pressure variation: ${range24h.toFixed(1)} hPa in 24h`);
+        results.phenomena.push(`extreme 24 hour pressure variation: ${FormatHelper.pressureToString (range24h)}`);
         results.alerts.push('unstable atmospheric conditions');
     } else if (range24h < 3) results.phenomena.push('very stable pressure');
 
@@ -407,7 +408,7 @@ function interpretHumidity(results, situation, data, data_previous, store, _opti
     }
 
     const change6h = humidity6hAgo === undefined ? 0 : humidity - humidity6hAgo;
-    if (Math.abs(change6h) > 30) results.phenomena.push(`rapid humidity ${change6h > 0 ? 'increase' : 'decrease'}: ${Math.abs(change6h)}% in 6 hours`);
+    if (Math.abs(change6h) > 30) results.phenomena.push(`rapid 6 hour humidity ${change6h > 0 ? 'increase' : 'decrease'}: ${FormatHelper.humidityToString(Math.abs(change6h))}`);
 
     if (dewPoint !== undefined) {
         const dewPointSpread = temp - dewPoint;
@@ -425,9 +426,9 @@ function interpretHumidity(results, situation, data, data_previous, store, _opti
 
     const diurnalRange = max24h - min24h;
     if (diurnalRange > 40) {
-        results.phenomena.push(`large humidity variation: ${diurnalRange}% range`);
-        if (store.humidity.avgDaytime < store.humidity.avgNighttime - 20) results.phenomena.push('typical daily humidity cycle');
-    } else if (diurnalRange < 10) results.phenomena.push('stable humidity levels');
+        results.phenomena.push(`large 24 hour humidity variation: ${lper.humidityToString (diurnalRange)}`);
+        if (store.humidity.avgDaytime < store.humidity.avgNighttime - 20) results.phenomena.push('typical 24 hour humidity cycle');
+    } else if (diurnalRange < 10) results.phenomena.push('stable 24 hour humidity levels');
 
     if (store.humidity.consecutiveDryHours > 24) results.phenomena.push(`prolonged dry conditions: ${Math.round(store.humidity.consecutiveDryHours)} hours`);
     if (store.humidity.consecutiveHumidHours > 12) results.phenomena.push(`prolonged humid conditions: ${Math.round(store.humidity.consecutiveHumidHours)} hours`);
@@ -608,7 +609,7 @@ function interpretWind(results, situation, data, data_previous, store, _options)
 
     if (temp < 10 && windSpeed > 3) {
         const windChillEffect = windChill - temp;
-        if (windChillEffect < -10) results.alerts.push(`severe wind chill: feels like ${windChill.toFixed(0)}°C`);
+        if (windChillEffect < -10) results.alerts.push(`severe wind chill: feels like ${FormatHelper.temperatureToString(windChill)}`);
         else if (windChillEffect < -5) results.phenomena.push(`significant wind chill effect`);
     }
 
@@ -906,7 +907,7 @@ function interpretPrecipitation(results, situation, data, data_previous, store, 
     if (rainRate > 0 && temp !== undefined) {
         if (temp < -5) {
             results.phenomena.push('snow (powder)');
-            results.phenomena.push(`snow accumulation rate: ~${(rainRate * 10).toFixed(1)} mm/hour`);
+            results.phenomena.push(`snow accumulation rate: ~${FormatHelper.snowdepthToString(rainRate * 10)}/hour`);
         } else if (temp < -2) results.phenomena.push('snow');
         else if (temp < 0) {
             results.phenomena.push('wet snow or sleet');
@@ -921,12 +922,12 @@ function interpretPrecipitation(results, situation, data, data_previous, store, 
     }
 
     if (accumulation24h > 50) {
-        results.alerts.push(`significant rainfall: ${accumulation24h.toFixed(1)}mm in 24 hours`);
-        if (accumulation24h > 100) results.alerts.push('extreme precipitation event');
-    } else if (accumulation24h > 25) results.phenomena.push(`notable rainfall: ${accumulation24h.toFixed(1)}mm in 24 hours`);
+        results.alerts.push(`significant 24 hour rainfall: ${FormatHelper.rainfallToString (accumulation24h)}`);
+        if (accumulation24h > 100) results.alerts.push('extreme 24 hour precipitation event');
+    } else if (accumulation24h > 25) results.phenomena.push(`notable 24 hour rainfall: ${FormatHelper.rainfallToString (accumulation24h)}`);
 
     if (accumulation7d > 100) {
-        results.phenomena.push(`wet week: ${accumulation7d.toFixed(0)}mm total`);
+        results.phenomena.push(`wet week: ${FormatHelper.rainfallToString (accumulation7d)} total`);
         if (location.forestCoverage === 'high') results.phenomena.push('saturated forest floor');
     } else if (accumulation7d < 5) {
         results.phenomena.push('dry week');
@@ -1067,7 +1068,7 @@ function interpretSnow(results, situation, data, data_previous, store, _options)
     if (snowDepth === 0) {
         if (month >= 11 || month <= 2) {
             results.phenomena.push('no snow cover during winter');
-            if (store.snow.maxDepth > 100) results.phenomena.push(`snow-free after ${store.snow.maxDepth}mm max depth`);
+            if (store.snow.maxDepth > 100) results.phenomena.push(`snow-free after ${FormatHelper.snowdepthToString (store.snow.maxDepth)} max depth`);
         }
     } else if (snowDepth < 50) {
         results.conditions.push('light snow cover');
@@ -1096,10 +1097,10 @@ function interpretSnow(results, situation, data, data_previous, store, _options)
     }
 
     if (store.snow.accumulation24h > 100) {
-        results.alerts.push(`heavy snowfall: ${store.snow.accumulation24h}mm in 24h`);
-        results.phenomena.push('significant snow accumulation');
-    } else if (store.snow.accumulation24h > 50) results.phenomena.push(`moderate snowfall: ${store.snow.accumulation24h}mm in 24h`);
-    else if (store.snow.accumulation24h > 10) results.phenomena.push(`light snowfall: ${store.snow.accumulation24h}mm in 24h`);
+        results.alerts.push(`heavy 24 hour snowfall: ${FormatHelper.snowdepthToString (store.snow.accumulation24h)}`);
+        results.phenomena.push('significant 24 hour snow accumulation');
+    } else if (store.snow.accumulation24h > 50) results.phenomena.push(`moderate 24 hour snowfall: ${FormatHelper.snowdepthToString (store.snow.accumulation24h)}`);
+    else if (store.snow.accumulation24h > 10) results.phenomena.push(`light 24 hour snowfall: ${FormatHelper.snowdepthToString (store.snow.accumulation24h)}`);
 
     for (let i = 1; i < accumulations.length; i++) {
         const rate = (accumulations[i].depth - accumulations[i - 1].depth) / ((accumulations[i].time - accumulations[i - 1].time) / 3600000);
@@ -1109,9 +1110,9 @@ function interpretSnow(results, situation, data, data_previous, store, _options)
     }
 
     if (store.snow.meltRate24h > 50) {
-        results.phenomena.push(`rapid snowmelt: ${store.snow.meltRate24h}mm in 24h`);
+        results.phenomena.push(`rapid 24 hour snowmelt: ${FormatHelper.snowdepthToString (store.snow.meltRate24h)}`);
         if (temp > 5 && rainRate > 0) results.alerts.push('rain-on-snow event - flood risk');
-    } else if (store.snow.meltRate24h > 20) results.phenomena.push(`moderate snowmelt: ${store.snow.meltRate24h}mm in 24h`);
+    } else if (store.snow.meltRate24h > 20) results.phenomena.push(`moderate 24 hour snowmelt: ${FormatHelper.snowdepthToString (store.snow.meltRate24h)}`);
 
     if (snowDepth > 200 && windSpeed > 10) results.phenomena.push('snow loading on trees - branch fall risk');
 
@@ -1211,9 +1212,9 @@ function interpretIce(results, situation, data, data_previous, store, _options) 
             results.phenomena.push('snow insulation slowing ice growth');
             results.alerts.push('variable ice thickness possible');
         }
-        if (store.ice.growthRate7d > 5) results.phenomena.push(`rapid ice growth: ${store.ice.growthRate7d.toFixed(1)}mm/day`);
+        if (store.ice.growthRate7d > 5) results.phenomena.push(`rapid ice growth: ${FormatHelper.icedepthToString(store.ice.growthRate7d)}/day`);
         else if (store.ice.meltRate7d > 3) {
-            results.phenomena.push(`ice deteriorating: ${store.ice.meltRate7d.toFixed(1)}mm/day loss`);
+            results.phenomena.push(`ice deteriorating: ${FormatHelper.icedepthToString(store.ice.meltRate7d)}/day loss`);
             if (iceDepth < 150) results.alerts.push('ice becoming unsafe');
         }
     }
@@ -1327,11 +1328,11 @@ function interpretRadiation(results, situation, data, data_previous, store, _opt
     }
 
     if (radationUsvh !== undefined) {
-        if (radationUsvh > 0.5) results.alerts.push(`radiation dose rate: ${radationUsvh.toFixed(2)} µSv/h`);
+        if (radationUsvh > 0.5) results.alerts.push(`radiation dose rate: ${FormatHelper.radiationToString(radationUsvh)}/h`);
         if (radationUsvh > 0.3 && radationUsvh <= 1) results.phenomena.push('above typical background dose rate');
         else if (radationUsvh > 1 && radationUsvh <= 5) results.phenomena.push('elevated dose rate - limit prolonged exposure');
         else if (radationUsvh > 5) results.phenomena.push('significant dose rate - health concern');
-        if (store.radiation.dailyDose > 2.4) results.phenomena.push(`daily dose: ${store.radiation.dailyDose.toFixed(1)} µSv (above average)`);
+        if (store.radiation.dailyDose > 2.4) results.phenomena.push(`daily dose: ${FormatHelper.radiationToString(store.radiation.dailyDose)} (above average)`);
     }
 
     if (radiationValue > 50 && solarUvi > 5) results.phenomena.push('combined radiation and UV exposure');
@@ -1451,7 +1452,7 @@ function interpretCombination(results, situation, data, data_previous) {
     if (temp !== undefined && windSpeed !== undefined && temp < 10 && windSpeed > 3) {
         const windChillDiff = Math.round(temp - windChill);
         if (windChillDiff >= 3) {
-            results.phenomena.push(`feels ${windChillDiff}°C colder due to wind`);
+            results.phenomena.push(`feels ${FormatHelper.temperatureToString (windChillDiff)} colder due to wind`);
             // More detailed wind chill warnings
             if (windChill < -25) results.alerts.push('extreme wind chill - frostbite risk in minutes');
             else if (windChill < -15) results.alerts.push('severe wind chill - limit outdoor exposure');

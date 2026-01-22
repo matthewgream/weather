@@ -1128,8 +1128,6 @@ function getVenusPosition(date, latitude, longitude) {
 module.exports = {
     constants,
     //
-    getDaylightSituation,
-    //
     getEquinoxSolstice,
     getCrossQuarterDates,
     isNearSolstice,
@@ -1147,7 +1145,6 @@ module.exports = {
     //
     getSolarPosition,
     getSolarLongitude,
-    getSolarSituation,
     //
     getLunarPhase,
     getLunarDistance,
@@ -1156,12 +1153,16 @@ module.exports = {
     getLunarName,
     getLunarBrightness,
     getLunarZodiac,
-    getLunarSituation,
     getLunarFeaturesVisible,
     getLunarApsis,
     //
     getVenusElongation,
     getVenusPosition,
+    //
+    getDaylightSituation,
+    getSolarSituation,
+    getLunarSituation,
+    //
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

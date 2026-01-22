@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 
 const helpers = require('./server-function-weather-helpers.js');
+const { FormatHelper } = require('./server-function-weather-tools-format.js');
 const toolsCalculators = require('./server-function-weather-tools-calculators.js');
 const toolsEvents = require('./server-function-weather-tools-events.js');
 const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
@@ -92,7 +93,7 @@ function __storagePerisist(options, storable) {
             if (options?.forced || !level[lastKey] || now - level[lastKey] > level.interval)
                 if (__storageFileSave(level.path, storageContent)) {
                     level[lastKey] = now;
-                    if (options.debug) console.error(`weather: storage persisted - to ${level.type}; path=${level.path}, size=${Math.floor(fs.statSync(level.path).size / 1024)}KB${options?.forced ? ', forced=true' : ''}`);
+                    if (options.debug) console.error(`weather: storage persisted - to ${level.type}; path=${level.path}, size=${FormatHelper.bytesToString (fs.statSync(level.path).size)}${options?.forced ? ', forced=true' : ''}`);
                 }
         });
 }
@@ -103,10 +104,9 @@ function __storageRestore(options) {
             if (!level.enabled || !level.path) continue;
             const data = __storageFileLoad(level.path);
             if (data && data.storable) {
-                const age = Date.now() - data.timestamp,
-                    maxAge = level.maxAge || 86400000;
-                if (age < maxAge) {
-                    if (options.debug) console.error(`weather: storage restored - from ${level.type}; path=${level.path}, age=${Math.round(age / 60000)}m, size=${Math.floor(fs.statSync(level.path).size / 1024)}KB`);
+                const age = Date.now() - data.timestamp;
+                if (age < (level.maxAge || 86400000)) {
+                    if (options.debug) console.error(`weather: storage restored - from ${level.type}; path=${level.path}, age=${FormatHelper.millisToString (age, '')}, size=${FormatHelper.bytesToString(fs.statSync(level.path).size)}`);
                     return data.storable;
                 }
             }
@@ -136,20 +136,12 @@ function storageExit(options) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function joinand(items) {
-    if (!items || items.length === 0) return '';
-    else if (items.length === 1) return items[0];
-    else if (items.length === 2) return `${items[0]} and ${items[1]}`;
-    const lastItem = items.pop();
-    return `${items.join(', ')}, and ${lastItem}`;
-}
-
 function __weatherDetails(results) {
     let details = '';
-    if (results.conditions.length > 0) details = joinand([...new Set(results.conditions)]);
-    if (results.phenomena.length > 0) details += (details ? ': ' : '') + joinand([...new Set(results.phenomena)]);
+    if (results.conditions.length > 0) details = FormatHelper.joinand([...new Set(results.conditions)]);
+    if (results.phenomena.length > 0) details += (details ? ': ' : '') + FormatHelper.joinand([...new Set(results.phenomena)]);
     if (details) {
-        details = details.charAt(0).toUpperCase() + details.slice(1);
+        details = FormatHelper.capitalise(details);
         if (!details.endsWith('.')) details += '.';
     }
     return details || undefined;
@@ -164,15 +156,15 @@ let weatherOptions = {},
 let weatherData = {},
     weatherStore = {};
 let weatherDataUpdated = 0;
-let weatherStoragePruned = Date.now();
-let weatherStorageStatsDisplayed = Date.now();
+let weatherStoragePruneTimestamp = Date.now();
+let weatherStorageStatsTimestamp = Date.now();
 
 function weatherStorageStats(options) {
     const stats = [];
-    stats.push(`cache: ${Object.keys(weatherData).length} entries, ~${Math.floor(JSON.stringify(weatherData).length / 1024)}KB`);
-    stats.push(`store: ${Object.keys(weatherStore).length} entries, ~${Math.floor(JSON.stringify(weatherStore).length / 1024)}KB`);
-    stats.push(`astro: ${Math.round((Date.now() - weatherCacheAstronomy.timestampAstronomy.getTime()) / 60000)}min old`);
-    if (options.storage?.persistence) stats.push(options.storage.persistence.filter((level) => level.enabled && level.lastSave).map((level) => `persist[${level.type}]: saved ${Math.round((Date.now() - level.lastSave) / 60000)}min ago`));
+    stats.push(`cache: ${Object.keys(weatherData).length} entries, ~${FormatHelper.bytesToString (JSON.stringify(weatherData).length)}`);
+    stats.push(`store: ${Object.keys(weatherStore).length} entries, ~${FormatHelper.bytesToString (JSON.stringify(weatherStore).length)}`);
+    stats.push(`astro: ${FormatHelper.millisToString(Date.now() - weatherCacheAstronomy.timestampAstronomy.getTime(),'')} old`);
+    if (options.storage?.persistence) stats.push(options.storage.persistence.filter((level) => level.enabled && level.lastSave).map((level) => `persist[${level.type}]: saved ${FormatHelper.millisToString(Date.now() - level.lastSave,'')} ago`));
     console.error(`weather: storage stats - ${stats.flat().join('; ')}`);
 }
 
@@ -200,7 +192,7 @@ function weatherStoragePrune(options, now) {
             });
     }
 
-    if (evictedOnTime + evictedOnSize > 0 && options.debug) console.error(`weather: storage prune - evicted on-time=${evictedOnTime}, on-size=${evictedOnSize}`);
+    if (options.debug && evictedOnTime + evictedOnSize > 0) console.error(`weather: storage prune - evicted on-time=${evictedOnTime}, on-size=${evictedOnSize}`);
 
     return evictedOnTime;
 }
@@ -209,16 +201,16 @@ function weatherStorageManage(options) {
     const now = Date.now();
 
     // prune periodically
-    if (now > weatherStoragePruned + options.storage.pruneInterval) {
+    if (now > weatherStoragePruneTimestamp + options.storage.pruneInterval) {
         weatherStoragePrune(options, now);
-        weatherStoragePruned = now;
+        weatherStoragePruneTimestamp = now;
         storageSave(options);
     }
 
     // stats periodically
-    if (now > weatherStorageStatsDisplayed + options.storage.statsInterval) {
+    if (now > weatherStorageStatsTimestamp + options.storage.statsInterval) {
         weatherStorageStats(options);
-        weatherStorageStatsDisplayed = now;
+        weatherStorageStatsTimestamp = now;
     }
 }
 
@@ -259,7 +251,7 @@ function __weatherSituation(location, data, options) {
             season: helpers.getSeason(date, location.hemisphere),
             timestampSituation: date,
         };
-        if (options?.debug) console.error(`weather: cached situation: ${date.getFullYear()}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`);
+        if (options?.debug) console.error(`weather: cached situation (daily, ${date.getFullYear()}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')})`); // XXX FormatHelper
     }
 
     // cache astronomy, 5 minutes default
@@ -270,7 +262,7 @@ function __weatherSituation(location, data, options) {
             solar: toolsAstronomy.getSolarSituation(date, location.latitude, location.longitude),
             timestampAstronomy: date,
         };
-        if (options?.debug) console.error(`weather: cached astronomy`);
+        if (options?.debug) console.error(`weather: cached astronomy (interval ${FormatHelper.millisToString (options?.compute?.astronomicalCalculationInterval || 300000,'')})`);
     }
 
     return {
@@ -334,7 +326,7 @@ function getWeatherInterpretation(data, options = {}) {
     // require minimal period
     const now = Date.now();
     if (now < weatherDataUpdated + options.data.gateInterval) {
-        if (options.debug) console.error(`weather: data gated - ${now - weatherDataUpdated}ms since last update`);
+        if (options.debug) console.error(`weather: data gated - ${FormatHelper.millisToString (now - weatherDataUpdated)} since last update`);
         return undefined;
     }
     weatherData[timestamp] = data;
