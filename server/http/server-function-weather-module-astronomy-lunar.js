@@ -196,7 +196,8 @@ function interpretLunarPhase({ results, situation, dataCurrent, store }) {
                 results.phenomena.push(`moon: in late ${zodiac.sign}, entering ${zodiac.next} soon`);
             } else {
                 const waterNote = WATER_SIGNS.includes(zodiac.sign) ? ' (emotional full moon in water sign)' : '';
-                results.phenomena.push(`moon: in ${zodiac.sign} ${zodiac.symbol}${waterNote}`);
+                // results.phenomena.push(`moon: in ${zodiac.sign} ${zodiac.symbol}${waterNote}`);
+                results.phenomena.push(`moon: in ${zodiac.sign} ${waterNote}`);
             }
         }
 
@@ -226,7 +227,8 @@ function interpretLunarPhase({ results, situation, dataCurrent, store }) {
 
         // Zodiac
         if (zodiac) {
-            results.phenomena.push(`moon: in ${zodiac.sign} ${zodiac.symbol} (${zodiac.meaning})`);
+            // results.phenomena.push(`moon: in ${zodiac.sign} ${zodiac.symbol} (${zodiac.meaning})`);
+            results.phenomena.push(`moon: in ${zodiac.sign} (${zodiac.meaning})`);
         }
 
         return;
@@ -249,7 +251,8 @@ function interpretLunarPhase({ results, situation, dataCurrent, store }) {
             if (zodiac.position === 'late') {
                 results.phenomena.push(`moon: in late ${zodiac.sign}, entering ${zodiac.next} soon`);
             } else {
-                results.phenomena.push(`moon: in ${zodiac.sign} ${zodiac.symbol}`);
+                // results.phenomena.push(`moon: in ${zodiac.sign} ${zodiac.symbol}`);
+                results.phenomena.push(`moon: in ${zodiac.sign}`);
             }
         }
 
@@ -275,7 +278,8 @@ function interpretLunarPhase({ results, situation, dataCurrent, store }) {
         if (zodiac.position === 'late') {
             results.phenomena.push(`moon: in late ${zodiac.sign}, entering ${zodiac.next} soon`);
         } else {
-            results.phenomena.push(`moon: in ${zodiac.sign} ${zodiac.symbol}`);
+            // results.phenomena.push(`moon: in ${zodiac.sign} ${zodiac.symbol}`);
+            results.phenomena.push(`moon: in ${zodiac.sign}`);
         }
     }
 }

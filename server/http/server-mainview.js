@@ -147,32 +147,34 @@ console.log(`Loaded '/' using 'server-mainview' && data/vars`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const weather_module = require('./server-function-weather.js')(configData.LOCATION, { debug: false });
+const weather_options = { debug: false, suppress: { stable: true }, n2yoApiKey: configData.N2YO_API_KEY };
+const weather_module = require('./server-function-weather.js')(configData.LOCATION, weather_options);
 function getWeatherInterpretation(vars) {
+    const dataConditions = vars['weather/branna'];
+    const dataSensorRadiation = vars['sensors/radiation'] || {};
+    const timestamp = dataConditions.timestamp || Date.now();
+    if (!dataConditions) return undefined;
     try {
-        const varsConditions = vars['weather/branna'] || {},
-            varsRadiation = vars['sensors/radiation'] || {};
-        const results = weather_module.getWeatherInterpretation(
-            {
-                timestamp: Date.now(),
-                temp: varsConditions.temp,
-                humidity: varsConditions.humidity,
-                pressure: varsConditions.baromrel,
-                windSpeed: varsConditions.windspeed ? varsConditions.windspeed / 3.6 : undefined,
-                windGust: varsConditions.windgust ? varsConditions.windgust / 3.6 : undefined,
-                solarRad: varsConditions.solarradiation,
-                solarUvi: varsConditions.uv,
-                rainRate: varsConditions.rainrate,
-                radiationCpm: varsRadiation.cpm,
-                radiationAcpm: varsRadiation.acpm,
-                radiationUsvh: varsRadiation.usvh,
-                cloudCover: undefined,
-                snowDepth: undefined,
-                iceDepth: undefined,
-            },
-            { suppress: { stable: true } }
-        );
-        return results;
+        const interpretation = weather_module.getWeatherInterpretation({
+            timestamp,
+            temp: dataConditions.temp,
+            humidity: dataConditions.humidity,
+            pressure: dataConditions.baromrel,
+            windSpeed: dataConditions.windspeed ? dataConditions.windspeed / 3.6 : undefined,
+            windGust: dataConditions.windgust ? dataConditions.windgust / 3.6 : undefined,
+            windDir: dataConditions.winddir,
+            solarRad: dataConditions.solarradiation,
+            solarUvi: dataConditions.uv,
+            rainRate: dataConditions.rainrate,
+            radiationCpm: dataSensorRadiation.cpm,
+            radiationAcpm: dataSensorRadiation.acpm,
+            radiationUsvh: dataSensorRadiation.usvh,
+            cloudCover: undefined,
+            snowDepth: undefined,
+            iceDepth: undefined,
+        });
+        // console.error(`weather: [${new Date().toISOString()}] process, response: <<<`, interpretation, `>>>`);
+        return interpretation;
     } catch (e) {
         console.error(`getWeatherInterpretation, error:`, e);
         return undefined;
@@ -246,8 +248,10 @@ function process_variables() {
             server_vars.update(topic, vars);
         }
         const interpretation = getWeatherInterpretation(server_vars.variables());
-        server_vars.update('interpretation', interpretation);
-        __weatherAlerts_update(interpretation.alerts);
+        if (interpretation) {
+            server_vars.update('interpretation', interpretation);
+            __weatherAlerts_update(interpretation.alerts);
+        }
     } catch (e) {
         console.error(`process_variables: error:`, e);
     }

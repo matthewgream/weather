@@ -433,7 +433,7 @@ function getAlerts(state) {
 
 async function updateAll(state, situation) {
     await Promise.all([fetchKpIndex(state), fetchSolarWind(state), fetchSolarWindMag(state), fetchAlerts(state)]);
-    if (Date.now() - state.kpForecast.lastUpdate > STALENESS.forecast) await fetchKpForecast(state);
+    if (!state?.kpForecast || (Date.now() - state.kpForecast.lastUpdate > STALENESS.forecast)) await fetchKpForecast(state);
     if (situation?.location && (!state.ovation || Date.now() - state.ovation.lastUpdate > STALENESS.ovation)) await fetchOvation(state, situation.location);
 }
 
