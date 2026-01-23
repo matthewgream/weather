@@ -2,18 +2,12 @@
 // Astronomy Celestial Module - Meteors, comets, and deep sky objects
 // -----------------------------------------------------------------------------------------------------------------------------------------
 //
-// Covers:
 //   - Meteor showers (major and minor)
 //   - Sporadic meteors
 //   - Fireball season
 //   - Comets (periodic returns)
 //   - Deep sky objects (galaxies, nebulae, clusters)
 //   - Limiting magnitude and visibility
-//
-// Dependencies:
-//   - server-function-weather-tools-astronomical.js
-//   - server-function-weather-tools-format.js
-//   - server-function-weather-helpers.js
 //
 // -----------------------------------------------------------------------------------------------------------------------------------------
 

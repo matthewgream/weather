@@ -2,7 +2,6 @@
 // Astronomy Solar Module - Sun position and direct solar phenomena
 // -----------------------------------------------------------------------------------------------------------------------------------------
 //
-// Covers:
 //   - Sun position (altitude, azimuth, direction)
 //   - Solar noon and equation of time
 //   - Golden hour / blue hour
@@ -10,10 +9,6 @@
 //   - UV index
 //   - Seasonal sun angle variations
 //   - Zenith passage (tropics)
-//
-// Dependencies:
-//   - server-function-weather-tools-astronomical.js
-//   - server-function-weather-tools-format.js
 //
 // -----------------------------------------------------------------------------------------------------------------------------------------
 

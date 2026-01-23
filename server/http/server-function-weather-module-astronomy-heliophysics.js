@@ -2,13 +2,11 @@
 // Heliophysics Module - Solar-terrestrial interactions and space weather
 // -----------------------------------------------------------------------------------------------------------------------------------------
 //
-// Covers:
 //   - Aurora predictions and real-time monitoring
 //   - Geomagnetic activity (Kp, Dst indices)
 //   - Solar wind conditions
 //   - CME/flare monitoring and alerts
 //
-// External data sources:
 //   - NOAA SWPC (Space Weather Prediction Center)
 //   - All endpoints at: https://services.swpc.noaa.gov/
 //
@@ -433,7 +431,7 @@ function getAlerts(state) {
 
 async function updateAll(state, situation) {
     await Promise.all([fetchKpIndex(state), fetchSolarWind(state), fetchSolarWindMag(state), fetchAlerts(state)]);
-    if (!state?.kpForecast || (Date.now() - state.kpForecast.lastUpdate > STALENESS.forecast)) await fetchKpForecast(state);
+    if (!state?.kpForecast || Date.now() - state.kpForecast.lastUpdate > STALENESS.forecast) await fetchKpForecast(state);
     if (situation?.location && (!state.ovation || Date.now() - state.ovation.lastUpdate > STALENESS.ovation)) await fetchOvation(state, situation.location);
 }
 

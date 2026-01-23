@@ -236,38 +236,34 @@ function weatherStorageStartup(options) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function __weatherTrend(weatherData, field) {
-    const trends = {};
-    for (const periodKey of Object.keys(WeatherData.PERIODS)) {
-        const period = weatherData.getPeriod(periodKey);
-        if (!period) {
-            trends[periodKey] = { valid: false };
-            continue;
-        }
-        const trend = {
-            back: period.back(field, weatherData.getPeriodHours(periodKey) * 3600),
-            min: period.min(field),
-            max: period.max(field),
-            avg: period.avg(field),
-            delta: period.delta(field),
-            rate: period.rateOfChange(field),
-            trend: period.trend(field),
-            count: period.count(),
-            valid: period.isReasonablyDistributed(),
-        };
-        if (periodKey === '24h' || periodKey === '7d') {
-            trend.minTime = period.minWithTime(field).time;
-            trend.maxTime = period.maxWithTime(field).time;
-        }
-        trends[periodKey] = trend;
+function __weatherTrendPeriod(weatherData, field, periodKey) {
+    const period = weatherData.getPeriod(periodKey);
+    if (!period) 
+        return { valid: false };
+    const trend = {
+        back: period.back(field, weatherData.getPeriodHours(periodKey) * 3600),
+        min: period.min(field),
+        max: period.max(field),
+        avg: period.avg(field),
+        delta: period.delta(field),
+        rate: period.rateOfChange(field),
+        trend: period.trend(field),
+        count: period.count(),
+        valid: period.isReasonablyDistributed(),
+    };
+    if (periodKey === '24h' || periodKey === '7d') {
+        trend.minTime = period.minWithTime(field).time;
+        trend.maxTime = period.maxWithTime(field).time;
     }
-    return trends;
+    return trend;
+}
+
+function __weatherTrend(weatherData, field) {
+    return Object.fromEntries (Object.keys(WeatherData.PERIODS).map (periodKey => [periodKey, __weatherTrendPeriod (weatherData, field, periodKey)]));
 }
 
 function __weatherTrends(weatherData, fields) {
-    const trends = {};
-    for (const field of fields) trends[field] = __weatherTrend(weatherData, field);
-    return trends;
+    return Object.fromEntries (fields.map (field => [field, __weatherTrend(weatherData, field)]));
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -407,9 +403,9 @@ function initialise(location, options) {
         ...require('./server-function-weather-module-astronomy-atmospheric.js')(parameters),
         ...require('./server-function-weather-module-astronomy-heliophysics.js')(parameters),
         ...require('./server-function-weather-module-astronomy-celestial.js')(parameters),
+        ...require('./server-function-weather-module-astronomy-planets-and-stars.js')(parameters),
         ...require('./server-function-weather-module-astronomy-meteors-realtime.js')(parameters),
         ...require('./server-function-weather-module-astronomy-satellites.js')(parameters),
-        ...require('./server-function-weather-module-astronomy-satellites-realtime.js')(parameters),
         ...require('./server-function-weather-module-eclipses.js')(parameters),
         ...require('./server-function-weather-module-phenology.js')(parameters),
         ...require('./server-function-weather-module-calendar.js')(parameters),

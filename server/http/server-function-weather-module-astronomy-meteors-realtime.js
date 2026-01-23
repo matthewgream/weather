@@ -2,7 +2,6 @@
 // Astronomy Meteors Realtime Module - Live meteor activity monitoring
 // -----------------------------------------------------------------------------------------------------------------------------------------
 //
-// External data sources:
 //   - American Meteor Society (AMS) Fireball API - recent bright meteors
 //   - Enhances static shower predictions with real observed data
 //

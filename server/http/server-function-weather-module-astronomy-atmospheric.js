@@ -2,7 +2,6 @@
 // Astronomy Atmospheric Module - Twilight, sky optics, and viewing conditions
 // -----------------------------------------------------------------------------------------------------------------------------------------
 //
-// Covers:
 //   - Twilight phases (civil, nautical, astronomical)
 //   - Twilight phenomena (Belt of Venus, Earth's shadow, alpenglow)
 //   - Sunrise/sunset conditions
@@ -14,11 +13,6 @@
 //   - Atmospheric optics (halos, sundogs, light pillars, arcs)
 //   - Viewing/seeing conditions
 //   - White nights
-//
-// Dependencies:
-//   - server-function-weather-tools-astronomical.js
-//   - server-function-weather-tools-format.js
-//   - server-function-weather-helpers.js
 //
 // -----------------------------------------------------------------------------------------------------------------------------------------
 

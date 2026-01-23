@@ -2,18 +2,12 @@
 // Astronomy Calendar Module - Seasonal astronomical events
 // -----------------------------------------------------------------------------------------------------------------------------------------
 //
-// Covers:
 //   - Equinoxes (spring/autumn)
 //   - Solstices (summer/winter)
 //   - Cross-quarter days (Imbolc, Beltane, Lughnasadh, Samhain)
 //   - Daylight change rates
 //   - Polar phenomena (midnight sun, polar night)
 //   - Cultural/seasonal context
-//
-// Dependencies:
-//   - server-function-weather-tools-astronomical.js
-//   - server-function-weather-tools-format.js
-//   - server-function-weather-helpers.js
 //
 // -----------------------------------------------------------------------------------------------------------------------------------------
 

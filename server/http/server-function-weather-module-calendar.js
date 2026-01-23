@@ -5,7 +5,6 @@
 // This module is CALENDAR-FIRST: dates, events, observances, and timing are primary.
 // Weather conditions are secondary context for the calendar events.
 //
-// Covers:
 //   - Swedish holidays and red days (röda dagar)
 //   - Traditional folk calendar and name days
 //   - Seasonal activities and their timing
@@ -21,7 +20,6 @@
 /* eslint-disable sonarjs/cognitive-complexity */
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
-// Constants - Swedish Calendar
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // Swedish public holidays (röda dagar) - month is 0-indexed, -1 means moveable, calculated at runtime
@@ -116,7 +114,6 @@ const HOURS = {
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
-// Constants - Weather Thresholds
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const TEMP = {
@@ -140,7 +137,6 @@ const WIND = {
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
-// Helper Functions - Date Calculations
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function getEaster(year) {
@@ -203,18 +199,6 @@ function getAdventSunday(year, which) {
     const targetDate = new Date(firstDate.getTime() + (which - 1) * 7 * 24 * 60 * 60 * 1000);
     return { month: targetDate.getMonth(), day: targetDate.getDate() };
 }
-
-// function isWithinDays(month, day, targetMonth, targetDay, rangeDays) {
-//     // Simplified check - doesn't handle year boundaries perfectly
-//     const current = month * 31 + day;
-//     const target = targetMonth * 31 + targetDay;
-//     return Math.abs(current - target) <= rangeDays;
-// }
-
-// function formatDate(month, day) {
-//     const months = ['januari', 'februari', 'mars', 'april', 'maj', 'juni', 'juli', 'augusti', 'september', 'oktober', 'november', 'december'];
-//     return `${day} ${months[month]}`;
-// }
 
 function isInPeriod(month, day, startMonth, startDay, endMonth, endDay) {
     const current = month * 100 + day;

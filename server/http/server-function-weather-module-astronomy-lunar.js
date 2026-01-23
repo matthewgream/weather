@@ -2,18 +2,12 @@
 // Astronomy Lunar Module - Moon phase, position, visibility, and events
 // -----------------------------------------------------------------------------------------------------------------------------------------
 //
-// Covers:
 //   - Lunar phase (new, crescent, quarter, gibbous, full)
 //   - Lunar position (altitude, azimuth, declination)
 //   - Lunar visibility (illumination, rise/set times, libration)
 //   - Lunar events (supermoon, blue moon, standstills)
 //   - Lunar surface features (terminator, crater rays)
 //   - Zodiac position
-//
-// Dependencies:
-//   - server-function-weather-tools-astronomical.js
-//   - server-function-weather-tools-format.js
-//   - server-function-weather-helpers.js
 //
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
