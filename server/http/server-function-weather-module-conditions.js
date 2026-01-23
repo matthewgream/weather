@@ -1,202 +1,487 @@
-// XXX review
-
 // -----------------------------------------------------------------------------------------------------------------------------------------
+// Weather Conditions Module - Interprets basic weather variables and their combinations
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-// const helpers = require('./server-function-weather-helpers.js');
+const { cardinalDirection } = require('./server-function-weather-helpers.js');
 const { FormatHelper } = require('./server-function-weather-tools-format.js');
-const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
-const toolsData = require('./server-function-weather-tools-data.js');
+// const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
+// const toolsData = require('./server-function-weather-tools-data.js');
 
-/* XXX for each
-function hasSignificantDataGap(sortedEntries, maxGapHours = 3) {
-    for (let i = 1; i < sortedEntries.length; i++) {
-        const gap = (sortedEntries[i][0] - sortedEntries[i-1][0]) / 3600000;
-        if (gap > maxGapHours) return true;
-    }
-    return false;
-}
-*/
-
-/* XXX for each
-const percentile95 = historicalValues.sort((a,b) => a-b)[Math.floor(historicalValues.length * 0.95)];
-const percentile5 = historicalValues.sort((a,b) => a-b)[Math.floor(historicalValues.length * 0.05)];
-if (temp > percentile95) {
-    results.phenomena.push('temperature in top 5% for recent period');
-} else if (temp < percentile5) {
-    results.phenomena.push('temperature in bottom 5% for recent period');
-}
-*/
-
-// XXX a lot of the store data is not used
+/* eslint-disable sonarjs/cognitive-complexity */
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
+// Constants - Weather Thresholds
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function calculateVariance(values) {
-    const mean = values.reduce((a, b) => a + b, 0) / values.length;
-    return values.reduce((sum, val) => sum + (val - mean) ** 2, 0) / values.length;
-}
+const THRESHOLDS = {
+    // =========================================================================
+    // Temperature thresholds (Celsius) - Nordic climate calibrated
+    // =========================================================================
+    TEMP: {
+        // Absolute thresholds
+        EXTREME_COLD: -25, // Frostbite risk begins
+        VERY_COLD: -15, // Severe cold
+        COLD: -5, // Cold
+        FREEZING: 0, // Water freezes
+        CHILLY: 5, // Cool, biological zero (growing threshold)
+        COOL: 10, // Mild cool
+        MILD: 15, // Comfortable mild
+        WARM: 20, // Warm
+        HOT: 25, // Hot for Nordic
+        VERY_HOT: 28, // Very hot for Nordic
+        EXTREME_HOT: 30, // Swedish heat wave threshold
+        DANGEROUS_HOT: 33, // Dangerous heat
 
-function getCardinalDirection(degrees) {
-    return ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(degrees / 45) % 8];
-}
+        // Other thresholds
+        TROPICAL_NIGHT: 20, // Min temp for "tropical night"
+
+        // Seasonal anomaly detection
+        WINTER_COLD: -20, // Unusually cold for winter
+        WINTER_WARM: 5, // Unusually warm for winter
+        WINTER_VERY_WARM: 10, // Very warm for winter
+        SUMMER_COOL: 12, // Cool for summer
+        SUMMER_COLD: 8, // Cold for summer
+
+        // Change thresholds
+        RAPID_HOURLY_CHANGE: 5,
+        SIGNIFICANT_3H_CHANGE: 8,
+        SIGNIFICANT_6H_CHANGE: 10,
+        EXTREME_DIURNAL_RANGE: 20,
+        STABLE_DIURNAL_RANGE: 5,
+        EXTREME_WEEKLY_RANGE: 30,
+    },
+
+    // =========================================================================
+    // Pressure thresholds (hPa)
+    // =========================================================================
+    PRESSURE: {
+        // Absolute thresholds
+        SEVERE_LOW: 970, // Major storm
+        STORMY: 990, // Storm conditions
+        UNSETTLED: 1000, // Unsettled weather
+        NORMAL_LOW: 1005, // Lower normal range
+        NORMAL_HIGH: 1015, // Upper normal range
+        SETTLED: 1020, // Settled weather
+        HIGH: 1030, // High pressure
+        VERY_HIGH: 1040, // Siberian high type
+
+        // Change thresholds
+        RAPID_HOURLY_CHANGE: 3,
+        SIGNIFICANT_3H_CHANGE: 5,
+        MODERATE_3H_CHANGE: 3,
+        SIGNIFICANT_24H_CHANGE: 10,
+        EXTREME_24H_RANGE: 20,
+        STABLE_24H_RANGE: 3,
+        DEEPENING_LOW: -15,
+        BUILDING_HIGH: 15,
+    },
+
+    // =========================================================================
+    // Humidity thresholds (%)
+    // =========================================================================
+    HUMIDITY: {
+        // Absolute thresholds
+        VERY_DRY: 20, // Very dry air
+        DRY: 30, // Dry air
+        COMFORT_LOW: 35, // Lower comfort bound
+        COMFORT_HIGH: 60, // Upper comfort bound
+        HUMID: 70, // Humid
+        VERY_HUMID: 85, // Very humid
+        SATURATED: 95, // Near saturation
+        FOG_LIKELY: 98, // Fog formation likely
+
+        // Change thresholds
+        RAPID_3H_CHANGE: 20,
+        RAPID_6H_CHANGE: 30,
+
+        // Streak thresholds (hours)
+        DRY_STREAK_WARNING: 24,
+        HUMID_STREAK_WARNING: 12,
+        MOLD_RISK_HOURS: 48, // Sustained high humidity for mold risk
+    },
+
+    // =========================================================================
+    // Wind thresholds (m/s) - Beaufort scale
+    // =========================================================================
+    WIND: {
+        // Beaufort scale thresholds
+        CALM: 0.5, // Bft 0-1 boundary
+        LIGHT_AIR: 1.5, // Bft 1-2 boundary
+        LIGHT_BREEZE: 3.3, // Bft 2-3 boundary
+        GENTLE_BREEZE: 5.5, // Bft 3-4 boundary
+        MODERATE_BREEZE: 7.9, // Bft 4-5 boundary
+        FRESH_BREEZE: 10.7, // Bft 5-6 boundary
+        STRONG_BREEZE: 13.8, // Bft 6-7 boundary
+        NEAR_GALE: 17.1, // Bft 7-8 boundary
+        GALE: 20.7, // Bft 8-9 boundary
+        STRONG_GALE: 24.4, // Bft 9-10 boundary
+        STORM: 28.4, // Bft 10-11 boundary
+        VIOLENT_STORM: 32.6, // Bft 11-12 boundary
+
+        // Gust thresholds
+        MODERATE_GUST_FACTOR: 1.4,
+        DANGEROUS_GUST_FACTOR: 1.7,
+        SEVERE_GUST_FACTOR: 2,
+
+        // Special conditions
+        SNOW_DRIFT: 5, // Threshold for blowing/drifting snow
+        TREE_DAMAGE: 25, // Severe tree damage threshold
+        EVAPORATION_SIGNIFICANT: 4, // Significant evaporative cooling
+    },
+
+    // =========================================================================
+    // Cloud cover thresholds (%)
+    // =========================================================================
+    CLOUDS: {
+        // Coverage classification
+        CLEAR: 10, // Clear skies
+        MOSTLY_CLEAR: 25, // Few clouds
+        PARTLY_CLOUDY: 50, // Scattered clouds
+        MOSTLY_CLOUDY: 75, // Broken clouds
+        OVERCAST: 90, // Overcast
+
+        // Variability (24h range)
+        HIGH_VARIABILITY: 50,
+        LOW_VARIABILITY: 15,
+
+        // Sunshine thresholds
+        SUNSHINE_THRESHOLD: 30, // Below this = sunshine possible
+    },
+
+    // =========================================================================
+    // Precipitation thresholds (mm/h for rate, mm for accumulation)
+    // =========================================================================
+    RAIN: {
+        // Rate thresholds (mm/h)
+        TRACE: 0.1, // Barely measurable
+        LIGHT: 0.5, // Light rain
+        LIGHT_MODERATE: 2.5, // Light to moderate
+        MODERATE: 4, // Moderate rain
+        HEAVY: 8, // Heavy rain
+        VERY_HEAVY: 16, // Very heavy rain
+        EXTREME: 30, // Extreme rainfall
+
+        // Accumulation thresholds (mm)
+        FLASH_FLOOD_RISK: 25, // 1h accumulation
+        SIGNIFICANT_24H: 25,
+        ALERT_24H: 50,
+        EXTREME_24H: 100,
+        WET_WEEK: 100, // 7d accumulation
+        DRY_WEEK: 5,
+
+        // Drought thresholds
+        DRY_DAYS_CONCERN: 7,
+        DROUGHT_DAYS: 14,
+    },
+
+    // =========================================================================
+    // Snow thresholds (mm depth)
+    // =========================================================================
+    SNOW: {
+        // Coverage thresholds
+        TRACE: 10, // Trace snow cover
+        LIGHT_COVER: 50, // Light snow cover
+        MODERATE_COVER: 200, // Moderate cover
+        DEEP_COVER: 500, // Deep snow
+        VERY_DEEP_COVER: 800, // Very deep snow
+
+        // 24h accumulation rates (mm)
+        LIGHT_24H: 10,
+        MODERATE_24H: 50,
+        HEAVY_24H: 100,
+        EXTREME_24H: 200,
+
+        // Hourly rate thresholds (mm/h)
+        RAPID_RATE: 10,
+
+        // Melt rates (mm/24h)
+        MODERATE_MELT: 20,
+        RAPID_MELT: 50,
+
+        // Skiing quality thresholds
+        MIN_SKIING: 30, // Minimum for skiing
+    },
+
+    // =========================================================================
+    // Ice thresholds (mm) - Swedish ice safety standards
+    // =========================================================================
+    ICE: {
+        THIN: 50, // Unsafe
+        WALKABLE: 100, // Single person (Swedish: 10 cm)
+        GROUP_SAFE: 150, // Group activities
+        SNOWMOBILE: 200, // Snowmobile (Swedish: 20 cm)
+        VEHICLE: 250, // Light vehicle (Swedish: 25 cm)
+        THICK: 300, // Very thick
+        HEAVY_VEHICLE: 400, // Heavy vehicle
+
+        // Growth/melt rate thresholds (mm/day)
+        RAPID_GROWTH: 10,
+        RAPID_MELT: 5,
+    },
+
+    // =========================================================================
+    // Radiation thresholds (CPM for Geiger counter)
+    // =========================================================================
+    RADIATION: {
+        NORMAL: 30, // Normal background
+        SLIGHTLY_ELEVATED: 50,
+        MODERATELY_ELEVATED: 100,
+        HIGH: 300,
+        DANGEROUS: 1000,
+
+        // Anomaly detection multipliers
+        ANOMALY_MULTIPLIER: 2,
+        SEVERE_ANOMALY_MULTIPLIER: 3,
+        CRITICAL_ANOMALY_MULTIPLIER: 5,
+
+        // Dose rate thresholds (µSv/h)
+        DOSE_NORMAL: 0.1,
+        DOSE_ELEVATED: 0.3,
+        DOSE_HIGH: 1,
+        DOSE_DANGEROUS: 5,
+    },
+
+    // =========================================================================
+    // Solar thresholds
+    // =========================================================================
+    SOLAR: {
+        // Solar radiation (W/m²)
+        LOW_RAD: 100,
+        MODERATE_RAD: 300,
+        STRONG_RAD: 500,
+        INTENSE_RAD: 800,
+        EXTREME_RAD: 1000,
+
+        // UV Index
+        UV_LOW: 2,
+        UV_MODERATE: 3,
+        UV_HIGH: 6,
+        UV_VERY_HIGH: 8,
+        UV_EXTREME: 11,
+    },
+
+    // =========================================================================
+    // Dew point and fog thresholds
+    // =========================================================================
+    DEW_POINT: {
+        // Spread thresholds (temp - dewpoint)
+        DENSE_FOG_SPREAD: 1, // Dense fog likely
+        FOG_SPREAD: 2, // Fog likely
+        PATCHY_FOG_SPREAD: 3, // Patchy fog possible
+        MIST_SPREAD: 5, // Mist possible
+
+        // Comfort thresholds (absolute dew point)
+        COMFORTABLE: 13, // Comfortable
+        SOMEWHAT_HUMID: 16, // Somewhat humid
+        HUMID: 18, // Humid/sticky
+        OPPRESSIVE: 21, // Oppressive
+        DANGEROUS: 24, // Dangerous heat stress risk
+    },
+
+    // =========================================================================
+    // Combination/compound thresholds
+    // =========================================================================
+    COMPOUND: {
+        // Wind chill thresholds (°C)
+        WIND_CHILL_COLD: -10,
+        WIND_CHILL_SEVERE: -20,
+        WIND_CHILL_EXTREME: -30,
+        WIND_CHILL_DANGEROUS: -40,
+
+        // Heat index thresholds (°C)
+        HEAT_INDEX_CAUTION: 27,
+        HEAT_INDEX_WARNING: 32,
+        HEAT_INDEX_DANGER: 39,
+        HEAT_INDEX_EXTREME: 46,
+
+        // Fire risk
+        FIRE_RISK_TEMP: 22,
+        FIRE_RISK_HUMIDITY: 40,
+        FIRE_EXTREME_TEMP: 25,
+        FIRE_EXTREME_HUMIDITY: 30,
+
+        // Black ice risk
+        BLACK_ICE_TEMP_LOW: -3,
+        BLACK_ICE_TEMP_HIGH: 2,
+        BLACK_ICE_HUMIDITY: 80,
+
+        // Freezing rain
+        FREEZING_RAIN_TEMP_LOW: -8,
+        FREEZING_RAIN_TEMP_HIGH: 2,
+
+        // Thunderstorm development
+        THUNDER_TEMP: 20,
+        THUNDER_HUMIDITY: 70,
+        THUNDER_PRESSURE: 1010,
+
+        // Blizzard conditions
+        BLIZZARD_WIND: 15,
+        BLIZZARD_VISIBILITY_SNOW: 1, // km visibility in snow
+    },
+};
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
+// Temperature Interpreter
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretTemperature(results, situation, data, data_previous, store, _options) {
-    const { timestamp, temp, humidity, windSpeed, snowDepth } = data;
+function interpretTemperature({ results, situation, dataCurrent, store }) {
+    const { temp } = dataCurrent;
     const { month, hour, location } = situation;
 
     if (temp === undefined) return;
 
-    if (!store.temperature)
-        store.temperature = {
-            extremes24h: { min: temp, max: temp, minTime: timestamp, maxTime: timestamp },
-            extremes7d: { min: temp, max: temp },
-            trend: 'stable',
-            rateOfChange: 0,
-            frostDays: 0,
-            heatDays: 0,
-        };
+    if (!store.temperature) store.temperature = {};
 
-    const oneHourAgo = timestamp - 60 * 60 * 1000,
-        sixHoursAgo = timestamp - 6 * 60 * 60 * 1000,
-        twentyFourHoursAgo = timestamp - 24 * 60 * 60 * 1000,
-        sevenDaysAgo = timestamp - 7 * 24 * 60 * 60 * 1000;
-    let temp1hAgo, temp6hAgo, temp24hAgo;
-    let variance6hAgo;
-    let min24h = temp,
-        max24h = temp,
-        min7d = temp,
-        max7d = temp;
-    let minTime24h = timestamp,
-        maxTime24h = timestamp;
-    Object.entries(data_previous)
-        .filter(([timestamp, entry]) => timestamp > sevenDaysAgo && entry.temp !== undefined)
-        .sort(([a], [b]) => a - b)
-        .forEach(([timestamp, entry]) => {
-            // XXX all of these are incorrect and should be "nearest"
-            if (timestamp > oneHourAgo && temp1hAgo === undefined) temp1hAgo = entry.temp;
-            if (timestamp > sixHoursAgo && temp6hAgo === undefined) temp6hAgo = entry.temp;
-            if (timestamp > twentyFourHoursAgo) {
-                if (temp24hAgo === undefined) temp24hAgo = entry.temp;
-                if (entry.temp < min24h) {
-                    min24h = entry.temp;
-                    minTime24h = timestamp;
-                }
-                if (entry.temp > max24h) {
-                    max24h = entry.temp;
-                    maxTime24h = timestamp;
-                }
+    // -------------------------------------------------------------------------
+    // PART A: Basic Temperature Classification
+    // -------------------------------------------------------------------------
+
+    const TEMP_RANGES = [
+        { below: THRESHOLDS.TEMP.EXTREME_COLD, label: 'extremely cold', showThreshold: '<', alert: 'extreme cold warning' },
+        { below: THRESHOLDS.TEMP.VERY_COLD, label: 'very cold', showThreshold: '<' },
+        { below: THRESHOLDS.TEMP.COLD, label: 'cold' },
+        { below: THRESHOLDS.TEMP.FREEZING, label: 'sub-zero' },
+        { below: THRESHOLDS.TEMP.CHILLY, label: 'chilly' },
+        { below: THRESHOLDS.TEMP.COOL, label: 'cool' },
+        { below: THRESHOLDS.TEMP.MILD, label: 'mild' },
+        { below: THRESHOLDS.TEMP.WARM, label: 'mild to warm' },
+        { below: THRESHOLDS.TEMP.HOT, label: 'warm' },
+        { below: THRESHOLDS.TEMP.VERY_HOT, label: 'hot', showThreshold: '>' },
+        { below: Infinity, label: 'very hot', showThreshold: '>' },
+    ];
+
+    for (const range of TEMP_RANGES)
+        if (temp < range.below) {
+            results.conditions.push(range.label + (range.showThreshold ? ` (${range.showThreshold} ${FormatHelper.temperatureToString(range.below)})` : ''));
+            if (range.alert) results.alerts.push(range.alert);
+            break;
+        }
+
+    // -------------------------------------------------------------------------
+    // PART B: Trend Analysis (temperature-only)
+    // -------------------------------------------------------------------------
+
+    const trends = store.conditions?.trends?.temp || {};
+
+    const t1h = trends['1h'];
+    if (t1h?.valid && t1h.back !== undefined) {
+        const change1h = temp - t1h.back;
+        if (Math.abs(change1h) > THRESHOLDS.TEMP.RAPID_HOURLY_CHANGE) {
+            results.phenomena.push(`rapid hourly temperature ${change1h > 0 ? 'rise' : 'drop'} (${FormatHelper.temperatureToString(Math.abs(change1h))})`);
+            if (change1h < -THRESHOLDS.TEMP.RAPID_HOURLY_CHANGE && temp < THRESHOLDS.TEMP.CHILLY) {
+                results.alerts.push('flash freeze possible');
             }
-            if (timestamp > sevenDaysAgo) {
-                min7d = Math.min(min7d, entry.temp);
-                max7d = Math.max(max7d, entry.temp);
-            }
-        });
-    if (temp6hAgo !== undefined) {
-        const samples = Object.entries(data_previous)
-            .filter(([timestamp, entry]) => timestamp > sixHoursAgo && entry.temp !== undefined)
-            .map(([_timestamp, entry]) => entry.temp);
-        if (samples.length > 3) variance6hAgo = calculateVariance(samples);
+        }
+        store.temperature.rateOfChange = change1h;
     }
-    store.temperature.extremes24h = { min: min24h, max: max24h, minTime: minTime24h, maxTime: maxTime24h };
-    store.temperature.extremes7d = { min: min7d, max: max7d };
 
-    if (temp < -25) {
-        results.conditions.push('extremely cold');
-        results.alerts.push('extreme cold warning');
-        if (windSpeed > 3) results.alerts.push('severe wind chill danger');
-    } else if (temp < -15) {
-        results.conditions.push('very cold');
-        if (humidity > 80) results.phenomena.push('ice crystal formation likely');
-    } else if (temp < -5) results.conditions.push('cold');
-    else if (temp < 0) results.conditions.push('freezing');
-    else if (temp < 5) results.conditions.push('chilly');
-    else if (temp < 10) results.conditions.push('cool');
-    else if (temp >= 10 && temp < 18) results.conditions.push('mild');
-    else if (temp >= 18 && temp < 23) results.conditions.push('warm');
-    else if (temp >= 22 && temp < 27) {
-        results.conditions.push('warm to hot');
-        results.phenomena.push('warm for Nordic climate');
-    } else if (temp >= 23 && temp < 28) {
-        results.conditions.push('hot');
-        if (location.latitude > 59) results.phenomena.push('unusually warm for this latitude');
-    } else {
-        results.conditions.push('very hot');
-        if (temp >= 30) {
-            results.alerts.push('unusual heat for Nordic region');
-            if (temp >= 32) results.alerts.push('extreme heat warning');
+    const t3h = trends['3h'];
+    if (t3h?.valid && t3h.back !== undefined) {
+        const change3h = temp - t3h.back;
+        if (Math.abs(change3h) > THRESHOLDS.TEMP.SIGNIFICANT_3H_CHANGE) {
+            results.phenomena.push(`significant 3 hour temperature ${change3h > 0 ? 'rise' : 'drop'} (${FormatHelper.temperatureToString(Math.abs(change3h))})`);
         }
     }
 
-    const change1h = temp1hAgo === undefined ? 0 : temp - temp1hAgo,
-        change6h = temp6hAgo === undefined ? 0 : temp - temp6hAgo;
-    if (Math.abs(change1h) > 5) {
-        results.phenomena.push(`rapid hourly temperature ${change1h > 0 ? 'rise' : 'drop'}: ${FormatHelper.temperatureToString(Math.abs(change1h))}`);
-        if (change1h < -5 && temp < 5) results.alerts.push('flash freeze possible');
-    } else if (Math.abs(change6h) > 10) results.phenomena.push(`significant 6 hour temperature ${change6h > 0 ? 'rise' : 'drop'}: ${FormatHelper.temperatureToString(Math.abs(change6h))}`);
-    if (variance6hAgo > 4) results.phenomena.push('unstable temperature conditions');
-
-    const diurnalRange = max24h - min24h;
-    if (diurnalRange > 20) {
-        results.phenomena.push(`extreme 24 hour temperature variation: ${FormatHelper.temperatureToString(diurnalRange)}`);
-        if (month >= 4 && month <= 9) results.phenomena.push('continental climate effect');
-    } else if (diurnalRange < 5) {
-        results.phenomena.push(`stable 24 hour temperature variation: ${FormatHelper.temperatureToString(diurnalRange)}`);
-        if (humidity > 80) results.phenomena.push('maritime influence likely');
+    const t6h = trends['6h'];
+    if (t6h?.valid && t6h.back !== undefined) {
+        const change6h = temp - t6h.back;
+        if (Math.abs(change6h) > THRESHOLDS.TEMP.SIGNIFICANT_6H_CHANGE) {
+            results.phenomena.push(`significant 6 hour temperature ${change6h > 0 ? 'rise' : 'drop'} (${FormatHelper.temperatureToString(Math.abs(change6h))})`);
+        }
     }
 
-    if (temp <= 0 && temp24hAgo > 0) {
-        store.temperature.frostDays++;
-        results.phenomena.push('first frost of the period');
-    } else if (temp > 0 && min24h <= 0) results.phenomena.push('frost occurred in last 24 hours');
+    const t24h = trends['24h'];
+    if (t24h?.valid) {
+        if (t24h.back !== undefined) {
+            if (temp <= THRESHOLDS.TEMP.FREEZING && t24h.back > THRESHOLDS.TEMP.FREEZING) {
+                results.phenomena.push('temperature dropped below freezing'); // XXX at
+            } else if (temp > THRESHOLDS.TEMP.FREEZING && t24h.min !== undefined && t24h.min <= THRESHOLDS.TEMP.FREEZING) {
+                results.phenomena.push('frost occurred in last 24 hours');
+            }
+        }
+        if (t24h.min !== undefined && t24h.max !== undefined) {
+            store.temperature.extremes24h = {
+                min: t24h.min,
+                max: t24h.max,
+                minTime: t24h.minTime,
+                maxTime: t24h.maxTime,
+            };
+            const range24h = t24h.max - t24h.min;
+            if (range24h > THRESHOLDS.TEMP.EXTREME_DIURNAL_RANGE) {
+                results.phenomena.push(`extreme 24 hour temperature variation (${FormatHelper.temperatureToString(range24h)})`);
+                if (month >= 4 && month <= 9) results.phenomena.push('continental climate effect');
+            } else if (range24h < THRESHOLDS.TEMP.STABLE_DIURNAL_RANGE) {
+                results.phenomena.push(`stable 24 hour temperature variation (${FormatHelper.temperatureToString(range24h)})`);
+            }
+        }
+        if (t24h.minTime) {
+            const minHour = new Date(t24h.minTime).getHours();
+            if (minHour >= 10 && minHour <= 18) results.phenomena.push(`unusual daytime temperature minimum (at ${minHour})`);
+        }
+        if (t24h.maxTime) {
+            const maxHour = new Date(t24h.maxTime).getHours();
+            if (maxHour >= 22 || maxHour <= 6) results.phenomena.push(`unusual nighttime temperature maximum (at ${maxHour})`);
+        }
+    }
 
-    if (max7d - min7d > 30) results.phenomena.push(`extreme weekly temperature range: ${FormatHelper.temperatureToString(max7d - min7d)}`);
+    const t7d = trends['7d'];
+    if (t7d?.valid) {
+        if (t7d.min !== undefined && t7d.max !== undefined) {
+            store.temperature.extremes7d = {
+                min: t7d.min,
+                max: t7d.max,
+                minTime: t7d.minTime,
+                maxTime: t7d.maxTime,
+            };
+            const range7d = t7d.max - t7d.min;
+            if (range7d > THRESHOLDS.TEMP.EXTREME_WEEKLY_RANGE) {
+                results.phenomena.push(`extreme weekly temperature variation (${FormatHelper.temperatureToString(range7d)})`);
+            }
+        }
+    }
 
-    const minHour = new Date(minTime24h).getHours(),
-        maxHour = new Date(maxTime24h).getHours();
-    if (minHour >= 10 && minHour <= 18) results.phenomena.push('unusual daytime temperature minimum');
-    if (maxHour >= 22 || maxHour <= 6) results.phenomena.push('unusual nighttime temperature maximum');
+    // -------------------------------------------------------------------------
+    // PART C: Nordic/Seasonal Context (temperature-only)
+    // -------------------------------------------------------------------------
 
     if (month >= 11 || month <= 2) {
-        // Winter
-        if (temp > 5) {
+        if (temp > THRESHOLDS.TEMP.WINTER_WARM) {
             results.phenomena.push('unseasonably warm for winter');
-            if (temp > 10) results.alerts.push('exceptional winter warmth');
-            if (snowDepth > 0) results.phenomena.push('rapid snowmelt likely');
-        } else if (temp < -20) {
+            if (temp > THRESHOLDS.TEMP.WINTER_VERY_WARM) results.alerts.push('exceptional winter warmth');
+        } else if (temp < THRESHOLDS.WINTER_COLD) {
             results.phenomena.push('extreme Nordic winter conditions');
             if (hour >= 6 && hour <= 18) results.phenomena.push('extreme cold despite daylight');
         }
-        if (hour >= 0 && hour <= 6 && temp > temp6hAgo + 3) results.phenomena.push('possible temperature inversion');
+        if (hour >= 0 && hour <= 6 && t6h?.valid && t6h.back !== undefined && temp > t6h.back + 3) {
+            results.phenomena.push('possible temperature inversion');
+        }
     } else if (month >= 6 && month <= 8) {
-        // Summer
-        if (temp > 25) {
+        if (temp > THRESHOLDS.TEMP.HOT) {
             results.phenomena.push('hot Nordic summer day');
-            if (temp > 28) {
+            if (temp > THRESHOLDS.TEMP.VERY_HOT) {
                 results.phenomena.push('exceptional summer heat');
                 store.temperature.heatDays++;
             }
-        } else if (temp < 10) {
+        } else if (temp < THRESHOLDS.TEMP.SUMMER_COOL) {
             results.phenomena.push('unseasonably cool for summer');
-            if (temp < 5) results.alerts.push('unusual summer cold');
+            if (temp < THRESHOLDS.TEMP.SUMMER_COLD) results.alerts.push('unusual summer cold');
         }
-        if (hour >= 0 && hour <= 6 && min24h > 20) results.phenomena.push(`tropical night (min temp > ${FormatHelper.temperatureToString(20)})`);
+        if (hour >= 0 && hour <= 6 && t24h?.valid && t24h.min > THRESHOLDS.TEMP.TROPICAL_NIGHT) {
+            results.phenomena.push(`tropical night (> ${FormatHelper.temperatureToString(THRESHOLDS.TEMP.TROPICAL_NIGHT)})`);
+        }
     }
 
-    if (location.elevation > 500 && temp < temp24hAgo - 5) results.phenomena.push('cold air pooling in valley possible');
-
-    store.temperature.rateOfChange = change1h;
+    if (location.elevation > 500 && t24h?.valid && t24h.back !== undefined && temp < t24h.back - 5) {
+        results.phenomena.push('cold air pooling in valley possible');
+    }
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretPressure(results, situation, data, data_previous, store, _options) {
-    const { timestamp, pressure, temp, windSpeed, humidity } = data;
+function interpretPressure({ results, situation, dataCurrent, store }) {
+    const { timestamp, pressure, temp } = dataCurrent;
     const { month, location } = situation;
 
     if (pressure === undefined) return;
@@ -204,591 +489,621 @@ function interpretPressure(results, situation, data, data_previous, store, _opti
     if (!store.pressure)
         store.pressure = {
             trend: 'stable',
-            changeRate: 0,
-            lastReading: pressure,
-            lastTimestamp: timestamp,
-            extremes24h: { min: pressure, max: pressure },
             rapidChanges: [],
         };
 
-    const adjustedPressure = pressure * Math.exp(location.elevation / (29.3 * (273.15 + temp)));
-    const oneHourAgo = timestamp - 60 * 60 * 1000,
-        threeHoursAgo = timestamp - 3 * 60 * 60 * 1000,
-        twentyFourHoursAgo = timestamp - 24 * 60 * 60 * 1000;
-    let pressure1hAgo, pressure3hAgo, pressure24hAgo;
-    let closest1hAgo, closest3hAgo, closest24hAgo;
-    let min24h = adjustedPressure,
-        max24h = adjustedPressure;
-    Object.entries(data_previous)
-        .filter(([timestamp, entry]) => timestamp > twentyFourHoursAgo && entry.pressure !== undefined)
-        .sort(([a], [b]) => a - b)
-        .forEach(([timestamp, entry]) => {
-            const adjP = entry.pressure * Math.exp(location.elevation / (29.3 * ((entry.temp || temp) + 273)));
-            if (timestamp <= oneHourAgo && (!closest1hAgo || timestamp > closest1hAgo)) {
-                closest1hAgo = timestamp;
-                pressure1hAgo = adjP;
-            }
-            if (timestamp <= threeHoursAgo && (!closest3hAgo || timestamp > closest3hAgo)) {
-                closest3hAgo = timestamp;
-                pressure3hAgo = adjP;
-            }
-            if (timestamp <= twentyFourHoursAgo && (!closest24hAgo || timestamp > closest24hAgo)) {
-                closest24hAgo = timestamp;
-                pressure24hAgo = adjP;
-            }
-            min24h = Math.min(min24h, adjP);
-            max24h = Math.max(max24h, adjP);
-        });
-    store.pressure.extremes24h = { min: min24h, max: max24h };
-    const change1h = pressure1hAgo ? adjustedPressure - pressure1hAgo : 0,
-        change3h = pressure3hAgo ? adjustedPressure - pressure3hAgo : 0,
-        change24h = pressure24hAgo ? adjustedPressure - pressure24hAgo : 0;
+    const pressureAdjusted = pressure * Math.exp(location.elevation / (29.3 * (273.15 + (temp || 15))));
+    store.pressure.adjusted = pressureAdjusted;
 
-    if (Math.abs(change3h) < 1) store.pressure.trend = 'stable';
-    else if (change3h > 0) store.pressure.trend = 'rising';
-    else store.pressure.trend = 'falling';
+    // -------------------------------------------------------------------------
+    // PART A: Basic Pressure Classification
+    // -------------------------------------------------------------------------
 
-    if (adjustedPressure < 970) {
-        results.conditions.push('severe storm conditions');
-        results.alerts.push('dangerously low pressure');
-    } else if (adjustedPressure < 990) {
-        results.conditions.push('stormy');
-        if (windSpeed > 10) results.alerts.push('storm system active');
-    } else if (adjustedPressure < 1000) results.conditions.push('unsettled');
-    else if (adjustedPressure >= 1000 && adjustedPressure <= 1015) {
+    if (pressureAdjusted < THRESHOLDS.PRESSURE.SEVERE_LOW) {
+        results.conditions.push(`severe storm conditions (< ${FormatHelper.pressureToString(THRESHOLDS.PRESSURE.SEVERE_LOW)})`);
+        results.alerts.push(`dangerously low pressure`);
+    } else if (pressureAdjusted < THRESHOLDS.PRESSURE.STORMY) {
+        results.conditions.push(`stormy (< ${FormatHelper.pressureToString(THRESHOLDS.PRESSURE.STORMY)})`);
+    } else if (pressureAdjusted < THRESHOLDS.PRESSURE.UNSETTLED) {
+        results.conditions.push('unsettled');
+    } else if (pressureAdjusted >= THRESHOLDS.PRESSURE.NORMAL_LOW && pressureAdjusted <= THRESHOLDS.PRESSURE.NORMAL_HIGH) {
         // Normal range - no condition added
-    } else if (adjustedPressure > 1015 && adjustedPressure <= 1025) results.conditions.push('settled');
-    else if (adjustedPressure > 1025) results.conditions.push('stable high pressure');
-
-    if (Math.abs(change1h) > 3) {
-        results.alerts.push(`rapid hourly pressure ${change1h > 0 ? 'rise' : 'drop'}: ${FormatHelper.pressureToString(Math.abs(change1h))}`);
-        store.pressure.rapidChanges.push({ timestamp, change: change1h });
-    } else if (Math.abs(change3h) > 5) results.phenomena.push(`significant 3 hour pressure ${change3h > 0 ? 'rise' : 'drop'}: ${FormatHelper.pressureToString (Math.abs(change3h))}`);
-
-    if (store.pressure.trend === 'falling') {
-        if (change3h < -5) {
-            results.phenomena.push('rapidly falling pressure - storm approaching');
-            if (month >= 9 || month <= 3) results.phenomena.push('winter storm possible');
-        } else if (change3h < -3) results.phenomena.push('falling pressure - weather deteriorating');
-    } else if (store.pressure.trend === 'rising') {
-        if (change3h > 5) results.phenomena.push('rapidly rising pressure - clearing conditions');
-        else if (change3h > 3) results.phenomena.push('rising pressure - improving weather');
-    }
-    if (Math.abs(change24h) > 10) {
-        results.phenomena.push(`significant 24 hour pressure ${change24h > 0 ? 'rise' : 'drop'}: ${FormatHelper.pressureToString (Math.abs(change24h))}`);
-        if (change24h > 15) results.phenomena.push('strong high pressure building');
-        else if (change24h < -15) results.phenomena.push('deepening low pressure system');
+    } else if (pressureAdjusted > THRESHOLDS.PRESSURE.NORMAL_HIGH && pressureAdjusted <= THRESHOLDS.PRESSURE.SETTLED) {
+        results.conditions.push('settled');
+    } else if (pressureAdjusted > THRESHOLDS.PRESSURE.SETTLED && pressureAdjusted <= THRESHOLDS.PRESSURE.HIGH) {
+        results.conditions.push('high pressure');
+    } else if (pressureAdjusted > THRESHOLDS.PRESSURE.HIGH) {
+        results.conditions.push(`very high pressure (> ${FormatHelper.pressureToString(THRESHOLDS.PRESSURE.HIGH)})`);
     }
 
-    const range24h = max24h - min24h;
-    if (range24h > 20) {
-        results.phenomena.push(`extreme 24 hour pressure variation: ${FormatHelper.pressureToString (range24h)}`);
-        results.alerts.push('unstable atmospheric conditions');
-    } else if (range24h < 3) results.phenomena.push('very stable pressure');
+    // -------------------------------------------------------------------------
+    // PART B: Trend Analysis (pressure-only)
+    // -------------------------------------------------------------------------
 
-    if (adjustedPressure < 1000 && Math.abs(change3h) > 3) results.phenomena.push('barometric pressure changes may affect sensitive individuals');
+    const trends = store.conditions?.trends?.pressure || {};
 
-    if (location.forestCoverage === 'high' && change3h < -5) results.phenomena.push('storm approaching - forest wind damage possible');
+    const t1h = trends['1h'];
+    if (t1h?.valid && t1h.back !== undefined) {
+        const change1h = pressure - t1h.back;
+        if (Math.abs(change1h) > THRESHOLDS.PRESSURE.RAPID_HOURLY_CHANGE) {
+            results.alerts.push(`rapid hourly pressure ${change1h > 0 ? 'rise' : 'drop'} (${FormatHelper.pressureToString(Math.abs(change1h))})`);
+            store.pressure.rapidChanges.push({ timestamp, change: change1h });
+        }
+    }
+
+    const t3h = trends['3h'];
+    if (t3h?.valid && t3h.back !== undefined) {
+        const change3h = pressure - t3h.back;
+        store.pressure.change3h = change3h;
+        if (Math.abs(change3h) < 1) store.pressure.trend = 'stable';
+        else if (change3h > 0) store.pressure.trend = 'rising';
+        else store.pressure.trend = 'falling';
+        if (Math.abs(change3h) > THRESHOLDS.PRESSURE.SIGNIFICANT_3H_CHANGE) {
+            results.phenomena.push(`significant 3h pressure ${change3h > 0 ? 'rise' : 'drop'} (${FormatHelper.pressureToString(Math.abs(change3h))})`);
+        } else if (Math.abs(change3h) > THRESHOLDS.PRESSURE.MODERATE_3H_CHANGE) {
+            results.phenomena.push(`moderate 3h pressure ${change3h > 0 ? 'rise' : 'drop'} (${FormatHelper.pressureToString(Math.abs(change3h))})`);
+        }
+        if (store.pressure.trend === 'falling') {
+            if (change3h < -THRESHOLDS.PRESSURE.SIGNIFICANT_3H_CHANGE) {
+                results.phenomena.push('rapidly falling pressure - storm approaching');
+                if (month >= 9 || month <= 3) results.phenomena.push('winter storm possible');
+            } else if (change3h < -THRESHOLDS.PRESSURE.MODERATE_3H_CHANGE) {
+                results.phenomena.push('falling pressure - weather deteriorating');
+            }
+        } else if (store.pressure.trend === 'rising') {
+            if (change3h > THRESHOLDS.PRESSURE.SIGNIFICANT_3H_CHANGE) {
+                results.phenomena.push('rapidly rising pressure - clearing conditions');
+            } else if (change3h > THRESHOLDS.PRESSURE.MODERATE_3H_CHANGE) {
+                results.phenomena.push('rising pressure - improving weather');
+            }
+        }
+        if (pressureAdjusted < THRESHOLDS.PRESSURE.UNSETTLED && Math.abs(change3h) > THRESHOLDS.PRESSURE.MODERATE_3H_CHANGE) {
+            results.phenomena.push('barometric changes may affect sensitive individuals');
+        }
+        if (location.forestCoverage === 'high' && change3h < -THRESHOLDS.PRESSURE.SIGNIFICANT_3H_CHANGE) {
+            results.phenomena.push('storm approaching - forest wind damage possible');
+        }
+    }
+
+    const t24h = trends['24h'];
+    if (t24h?.valid) {
+        if (t24h.back !== undefined) {
+            const change24h = pressure - t24h.back;
+            store.pressure.change24h = change24h;
+            if (Math.abs(change24h) > THRESHOLDS.PRESSURE.SIGNIFICANT_24H_CHANGE) {
+                results.phenomena.push(`significant 24h pressure ${change24h > 0 ? 'rise' : 'drop'} (${FormatHelper.pressureToString(Math.abs(change24h))})`);
+                if (change24h > THRESHOLDS.PRESSURE.BUILDING_HIGH) results.phenomena.push('strong high pressure building');
+                else if (change24h < THRESHOLDS.PRESSURE.DEEPENING_LOW) results.phenomena.push('deepening low pressure system');
+            }
+            if ((month >= 11 || month <= 2) && change24h > 10 && pressureAdjusted > THRESHOLDS.PRESSURE.SETTLED) {
+                results.phenomena.push('arctic high strengthening');
+            }
+        }
+        if (t24h.min !== undefined && t24h.max !== undefined) {
+            store.pressure.extremes24h = {
+                min: t24h.min,
+                max: t24h.max,
+                minTime: t24h.minTime,
+                maxTime: t24h.maxTime,
+            };
+            const range24h = t24h.max - t24h.min;
+            if (range24h > THRESHOLDS.PRESSURE.EXTREME_24H_RANGE) {
+                results.phenomena.push(`extreme 24h pressure variation (${FormatHelper.pressureToString(range24h)})`);
+                results.alerts.push('unstable atmospheric conditions');
+            } else if (range24h < THRESHOLDS.PRESSURE.STABLE_24H_RANGE) {
+                results.phenomena.push('very stable pressure');
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // PART C: Nordic/Seasonal Context (pressure-only)
+    // -------------------------------------------------------------------------
 
     if (month >= 9 || month <= 3) {
-        // Fall through early spring
-        if (adjustedPressure > 1020) {
-            results.phenomena.push('clear winter conditions likely');
-            if (temp < -10) results.phenomena.push('cold high pressure system');
-        } else if (adjustedPressure < 990 && temp > 0) {
-            results.phenomena.push('winter rain likely');
-            if (change3h < -3) results.alerts.push('winter storm developing');
+        if (pressureAdjusted > THRESHOLDS.PRESSURE.SETTLED) {
+            results.phenomena.push('winter high pressure - clear conditions likely');
         }
     } else if (month >= 6 && month <= 8) {
-        // Summer
-        if (adjustedPressure < 1005 && humidity > 70) results.phenomena.push('summer low pressure - showers possible');
-        else if (adjustedPressure > 1020) results.phenomena.push('summer high pressure - warm and dry');
-    }
-    if (month >= 11 || month <= 2) {
-        // Winter
-        if (change24h > 10 && adjustedPressure > 1020) results.phenomena.push('arctic high strengthening - colder weather likely');
+        if (pressureAdjusted > THRESHOLDS.PRESSURE.SETTLED) {
+            results.phenomena.push('summer high pressure - likely warm and dry');
+        } else if (pressureAdjusted < THRESHOLDS.PRESSURE.NORMAL_LOW) {
+            results.phenomena.push('summer low pressure');
+        }
     }
 
-    store.pressure.lastReading = adjustedPressure;
-    store.pressure.lastTimestamp = timestamp;
+    store.pressure.lastReading = pressureAdjusted;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretHumidity(results, situation, data, data_previous, store, _options) {
-    const { timestamp, humidity, temp, pressure, windSpeed, windDir, rainRate } = data;
-    const { month, hour, location, dewPoint, heatIndex } = situation;
+function interpretHumidity({ results, situation, dataCurrent, store, weatherData }) {
+    const { humidity } = dataCurrent;
+    const { month, hour, location } = situation;
 
     if (humidity === undefined) return;
 
     if (!store.humidity)
         store.humidity = {
-            extremes24h: { min: humidity, max: humidity },
-            avgDaytime: humidity,
-            avgNighttime: humidity,
-            trend: 'stable',
-            dewPointTrend: 'stable',
-            consecutiveDryHours: 0,
-            consecutiveHumidHours: 0,
-            currentDryStreak: 0,
-            currentHumidStreak: 0,
+            dryHours24h: 0,
+            humidHours24h: 0,
         };
 
-    const sixHoursAgo = timestamp - 6 * 60 * 60 * 1000,
-        twentyFourHoursAgo = timestamp - 24 * 60 * 60 * 1000;
-    let humidity6hAgo;
-    let min24h = humidity,
-        max24h = humidity;
-    let daytimeSum = 0,
-        daytimeCount = 0;
-    let nighttimeSum = 0,
-        nighttimeCount = 0;
-    let lastDryTimestamp, lastHumidTimestamp;
-    let currentDryStreak = 0,
-        currentHumidStreak = 0;
-    let maxDryStreak = 0,
-        maxHumidStreak = 0;
-    Object.entries(data_previous)
-        .filter(([timestamp, entry]) => timestamp > twentyFourHoursAgo && entry.humidity !== undefined)
-        .sort(([a], [b]) => a - b)
-        .forEach(([timestamp, entry]) => {
-            if (timestamp > sixHoursAgo && humidity6hAgo === undefined) humidity6hAgo = entry.humidity;
-            min24h = Math.min(min24h, entry.humidity);
-            max24h = Math.max(max24h, entry.humidity);
-            const entryHour = new Date(timestamp).getHours();
-            if (entryHour >= 6 && entryHour <= 18) {
-                daytimeSum += entry.humidity;
-                daytimeCount++;
-            } else {
-                nighttimeSum += entry.humidity;
-                nighttimeCount++;
-            }
-            if (entry.humidity < 30) {
-                if (lastDryTimestamp && timestamp - lastDryTimestamp <= 2 * 3600000)
-                    // 2 hour gap tolerance
-                    currentDryStreak += (timestamp - lastDryTimestamp) / 3600000;
-                else currentDryStreak = 1; // Reset to 1 hour
-                lastDryTimestamp = timestamp;
-                maxDryStreak = Math.max(maxDryStreak, currentDryStreak);
-            } else {
-                currentDryStreak = 0;
-                lastDryTimestamp = undefined;
-            }
-            if (entry.humidity > 90) {
-                if (lastHumidTimestamp && timestamp - lastHumidTimestamp <= 2 * 3600000) currentHumidStreak += (timestamp - lastHumidTimestamp) / 3600000;
-                else currentHumidStreak = 1;
-                lastHumidTimestamp = timestamp;
-                maxHumidStreak = Math.max(maxHumidStreak, currentHumidStreak);
-            } else {
-                currentHumidStreak = 0;
-                lastHumidTimestamp = undefined;
-            }
-        });
-    store.humidity.consecutiveDryHours = maxDryStreak;
-    store.humidity.consecutiveHumidHours = maxHumidStreak;
-    store.humidity.currentDryStreak = currentDryStreak;
-    store.humidity.currentHumidStreak = currentHumidStreak;
-    store.humidity.extremes24h = { min: min24h, max: max24h };
-    if (daytimeCount > 0) store.humidity.avgDaytime = daytimeSum / daytimeCount;
-    if (nighttimeCount > 0) store.humidity.avgNighttime = nighttimeSum / nighttimeCount;
+    // -------------------------------------------------------------------------
+    // PART A: Basic Humidity Classification
+    // -------------------------------------------------------------------------
 
-    if (humidity > 90) {
-        results.conditions.push('very humid');
-        if (temp > 20) results.phenomena.push('oppressive humidity');
-    } else if (humidity > 70) results.conditions.push('humid');
-    else if (humidity >= 30 && humidity <= 60) {
+    if (humidity >= THRESHOLDS.HUMIDITY.FOG_LIKELY) {
+        results.conditions.push(`saturated (> ${FormatHelper.humidityToString(THRESHOLDS.HUMIDITY.FOG_LIKELY)})`);
+    } else if (humidity > THRESHOLDS.HUMIDITY.VERY_HUMID) {
+        results.conditions.push(`very humid (> ${FormatHelper.humidityToString(THRESHOLDS.HUMIDITY.VERY_HUMID)})`);
+    } else if (humidity > THRESHOLDS.HUMIDITY.HUMID) {
+        results.conditions.push('humid');
+    } else if (humidity >= THRESHOLDS.HUMIDITY.COMFORT_LOW && humidity <= THRESHOLDS.HUMIDITY.COMFORT_HIGH) {
         // Comfort range - no condition added
-    } else if (humidity < 30) {
+    } else if (humidity < THRESHOLDS.HUMIDITY.VERY_DRY) {
+        results.conditions.push(`very dry (< ${FormatHelper.humidityToString(THRESHOLDS.HUMIDITY.VERY_DRY)})`);
+        results.alerts.push(`extremely dry conditions`);
+    } else if (humidity < THRESHOLDS.HUMIDITY.DRY) {
         results.conditions.push('dry');
-        if (humidity < 20) {
-            results.conditions.push('very dry air');
-            results.alerts.push('extremely dry conditions');
+    }
+
+    // -------------------------------------------------------------------------
+    // PART B: Trend Analysis (humidity-only)
+    // -------------------------------------------------------------------------
+
+    const trends = store.conditions?.trends?.humidity || {};
+
+    const t3h = trends['3h'];
+    if (t3h?.valid && t3h.back !== undefined) {
+        const change3h = humidity - t3h.back;
+        store.humidity.change3h = change3h;
+        if (Math.abs(change3h) > THRESHOLDS.HUMIDITY.RAPID_3H_CHANGE) {
+            results.phenomena.push(`rapid 3 hour humidity ${change3h > 0 ? 'increase' : 'decrease'} (${FormatHelper.humidityToString(Math.abs(change3h))})`);
         }
     }
 
-    const change6h = humidity6hAgo === undefined ? 0 : humidity - humidity6hAgo;
-    if (Math.abs(change6h) > 30) results.phenomena.push(`rapid 6 hour humidity ${change6h > 0 ? 'increase' : 'decrease'}: ${FormatHelper.humidityToString(Math.abs(change6h))}`);
-
-    if (dewPoint !== undefined) {
-        const dewPointSpread = temp - dewPoint;
-        if (dewPointSpread < 2 && humidity > 85) {
-            if (windSpeed < 2) {
-                results.phenomena.push('fog formation likely');
-                if (hour >= 22 || hour <= 8) results.phenomena.push('overnight fog probable');
-            } else if (windSpeed < 5) results.phenomena.push('patchy fog possible');
-        }
-        if (dewPointSpread < 1 && humidity > 95) {
-            results.conditions.push('foggy conditions');
-            if (temp < 0) results.phenomena.push('freezing fog possible');
+    const t6h = trends['6h'];
+    if (t6h?.valid && t6h.back !== undefined) {
+        const change6h = humidity - t6h.back;
+        store.humidity.change6h = change6h;
+        if (Math.abs(change6h) > THRESHOLDS.HUMIDITY.RAPID_6H_CHANGE) {
+            results.phenomena.push(`significant 6 hour humidity ${change6h > 0 ? 'increase' : 'decrease'} (${FormatHelper.humidityToString(Math.abs(change6h))})`);
         }
     }
 
-    const diurnalRange = max24h - min24h;
-    if (diurnalRange > 40) {
-        results.phenomena.push(`large 24 hour humidity variation: ${lper.humidityToString (diurnalRange)}`);
-        if (store.humidity.avgDaytime < store.humidity.avgNighttime - 20) results.phenomena.push('typical 24 hour humidity cycle');
-    } else if (diurnalRange < 10) results.phenomena.push('stable 24 hour humidity levels');
-
-    if (store.humidity.consecutiveDryHours > 24) results.phenomena.push(`prolonged dry conditions: ${Math.round(store.humidity.consecutiveDryHours)} hours`);
-    if (store.humidity.consecutiveHumidHours > 12) results.phenomena.push(`prolonged humid conditions: ${Math.round(store.humidity.consecutiveHumidHours)} hours`);
-    if (store.humidity.currentDryStreak > 0 && humidity < 30) results.phenomena.push(`ongoing dry spell: ${Math.round(store.humidity.currentDryStreak)} hours`);
-    if (humidity < 30 && store.humidity.consecutiveDryHours > 24) {
-        results.phenomena.push('prolonged dry air - hydration important');
-    } else if (humidity > 70 && temp > 20) {
-        const apparentTemp = heatIndex || temp;
-        if (apparentTemp > temp + 5) results.phenomena.push('humidity making it feel much warmer');
+    const t24h = trends['24h'];
+    if (t24h?.valid) {
+        if (t24h.min !== undefined && t24h.max !== undefined) {
+            store.humidity.extremes24h = {
+                min: t24h.min,
+                max: t24h.max,
+                minTime: t24h.minTime,
+                maxTime: t24h.maxTime,
+            };
+            const range24h = t24h.max - t24h.min;
+            if (range24h > 50) {
+                results.phenomena.push(`large 24 hour humidity variation (${FormatHelper.humidityToString(range24h)})`);
+            } else if (range24h < 10) {
+                results.phenomena.push('stable 24 hour humidity levels');
+            }
+        }
     }
 
-    if (rainRate > 0 && humidity < 70) results.phenomena.push('dry air - limited precipitation despite rain');
-    else if (humidity > 95 && rainRate === 0) results.phenomena.push('saturated air - precipitation imminent');
+    // -------------------------------------------------------------------------
+    // PART B2: Extended Period Analysis (humidity-only)
+    // -------------------------------------------------------------------------
 
-    if (humidity > 80 && windDir >= 180 && windDir <= 270) results.phenomena.push('moisture from Baltic Sea region');
+    const period24h = weatherData?.getPeriod?.('24h');
+    if (period24h?.entries.length > 0) {
+        store.humidity.dryHours24h = period24h.estimateHours((e) => e.humidity !== undefined && e.humidity < THRESHOLDS.HUMIDITY.DRY);
+        store.humidity.humidHours24h = period24h.estimateHours((e) => e.humidity !== undefined && e.humidity > THRESHOLDS.HUMIDITY.VERY_HUMID);
+        if (store.humidity.dryHours24h > THRESHOLDS.HUMIDITY.DRY_STREAK_WARNING) {
+            results.phenomena.push(`prolonged dry conditions (${Math.round(store.humidity.dryHours24h)} hours in last 24h)`);
+            results.phenomena.push('hydration important');
+        }
+        if (store.humidity.humidHours24h > THRESHOLDS.HUMIDITY.HUMID_STREAK_WARNING) {
+            results.phenomena.push(`prolonged humid conditions (${Math.round(store.humidity.humidHours24h)} hours in last 24h)`);
+        }
+        if (store.humidity.humidHours24h > THRESHOLDS.HUMIDITY.MOLD_RISK_HOURS) {
+            results.phenomena.push(`sustained high humidity (${Math.round(store.humidity.humidHours24h)} hours) - mold risk`);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // PART C: Nordic/Seasonal Context (humidity-only)
+    // -------------------------------------------------------------------------
 
     if (hour >= 18 || hour <= 6) {
-        if (humidity < 30 && temp < 0) results.phenomena.push('indoor heating will create very dry conditions');
-        else if (humidity > 80 && temp > 0) results.phenomena.push('indoor condensation risk');
+        if (humidity < THRESHOLDS.HUMIDITY.DRY) {
+            results.phenomena.push('indoor heating will create very dry conditions');
+        } else if (humidity > THRESHOLDS.HUMIDITY.VERY_HUMID) {
+            results.phenomena.push('indoor condensation risk');
+        }
     }
 
     if (month >= 11 || month <= 2) {
         // Winter
-        if (humidity < 40 && temp < -10) results.phenomena.push('arctic dry air');
-        else if (humidity > 85 && temp > -5) {
-            results.phenomena.push('damp winter conditions');
-            if (windSpeed > 5) results.phenomena.push('raw winter weather');
+        if (humidity < 40) {
+            results.phenomena.push('low winter humidity');
+        } else if (humidity > 85) {
+            results.phenomena.push('damp winter air');
         }
     } else if (month >= 6 && month <= 8) {
         // Summer
-        if (humidity > 80 && temp > 20) {
-            results.phenomena.push('muggy summer conditions');
-            if (pressure < 1010) results.phenomena.push('thunderstorm development possible');
-        } else if (humidity < 40 && temp > 25) {
-            results.phenomena.push('dry summer heat');
-            if (store.humidity.consecutiveDryHours > 72) results.alerts.push('prolonged dry conditions - fire risk');
+        if (humidity > 80) {
+            results.phenomena.push('muggy summer humidity');
+        } else if (humidity < 40) {
+            results.phenomena.push('dry summer air');
         }
     }
 
-    if (location.forestCoverage === 'high') {
-        if (humidity > 85 && temp > 15) results.phenomena.push('forest transpiration contributing to humidity');
-        if (humidity < 30 && windSpeed > 10) results.phenomena.push('desiccating conditions in forest');
+    // Forest transpiration effect (location + humidity only)
+    if (location.forestCoverage === 'high' && humidity > 85) {
+        results.phenomena.push('forest transpiration contributing to humidity');
     }
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretWind(results, situation, data, data_previous, store, _options) {
-    const { timestamp, windSpeed, windGust, windDir, temp, pressure, rainRate } = data;
-    const { month, hour, location, snowDepth, windChill } = situation;
+function interpretWind({ results, situation, dataCurrent, store, weatherData }) {
+    const { windSpeed, windGust, windDir } = dataCurrent;
+    const { month, hour, location } = situation;
 
     if (windSpeed === undefined) return;
 
     if (!store.wind)
         store.wind = {
-            extremes24h: { maxSpeed: windSpeed, maxGust: windGust || windSpeed },
-            avgSpeed6h: windSpeed,
-            dominantDirection: windDir,
             gustFactor: 1,
-            calmHours: 0,
-            stormHours: 0,
+            calmHours24h: 0,
+            stormHours24h: 0,
             directionChanges: 0,
             lastDirection: windDir,
         };
 
-    const sixHoursAgo = timestamp - 6 * 60 * 60 * 1000,
-        twentyFourHoursAgo = timestamp - 24 * 60 * 60 * 1000;
-    let maxSpeed24h = windSpeed,
-        maxGust24h = windGust || windSpeed;
-    let weightedSpeedSum6h = 0;
-    let totalTime6h = 0;
-    const directionHistory = [];
-    let calmHours = 0,
-        stormHours = 0;
-    let previousTimestamp;
-    Object.entries(data_previous)
-        .filter(([timestamp, entry]) => timestamp > twentyFourHoursAgo && entry.windSpeed !== undefined)
-        .sort(([a], [b]) => a - b)
-        .forEach(([timestamp, entry]) => {
-            maxSpeed24h = Math.max(maxSpeed24h, entry.windSpeed);
-            if (entry.windGust) maxGust24h = Math.max(maxGust24h, entry.windGust);
-            if (timestamp > sixHoursAgo) {
-                if (previousTimestamp && previousTimestamp > sixHoursAgo) {
-                    const timeDiff = Math.min((timestamp - previousTimestamp) / 3600000, 3); // hours, capped at 3
-                    weightedSpeedSum6h += entry.windSpeed * timeDiff;
-                    totalTime6h += timeDiff;
-                }
-            }
-            if (entry.windDir !== undefined) directionHistory.push(entry.windDir);
-            if (entry.windSpeed < 0.5) calmHours++;
-            if (entry.windSpeed > 17.1) stormHours++;
-            previousTimestamp = timestamp;
-        });
-    store.wind.extremes24h = { maxSpeed: maxSpeed24h, maxGust: maxGust24h };
-    store.wind.avgSpeed6h = totalTime6h > 0 ? weightedSpeedSum6h / totalTime6h : windSpeed;
-    store.wind.calmHours = calmHours;
-    store.wind.stormHours = stormHours;
+    // -------------------------------------------------------------------------
+    // PART A: Basic Wind Classification (Beaufort Scale)
+    // -------------------------------------------------------------------------
 
-    if (windGust !== undefined && windSpeed > 0) store.wind.gustFactor = windGust / windSpeed;
-
-    if (windSpeed < 0.5) {
-        results.conditions.push('calm');
-        if (temp < -10) results.phenomena.push('still arctic air');
-    } else if (windSpeed < 1.5) results.conditions.push('light air');
-    else if (windSpeed < 3.3) results.conditions.push('light breeze');
-    else if (windSpeed < 5.5) results.conditions.push('gentle breeze');
-    else if (windSpeed < 7.9) results.conditions.push('moderate breeze');
-    else if (windSpeed < 10.7) {
+    if (windSpeed < THRESHOLDS.WIND.CALM) {
+        results.conditions.push(`calm (< ${FormatHelper.windspeedToString(THRESHOLDS.WIND.CALM)})`);
+    } else if (windSpeed < THRESHOLDS.WIND.LIGHT_AIR) {
+        results.conditions.push('light air');
+    } else if (windSpeed < THRESHOLDS.WIND.LIGHT_BREEZE) {
+        results.conditions.push('light breeze');
+    } else if (windSpeed < THRESHOLDS.WIND.GENTLE_BREEZE) {
+        results.conditions.push('gentle breeze');
+    } else if (windSpeed < THRESHOLDS.WIND.MODERATE_BREEZE) {
+        results.conditions.push('moderate breeze');
+    } else if (windSpeed < THRESHOLDS.WIND.FRESH_BREEZE) {
         results.conditions.push('fresh breeze');
         if (location.forestCoverage === 'high') results.phenomena.push('trees swaying noticeably');
-    } else if (windSpeed < 13.8) {
+    } else if (windSpeed < THRESHOLDS.WIND.STRONG_BREEZE) {
         results.conditions.push('strong breeze');
         if (location.forestCoverage === 'high') results.phenomena.push('large branches in motion');
-    } else if (windSpeed < 17.1) {
-        results.conditions.push('near gale');
-        results.alerts.push('strong wind warning');
-    } else if (windSpeed < 20.7) {
-        results.conditions.push('gale');
-        results.alerts.push('gale warning');
+    } else if (windSpeed < THRESHOLDS.WIND.NEAR_GALE) {
+        results.conditions.push(`near gale`);
+        results.alerts.push(`strong wind warning`);
+    } else if (windSpeed < THRESHOLDS.WIND.GALE) {
+        results.conditions.push(`gale`);
+        results.alerts.push(`gale warning`);
         if (location.forestCoverage === 'high') results.alerts.push('risk of falling branches');
-    } else if (windSpeed < 24.4) {
-        results.conditions.push('strong gale');
-        results.alerts.push('strong gale warning');
-    } else if (windSpeed < 28.4) {
-        results.conditions.push('storm');
-        results.alerts.push('storm warning');
+    } else if (windSpeed < THRESHOLDS.WIND.STRONG_GALE) {
+        results.conditions.push(`strong gale`);
+        results.alerts.push(`strong gale warning`);
+    } else if (windSpeed < THRESHOLDS.WIND.STORM) {
+        results.conditions.push(`storm (< ${FormatHelper.windspeedToString(THRESHOLDS.WIND.STORM)})`);
+        results.alerts.push(`storm warning (< ${FormatHelper.windspeedToString(THRESHOLDS.WIND.STORM)})`);
         if (location.forestCoverage === 'high') results.alerts.push('severe tree damage likely');
-    } else if (windSpeed < 32.6) {
-        results.conditions.push('violent storm');
-        results.alerts.push('violent storm warning');
+    } else if (windSpeed < THRESHOLDS.WIND.VIOLENT_STORM) {
+        results.conditions.push(`violent storm (< ${FormatHelper.windspeedToString(THRESHOLDS.WIND.VIOLENT_STORM)})`);
+        results.alerts.push(`violent storm warning (< ${FormatHelper.windspeedToString(THRESHOLDS.WIND.VIOLENT_STORM)})`);
     } else {
-        results.conditions.push('hurricane force');
-        results.alerts.push('hurricane force wind warning');
+        results.conditions.push(`hurricane force`);
+        results.alerts.push(`hurricane force wind warning`);
     }
 
-    if (store.wind.gustFactor > 1.7) {
-        results.phenomena.push(`gusty conditions (gusts ${Math.round((store.wind.gustFactor - 1) * 100)}% stronger)`);
-        if (windSpeed > 10) results.alerts.push('dangerous gusts');
-    } else if (store.wind.gustFactor > 1.4) results.phenomena.push('moderate gusts');
+    if (windGust !== undefined && windSpeed > 0) {
+        store.wind.gustFactor = windGust / windSpeed;
+    }
+    if (store.wind.gustFactor > THRESHOLDS.WIND.SEVERE_GUST_FACTOR) {
+        results.phenomena.push(`severe gusts (${Math.round((store.wind.gustFactor - 1) * 100)}% stronger, > ${FormatHelper.windspeedToString(THRESHOLDS.WIND.SEVERE_GUST_FACTOR)})`);
+        results.alerts.push(`dangerous gusts (${FormatHelper.windspeedToString(windGust)}, > ${FormatHelper.windspeedToString(THRESHOLDS.WIND.SEVERE_GUST_FACTOR)})`);
+    } else if (store.wind.gustFactor > THRESHOLDS.WIND.DANGEROUS_GUST_FACTOR) {
+        results.phenomena.push(`gusty (${Math.round((store.wind.gustFactor - 1) * 100)}% stronger, > ${FormatHelper.windspeedToString(THRESHOLDS.WIND.DANGEROUS_GUST_FACTOR)})`);
+        if (windSpeed > 10) results.alerts.push(`dangerous gusts (${FormatHelper.windspeedToString(windGust)})`);
+    } else if (store.wind.gustFactor > THRESHOLDS.WIND.MODERATE_GUST_FACTOR) {
+        results.phenomena.push('moderate gusts');
+    }
 
-    if (windDir !== undefined && directionHistory.length > 5) {
-        const directionChange = Math.abs(windDir - store.wind.lastDirection);
-        if (directionChange > 90 && directionChange < 270) {
-            store.wind.directionChanges++;
-            if (store.wind.directionChanges > 3) {
-                results.phenomena.push('variable wind direction');
-                if (pressure < 1000) results.phenomena.push('unstable conditions near low pressure');
+    if (windDir !== undefined) {
+        store.wind.currentDirection = windDir;
+
+        // Track direction changes
+        if (store.wind.lastDirection !== undefined) {
+            const directionChange = Math.abs(windDir - store.wind.lastDirection);
+            if (directionChange > 90 && directionChange < 270) {
+                if (++store.wind.directionChanges > 3) {
+                    results.phenomena.push('variable wind direction');
+                }
             }
         }
         store.wind.lastDirection = windDir;
-        const cardinalDir = getCardinalDirection(windDir);
+
+        // Cardinal direction - basic classification
+        const cardinalDir = cardinalDirection(windDir);
+        store.wind.cardinalDirection = cardinalDir;
+
+        // Nordic wind source indication (wind-only)
         if (month >= 11 || month <= 2) {
-            // Winter
             if (cardinalDir === 'N' || cardinalDir === 'NE') {
-                results.phenomena.push('arctic wind');
-                if (temp < -5) results.phenomena.push('severe wind chill from north');
-            } else if (cardinalDir === 'SW' || cardinalDir === 'W') results.phenomena.push('milder Atlantic influence');
+                results.phenomena.push('northerly wind - winter Artic influence');
+            } else if (cardinalDir === 'SW' || cardinalDir === 'W') {
+                results.phenomena.push('westerly wind - winter Atlantic influence');
+            }
+        }
+
+        // Wind veering/backing analysis from direction history
+        const period24h = weatherData?.getPeriod?.('24h');
+        if (period24h?.entries) {
+            const dirHistory = period24h.entries.filter((e) => e.windDir !== undefined).map((e) => e.windDir);
+            if (dirHistory.length > 5) {
+                const dirChanges = [];
+                for (let i = 1; i < dirHistory.length; i++) dirChanges.push(((dirHistory[i] - dirHistory[i - 1] + 180) % 360) - 180);
+                const avgDirChange = dirChanges.reduce((a, b) => a + b, 0) / dirChanges.length;
+                if (avgDirChange > 10) results.phenomena.push('wind veering (clockwise shift)');
+                else if (avgDirChange < -10) results.phenomena.push('wind backing (counter-clockwise shift)');
+            }
         }
     }
-    const directionChanges = [];
-    for (let i = 1; i < directionHistory.length; i++) directionChanges.push(((directionHistory[i] - directionHistory[i - 1] + 180) % 360) - 180);
-    const avgDirectionChange = directionChanges.reduce((a, b) => a + b, 0) / directionChanges.length;
-    if (avgDirectionChange > 10) results.phenomena.push('wind veering (typically indicates warming)');
-    else if (avgDirectionChange < -10) results.phenomena.push('wind backing (typically indicates cooling)');
 
-    const windVariability = maxSpeed24h - store.wind.avgSpeed6h;
-    if (windVariability > 10) results.phenomena.push('highly variable wind speeds');
-    else if (windVariability < 2 && windSpeed > 5) results.phenomena.push('steady wind conditions');
+    // -------------------------------------------------------------------------
+    // PART B: Trend Analysis (wind-only)
+    // -------------------------------------------------------------------------
+
+    const trends = store.conditions?.trends?.windSpeed || {};
+
+    const t3h = trends['3h'];
+    if (t3h?.valid && t3h.back !== undefined) {
+        const change3h = windSpeed - t3h.back;
+        store.wind.change3h = change3h;
+        if (change3h > 5) {
+            results.phenomena.push(`wind strengthening (+${FormatHelper.windspeedToString(change3h)} in 3 hours)`);
+        } else if (change3h < -5) {
+            results.phenomena.push(`wind easing (-${FormatHelper.windspeedToString(change3h)} in 3 hours)`);
+        }
+    }
+
+    const t6h = trends['6h'];
+    if (t6h?.valid) {
+        store.wind.avgSpeed6h = t6h.avg;
+    }
+
+    const t24h = trends['24h'];
+    if (t24h?.valid) {
+        if (t24h.min !== undefined && t24h.max !== undefined) {
+            store.wind.extremes24h = {
+                maxSpeed: t24h.max,
+                maxGust: store.conditions?.trends?.windGust?.['24h']?.max || t24h.max,
+            };
+        }
+    }
+
+    if (t24h?.valid && t6h?.valid) {
+        const variance24h = t24h.max - t6h.avg;
+        if (variance24h > 10) results.phenomena.push('highly variable wind speeds');
+        else if (variance24h < 2 && windSpeed > 5) results.phenomena.push('steady wind conditions');
+    }
+
+    // -------------------------------------------------------------------------
+    // PART D2: Extended Period Tracking (wind-only)
+    // -------------------------------------------------------------------------
+
+    const period24h = weatherData?.getPeriod?.('24h');
+    if (period24h?.entries.length > 0) {
+        store.wind.calmHours24h = period24h.estimateHours((e) => e.windSpeed !== undefined && e.windSpeed < THRESHOLDS.WIND.CALM);
+        store.wind.stormHours24h = period24h.estimateHours((e) => e.windSpeed !== undefined && e.windSpeed > THRESHOLDS.WIND.NEAR_GALE);
+    }
+
+    // -------------------------------------------------------------------------
+    // PART E: Forest Effects (wind + location only)
+    // -------------------------------------------------------------------------
 
     if (location.forestCoverage === 'high') {
-        if (windSpeed > 5 && windSpeed < 10) results.phenomena.push('forest canopy reducing ground-level wind');
-        else if (windSpeed > 15) {
+        if (windSpeed > 5 && windSpeed < 10) {
+            results.phenomena.push('forest canopy reducing ground-level wind');
+        } else if (windSpeed > 15) {
             results.phenomena.push('wind penetrating forest canopy');
-            if (rainRate > 0 || snowDepth > 0) results.alerts.push('increased risk of tree damage');
         }
     }
 
-    if (temp < 10 && windSpeed > 3) {
-        const windChillEffect = windChill - temp;
-        if (windChillEffect < -10) results.alerts.push(`severe wind chill: feels like ${FormatHelper.temperatureToString(windChill)}`);
-        else if (windChillEffect < -5) results.phenomena.push(`significant wind chill effect`);
+    // -------------------------------------------------------------------------
+    // PART F: Extended Periods (wind-only)
+    // -------------------------------------------------------------------------
+
+    if (store.wind.calmHours24h > 12) {
+        results.phenomena.push(`extended calm period (${Math.round(store.wind.calmHours24h)} hours in last 24h)`);
     }
 
-    if (store.wind.calmHours > 12) {
-        results.phenomena.push(`extended calm period: ${store.wind.calmHours} hours`);
-        if (temp < -10) results.phenomena.push('temperature inversion likely');
+    if (store.wind.stormHours24h > 6) {
+        results.alerts.push(`prolonged storm (${Math.round(store.wind.stormHours24h)} hours of gale-force winds)`);
     }
 
-    if (store.wind.stormHours > 6) results.alerts.push(`prolonged storm: ${store.wind.stormHours} hours of gale-force winds`);
+    // Diurnal patterns
+    if (t6h?.valid && t6h.avg !== undefined) {
+        if (hour >= 10 && hour <= 16 && windSpeed > t6h.avg * 1.5) {
+            results.phenomena.push('daytime wind strengthening');
+        } else if ((hour >= 22 || hour <= 4) && windSpeed < t6h.avg * 0.5) {
+            results.phenomena.push('nocturnal wind calming');
+        }
+    }
 
-    if (hour >= 10 && hour <= 16 && windSpeed > store.wind.avgSpeed6h * 1.5) results.phenomena.push('daytime wind strengthening');
-    else if ((hour >= 22 || hour <= 4) && windSpeed < store.wind.avgSpeed6h * 0.5) results.phenomena.push('nocturnal wind calming');
+    // -------------------------------------------------------------------------
+    // PART G: Nordic/Seasonal Context (wind-only)
+    // -------------------------------------------------------------------------
 
     if (month >= 9 && month <= 3) {
         // Fall through spring
         if (windSpeed > 15) {
             results.phenomena.push('autumn/winter storm conditions');
-            if (pressure < 990) results.phenomena.push('deep low pressure system');
         }
     } else if (month >= 6 && month <= 8) {
         // Summer
         if (windSpeed < 2 && hour >= 10 && hour <= 16) {
             results.phenomena.push('calm summer conditions');
-            if (temp > 25) results.phenomena.push('still, hot conditions');
         }
     }
 
+    // Elevation effects
     if (location.elevation > 500) {
         if (windSpeed > 10) results.phenomena.push('exposed elevation - enhanced wind');
-        if (hour >= 18 || hour <= 6) if (windSpeed < 2) results.phenomena.push('katabatic (downslope) flow possible');
+        if ((hour >= 18 || hour <= 6) && windSpeed < 2) {
+            results.phenomena.push('katabatic (downslope) flow possible');
+        }
     }
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretClouds(results, situation, data, data_previous, store, _options) {
-    const { month, hour, daylight, dewPoint, location, lunar } = situation;
-    const { timestamp, cloudCover, temp, humidity, pressure, solarRad, rainRate } = data;
+function interpretClouds({ results, situation, dataCurrent, store, weatherData }) {
+    const { month, hour, daylight, location, lunar } = situation;
+    const { cloudCover } = dataCurrent;
 
     if (cloudCover === undefined) return;
 
     if (!store.clouds)
         store.clouds = {
-            trend: 'stable',
-            avgDaytime: cloudCover,
-            avgNighttime: cloudCover,
-            clearHours: 0,
-            overcastHours: 0,
+            clearHours24h: 0,
+            overcastHours24h: 0,
             variability: 0,
-            sunshineHours: 0,
         };
 
-    const sixHoursAgo = timestamp - 6 * 60 * 60 * 1000,
-        twentyFourHoursAgo = timestamp - 24 * 60 * 60 * 1000;
+    // -------------------------------------------------------------------------
+    // PART A: Basic Cloud Classification
+    // -------------------------------------------------------------------------
 
-    let cloudCover6hAgo;
-    let daytimeSum = 0,
-        daytimeCount = 0,
-        nighttimeSum = 0,
-        nighttimeCount = 0;
-    let clearHours = 0,
-        overcastHours = 0,
-        sunshineHours = 0;
-    const cloudChanges = [];
-
-    let previousTimestamp;
-    Object.entries(data_previous)
-        .filter(([timestamp, entry]) => timestamp > twentyFourHoursAgo && entry.cloudCover !== undefined)
-        .sort(([a], [b]) => a - b)
-        .forEach(([timestamp, entry]) => {
-            let timeDiff = 1; // Default to 1 hour
-            if (previousTimestamp) timeDiff = Math.min((timestamp - previousTimestamp) / 3600000, 3); // Cap at 3 hours
-            if (timestamp > sixHoursAgo && cloudCover6hAgo === undefined) cloudCover6hAgo = entry.cloudCover;
-            const entryDate = new Date(timestamp),
-                entryDaylight = toolsAstronomy.getDaylightHours(entryDate, location.latitude, location.longitude);
-            if (entryDaylight.isDaytime) {
-                daytimeSum += entry.cloudCover;
-                daytimeCount++;
-                if (entry.cloudCover < 30 && entry.solarRad > 200) sunshineHours += timeDiff;
-            } else {
-                nighttimeSum += entry.cloudCover;
-                nighttimeCount++;
-            }
-            if (entry.cloudCover < 20) clearHours += timeDiff;
-            if (entry.cloudCover > 80) overcastHours += timeDiff;
-            cloudChanges.push(entry.cloudCover);
-            previousTimestamp = timestamp;
-        });
-    store.clouds.clearHours = clearHours;
-    store.clouds.overcastHours = overcastHours;
-    store.clouds.sunshineHours = sunshineHours;
-    if (daytimeCount > 0) store.clouds.avgDaytime = daytimeSum / daytimeCount;
-    if (nighttimeCount > 0) store.clouds.avgNighttime = nighttimeSum / nighttimeCount;
-
-    if (cloudCover < 10) {
-        results.conditions.push('clear sky');
+    if (cloudCover < THRESHOLDS.CLOUDS.CLEAR) {
+        results.conditions.push(`clear sky (< ${FormatHelper.cloudCoverToString(THRESHOLDS.CLOUDS.CLEAR)})`);
         if (daylight.isDaytime) results.phenomena.push('full sunshine');
         else if (location.lightPollution === 'low') results.phenomena.push('excellent stargazing conditions');
-    } else if (cloudCover < 30) {
+    } else if (cloudCover < THRESHOLDS.CLOUDS.MOSTLY_CLEAR) {
         results.conditions.push('mostly clear');
         if (daylight.isDaytime) results.phenomena.push('mostly sunny');
-    } else if (cloudCover < 70) {
+    } else if (cloudCover < THRESHOLDS.CLOUDS.PARTLY_CLOUDY) {
         results.conditions.push('partly cloudy');
-        if (daylight.isDaytime && solarRad > 300) results.phenomena.push('sun breaking through clouds');
-    } else if (cloudCover < 90) {
+    } else if (cloudCover < THRESHOLDS.CLOUDS.MOSTLY_CLOUDY) {
         results.conditions.push('mostly cloudy');
         if (daylight.isDaytime) results.phenomena.push('limited sunshine');
+    } else if (cloudCover < THRESHOLDS.CLOUDS.OVERCAST) {
+        results.conditions.push('cloudy');
     } else {
-        results.conditions.push('overcast');
+        results.conditions.push(`overcast (> ${FormatHelper.cloudCoverToString(THRESHOLDS.CLOUDS.OVERCAST)})`);
         if (daylight.isDaytime) results.phenomena.push('no direct sunshine');
     }
 
-    const change6h = cloudCover6hAgo === undefined ? 0 : cloudCover - cloudCover6hAgo;
-    if (change6h > 50) {
-        results.phenomena.push('rapidly increasing cloud cover');
-        if (pressure < 1010) results.phenomena.push('weather system approaching');
-    } else if (change6h < -50) {
-        results.phenomena.push('rapidly clearing skies');
-        if (pressure > 1015) results.phenomena.push('high pressure building');
-    }
+    // -------------------------------------------------------------------------
+    // PART B: Trend Analysis (cloud-only)
+    // -------------------------------------------------------------------------
 
-    if (cloudChanges.length > 10) {
-        const variance = calculateVariance(cloudChanges);
-        store.clouds.variability = Math.sqrt(variance);
-        if (store.clouds.variability > 30) {
-            results.phenomena.push('highly variable cloud cover');
-            if (month >= 4 && month <= 9) results.phenomena.push('convective cloud development');
-        } else if (store.clouds.variability < 10) results.phenomena.push('stable cloud conditions');
-    }
+    const trends = store.conditions?.trends?.cloudCover || {};
 
-    if (cloudCover > 70 && rainRate === 0 && humidity < 80) results.phenomena.push('high cloud layer likely');
-    else if (cloudCover > 90 && humidity > 90) {
-        results.phenomena.push('low stratus cloud');
-        if (temp - dewPoint < 2) results.phenomena.push('cloud base near ground level');
-    }
-
-    if (daylight.isDaytime && store.clouds.sunshineHours > 0) {
-        const possibleSunshineHours = Math.min(24, daylight.daylightHours),
-            sunshinePercentage = (store.clouds.sunshineHours / possibleSunshineHours) * 100;
-        if (sunshinePercentage > 80) results.phenomena.push('abundant sunshine today');
-        else if (sunshinePercentage < 20) {
-            results.phenomena.push('minimal sunshine today');
-            if (month >= 11 || month <= 1) results.phenomena.push('typical winter gloom');
+    const t3h = trends['3h'];
+    if (t3h?.valid && t3h.back !== undefined) {
+        const change3h = cloudCover - t3h.back;
+        store.clouds.change3h = change3h;
+        if (change3h > 40) {
+            results.phenomena.push('rapidly increasing cloud cover');
+        } else if (change3h < -40) {
+            results.phenomena.push('rapidly clearing skies');
         }
     }
+
+    const t6h = trends['6h'];
+    if (t6h?.valid && t6h.back !== undefined) {
+        const change6h = cloudCover - t6h.back;
+        store.clouds.change6h = change6h;
+        if (change6h > 50) {
+            results.phenomena.push('significant cloud buildup over 6 hours');
+        } else if (change6h < -50) {
+            results.phenomena.push('significant clearing over 6 hours');
+        }
+    }
+
+    const t24h = trends['24h'];
+    if (t24h?.valid) {
+        if (t24h.min !== undefined && t24h.max !== undefined) {
+            const range24h = t24h.max - t24h.min;
+            store.clouds.variability = range24h;
+            if (range24h > THRESHOLDS.CLOUDS.HIGH_VARIABILITY) {
+                results.phenomena.push('highly variable cloud cover');
+                if (month >= 4 && month <= 9) results.phenomena.push('convective cloud development');
+            } else if (range24h < THRESHOLDS.CLOUDS.LOW_VARIABILITY) {
+                results.phenomena.push('stable cloud conditions');
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // PART B2: Extended Period Tracking (cloud-only)
+    // -------------------------------------------------------------------------
+
+    const period24h = weatherData?.getPeriod?.('24h');
+    if (period24h?.entries.length > 0) {
+        store.clouds.clearHours24h = period24h.estimateHours((e) => e.cloudCover !== undefined && e.cloudCover < THRESHOLDS.CLOUDS.CLEAR);
+        store.clouds.overcastHours24h = period24h.estimateHours((e) => e.cloudCover !== undefined && e.cloudCover > THRESHOLDS.CLOUDS.OVERCAST);
+    }
+
+    // -------------------------------------------------------------------------
+    // PART C: Nighttime Sky Conditions (cloud + lunar only)
+    // -------------------------------------------------------------------------
+
     if (!daylight.isDaytime) {
-        if (cloudCover < 20) {
-            if (lunar.phase < 0.2 || lunar.phase > 0.8) results.phenomena.push('dark skies - good for astronomy');
-        } else if (cloudCover > 80 && location.lightPollution !== 'low') results.phenomena.push('cloud reflection of urban lights');
+        if (cloudCover < THRESHOLDS.CLOUDS.CLEAR + 10) {
+            if (lunar && (lunar.phase < 0.2 || lunar.phase > 0.8)) {
+                results.phenomena.push('dark skies - good for astronomy');
+            }
+        } else if (cloudCover > 80 && location.lightPollution !== 'low') {
+            results.phenomena.push('cloud reflection of urban lights');
+        }
     }
 
-    if (cloudCover > 80) {
-        if (month >= 11 || month <= 2) results.phenomena.push('clouds providing insulation');
-        else if (month >= 6 && month <= 8 && daylight.isDaytime) results.phenomena.push('clouds limiting heating');
-    } else if (cloudCover < 20) {
-        if (!daylight.isDaytime && temp < 5) results.phenomena.push('clear skies enhancing cooling');
-        else if (daylight.isDaytime && month >= 6 && month <= 8) results.phenomena.push('strong solar heating');
+    // -------------------------------------------------------------------------
+    // PART D: Extended Periods (cloud-only)
+    // -------------------------------------------------------------------------
+
+    // Check for prolonged conditions over multiple days using 7d period
+    const period7d = weatherData?.getPeriod?.('7d');
+    if (period7d?.entries.length > 0) {
+        const overcastHours7d = period7d.estimateHours((e) => e.cloudCover !== undefined && e.cloudCover > THRESHOLDS.CLOUDS.OVERCAST);
+        const clearHours7d = period7d.estimateHours((e) => e.cloudCover !== undefined && e.cloudCover < THRESHOLDS.CLOUDS.CLEAR);
+        if (overcastHours7d > 72) {
+            // 3+ days of overcast
+            results.phenomena.push(`prolonged overcast (${Math.round(overcastHours7d / 24)} days)`);
+            if (month >= 11 || month <= 2) results.phenomena.push('persistent winter gloom');
+        } else if (clearHours7d > 72) {
+            // 3+ days of clear
+            results.phenomena.push(`extended clear period (${Math.round(clearHours7d / 24)} days)`);
+        }
     }
 
-    if (store.clouds.overcastHours > 48) {
-        results.phenomena.push(`prolonged overcast: ${Math.round(store.clouds.overcastHours / 24)} days`);
-        if (month >= 11 || month <= 2) results.phenomena.push('persistent winter gloom');
-    } else if (store.clouds.clearHours > 48) results.phenomena.push(`extended clear period: ${Math.round(store.clouds.clearHours / 24)} days`);
+    // -------------------------------------------------------------------------
+    // PART E: Nordic/Seasonal Context (cloud-only)
+    // -------------------------------------------------------------------------
 
     if (month >= 11 || month <= 2) {
         // Winter
-        if (cloudCover > 80) {
+        if (cloudCover > THRESHOLDS.CLOUDS.OVERCAST) {
             results.phenomena.push('typical winter overcast');
-            if (temp > 0) results.phenomena.push('mild air mass');
-        } else if (cloudCover < 20 && temp < -10) {
-            results.phenomena.push('clear arctic conditions');
-            results.phenomena.push('strong radiational cooling');
+        } else if (cloudCover < THRESHOLDS.CLOUDS.CLEAR) {
+            results.phenomena.push('clear winter sky');
         }
     } else if (month >= 6 && month <= 8) {
         // Summer
-        if (cloudCover > 30 && cloudCover < 70 && hour >= 12 && hour <= 18) {
+        if (cloudCover > THRESHOLDS.CLOUDS.MOSTLY_CLEAR && cloudCover < THRESHOLDS.CLOUDS.PARTLY_CLOUDY && hour >= 12 && hour <= 18) {
             results.phenomena.push('fair weather cumulus likely');
-            if (humidity > 70 && temp > 20) results.phenomena.push('building cumulus - showers possible');
         }
     }
 }
@@ -796,8 +1111,8 @@ function interpretClouds(results, situation, data, data_previous, store, _option
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretPrecipitation(results, situation, data, data_previous, store, _options) {
-    const { timestamp, rainRate, temp, humidity, pressure, windSpeed, windDir, snowDepth } = data;
+function interpretPrecipitation({ results, situation, dataCurrent, store, weatherData }) {
+    const { timestamp, rainRate } = dataCurrent;
     const { month, hour, location } = situation;
 
     if (rainRate === undefined) return;
@@ -807,223 +1122,208 @@ function interpretPrecipitation(results, situation, data, data_previous, store, 
             accumulation1h: 0,
             accumulation24h: 0,
             accumulation7d: 0,
-            consecutiveDryDays: 0,
-            consecutiveWetHours: 0,
+            wetHours24h: 0,
+            dryDays7d: 0,
             maxRate24h: rainRate,
             rainEvents: [],
             currentEvent: undefined,
         };
 
-    const oneHourAgo = timestamp - 60 * 60 * 1000,
-        twentyFourHoursAgo = timestamp - 24 * 60 * 60 * 1000,
-        sevenDaysAgo = timestamp - 7 * 24 * 60 * 60 * 1000;
-    let accumulation1h = 0,
-        accumulation24h = 0,
-        accumulation7d = 0;
-    let maxRate24h = rainRate;
-    let consecutiveWetHours = 0;
-    let lastDryTime = timestamp;
-    let previousTimestamp;
-    Object.entries(data_previous)
-        .filter(([timestamp, entry]) => timestamp > sevenDaysAgo && entry.rainRate !== undefined)
-        .sort(([a], [b]) => a - b)
-        .forEach(([timestamp, entry]) => {
-            let timeDiff = 1; // Default to 1 hour if no previous entry
-            if (previousTimestamp) timeDiff = Math.min((timestamp - previousTimestamp) / 3600000, 3); // Max 3 hours
-            const accumulation = entry.rainRate * timeDiff;
-            if (timestamp > oneHourAgo) accumulation1h += accumulation;
-            if (timestamp > twentyFourHoursAgo) {
-                accumulation24h += accumulation;
-                maxRate24h = Math.max(maxRate24h, entry.rainRate);
-            }
-            if (timestamp > sevenDaysAgo) accumulation7d += accumulation;
-            if (entry.rainRate > 0) {
-                if (!store.precipitation.currentEvent)
-                    store.precipitation.currentEvent = {
-                        start: timestamp,
-                        accumulation: 0,
-                        maxRate: entry.rainRate,
-                        consecutiveWetHours: 0,
-                    };
-                store.precipitation.currentEvent.consecutiveWetHours += timeDiff;
-            } else {
-                if (consecutiveWetHours > 0) lastDryTime = timestamp;
-                consecutiveWetHours = 0;
-                if (entry.rainRate === 0 && consecutiveWetHours > 0) lastDryTime = timestamp;
-            }
-            previousTimestamp = timestamp;
-        });
-    store.precipitation.accumulation1h = accumulation1h;
-    store.precipitation.accumulation24h = accumulation24h;
-    store.precipitation.accumulation7d = accumulation7d;
-    store.precipitation.maxRate24h = maxRate24h;
-    store.precipitation.consecutiveWetHours = consecutiveWetHours;
-
-    if (rainRate === 0 && consecutiveWetHours === 0) {
-        const hoursSinceLastRain = (timestamp - lastDryTime) / 3600000;
-        if (hoursSinceLastRain > 24) results.phenomena.push(`dry for ${Math.round(hoursSinceLastRain)} hours`);
-    }
-    if (rainRate === 0 && accumulation24h < 0.5) store.precipitation.consecutiveDryDays++;
-    else store.precipitation.consecutiveDryDays = 0;
+    // -------------------------------------------------------------------------
+    // PART A: Basic Precipitation Classification (rainRate-only)
+    // -------------------------------------------------------------------------
 
     if (rainRate > 0) {
-        if (rainRate < 0.5) {
-            results.conditions.push('light rain');
-            if (temp < 0) results.conditions.push('light snow likely');
-            else if (temp < 3) results.phenomena.push('mixed precipitation possible');
-        } else if (rainRate < 2.5) results.conditions.push('light to moderate rain');
-        else if (rainRate < 4) results.conditions.push('moderate rain');
-        else if (rainRate < 8) {
-            results.conditions.push('heavy rain');
-            if (windSpeed > 10) results.phenomena.push('driving rain');
-        } else if (rainRate < 16) {
-            results.conditions.push('very heavy rain');
-            results.alerts.push('heavy rainfall warning');
+        if (rainRate < THRESHOLDS.RAIN.TRACE) {
+            results.conditions.push('trace precipitation');
+        } else if (rainRate < THRESHOLDS.RAIN.LIGHT) {
+            results.conditions.push(`light precipitation (< ${FormatHelper.rainfallToString(THRESHOLDS.RAIN.LIGHT)}/h)`);
+        } else if (rainRate < THRESHOLDS.RAIN.LIGHT_MODERATE) {
+            results.conditions.push('light to moderate precipitation');
+        } else if (rainRate < THRESHOLDS.RAIN.MODERATE) {
+            results.conditions.push('moderate precipitation');
+        } else if (rainRate < THRESHOLDS.RAIN.HEAVY) {
+            results.conditions.push(`heavy precipitation (< ${FormatHelper.rainfallToString(THRESHOLDS.RAIN.HEAVY)}/h)`);
+        } else if (rainRate < THRESHOLDS.RAIN.VERY_HEAVY) {
+            results.conditions.push(`very heavy precipitation (< ${FormatHelper.rainfallToString(THRESHOLDS.RAIN.VERY_HEAVY)}/h)`);
+            results.alerts.push(`heavy rainfall warning (< ${FormatHelper.rainfallToString(THRESHOLDS.RAIN.VERY_HEAVY)}/h)`);
+        } else if (rainRate < THRESHOLDS.RAIN.EXTREME) {
+            results.conditions.push(`extreme precipitation (< ${FormatHelper.rainfallToString(THRESHOLDS.RAIN.EXTREME)}/h)`);
+            results.alerts.push(`extreme rainfall warning (< ${FormatHelper.rainfallToString(THRESHOLDS.RAIN.EXTREME)}/h)`);
         } else {
-            results.conditions.push('extreme rainfall');
-            results.alerts.push('extreme rainfall warning');
-            if (accumulation1h > 25) results.alerts.push('flash flood risk');
+            results.conditions.push(`torrential precipitation`);
+            results.alerts.push(`torrential rainfall`);
         }
-        if (store.precipitation.currentEvent) {
-            store.precipitation.currentEvent.accumulation += rainRate / 60; // mm per minute
-            store.precipitation.currentEvent.maxRate = Math.max(store.precipitation.currentEvent.maxRate, rainRate);
-            const duration = (timestamp - store.precipitation.currentEvent.start) / 3600000;
-            if (duration > 0.5) results.phenomena.push(`ongoing rain event: ${duration.toFixed(1)} hours`);
-        }
+
+        if (!store.precipitation.currentEvent)
+            store.precipitation.currentEvent = {
+                start: timestamp,
+                accumulation: 0,
+                maxRate: rainRate,
+            };
+        store.precipitation.currentEvent.accumulation += rainRate / 60;
+        store.precipitation.currentEvent.maxRate = Math.max(store.precipitation.currentEvent.maxRate, rainRate);
+        const duration = (timestamp - store.precipitation.currentEvent.start) / 3600000;
+        if (duration > 0.5) results.phenomena.push(`ongoing precipitation event (${duration.toFixed(1)} hours)`);
     } else {
         if (store.precipitation.currentEvent && store.precipitation.currentEvent.accumulation > 1) {
-            const eventDuration = (timestamp - store.precipitation.currentEvent.start) / 3600000;
-            if (eventDuration > 0.5)
+            const duration = (timestamp - store.precipitation.currentEvent.start) / 3600000;
+            if (duration > 0.5)
                 store.precipitation.rainEvents.push({
                     ...store.precipitation.currentEvent,
                     end: timestamp,
-                    duration: eventDuration,
+                    duration,
                 });
             store.precipitation.currentEvent = undefined;
         }
-        if (humidity > 90 && pressure < 1010) results.phenomena.push('rain likely soon');
     }
 
-    if (rainRate > 0 && temp !== undefined) {
-        if (temp < -5) {
-            results.phenomena.push('snow (powder)');
-            results.phenomena.push(`snow accumulation rate: ~${FormatHelper.snowdepthToString(rainRate * 10)}/hour`);
-        } else if (temp < -2) results.phenomena.push('snow');
-        else if (temp < 0) {
-            results.phenomena.push('wet snow or sleet');
-            results.alerts.push('slippery conditions');
-        } else if (temp < 2) {
-            results.phenomena.push('mixed precipitation possible');
-            if (humidity > 95) {
-                results.phenomena.push('freezing rain risk');
-                results.alerts.push('ice hazard warning');
-            }
-        }
+    // -------------------------------------------------------------------------
+    // PART B: Accumulation Analysis (precipitation-only)
+    // -------------------------------------------------------------------------
+
+    // const trends = store.conditions?.trends?.rainRate || {};
+
+    const period1h = weatherData?.getPeriod?.('1h');
+    if (period1h) {
+        store.precipitation.accumulation1h = period1h.sum('rainRate') || 0;
+    }
+    if (store.precipitation.accumulation1h > THRESHOLDS.RAIN.FLASH_FLOOD_RISK) {
+        results.alerts.push(`flash flood risk (${FormatHelper.rainfallToString(store.precipitation.accumulation1h)} in an hour)`);
     }
 
-    if (accumulation24h > 50) {
-        results.alerts.push(`significant 24 hour rainfall: ${FormatHelper.rainfallToString (accumulation24h)}`);
-        if (accumulation24h > 100) results.alerts.push('extreme 24 hour precipitation event');
-    } else if (accumulation24h > 25) results.phenomena.push(`notable 24 hour rainfall: ${FormatHelper.rainfallToString (accumulation24h)}`);
+    const period24h = weatherData?.getPeriod?.('24h');
+    if (period24h?.entries.length > 0) {
+        store.precipitation.accumulation24h = period24h.sum('rainRate') || 0;
+        store.precipitation.maxRate24h = period24h.max('rainRate') || rainRate;
+        store.precipitation.wetHours24h = period24h.estimateHours((e) => e.rainRate !== undefined && e.rainRate > 0);
+    }
+    if (store.precipitation.accumulation24h > THRESHOLDS.RAIN.EXTREME_24H) {
+        results.alerts.push(`extreme 24 hour precipitation (${FormatHelper.rainfallToString(store.precipitation.accumulation24h)})`);
+    } else if (store.precipitation.accumulation24h > THRESHOLDS.RAIN.ALERT_24H) {
+        results.alerts.push(`significant 24 hour precipitation (${FormatHelper.rainfallToString(store.precipitation.accumulation24h)})`);
+    } else if (store.precipitation.accumulation24h > THRESHOLDS.RAIN.SIGNIFICANT_24H) {
+        results.phenomena.push(`notable 24 hour precipitation (${FormatHelper.rainfallToString(store.precipitation.accumulation24h)})`);
+    }
 
-    if (accumulation7d > 100) {
-        results.phenomena.push(`wet week: ${FormatHelper.rainfallToString (accumulation7d)} total`);
+    const period7d = weatherData?.getPeriod?.('7d');
+    if (period7d?.entries.length > 0) {
+        store.precipitation.accumulation7d = period7d.sum('rainRate') || 0;
+        store.precipitation.dryDays7d = Math.round(period7d.estimateHours((e) => e.rainRate === undefined || e.rainRate < 0.1) / 24);
+    }
+    if (store.precipitation.accumulation7d > THRESHOLDS.RAIN.WET_WEEK) {
+        results.phenomena.push(`wet week (${FormatHelper.rainfallToString(store.precipitation.accumulation7d)} total)`);
         if (location.forestCoverage === 'high') results.phenomena.push('saturated forest floor');
-    } else if (accumulation7d < 5) {
+    } else if (store.precipitation.accumulation7d < THRESHOLDS.RAIN.DRY_WEEK) {
         results.phenomena.push('dry week');
-        if (month >= 6 && month <= 8) {
-            store.precipitation.consecutiveDryDays++;
-            if (store.precipitation.consecutiveDryDays > 14) results.alerts.push('drought conditions developing');
+    }
+
+    // Drought tracking - use calculated dry days from 7d period
+    if (store.precipitation.dryDays7d !== undefined) {
+        if (store.precipitation.dryDays7d >= THRESHOLDS.RAIN.DROUGHT_DAYS) {
+            results.alerts.push(`drought conditions (${store.precipitation.dryDays7d} dry days in last week)`);
+        } else if (store.precipitation.dryDays7d >= THRESHOLDS.RAIN.DRY_DAYS_CONCERN) {
+            results.phenomena.push(`extended dry period (${store.precipitation.dryDays7d} days)`);
         }
     }
 
-    if (maxRate24h > 10 && accumulation24h > 20) {
+    // -------------------------------------------------------------------------
+    // PART C: Rainfall Patterns (precipitation-only)
+    // -------------------------------------------------------------------------
+
+    if (store.precipitation.maxRate24h > 10 && store.precipitation.accumulation24h > 20) {
         results.phenomena.push('periods of intense rainfall');
         if (month >= 6 && month <= 8) results.phenomena.push('convective precipitation');
-    } else if (rainRate > 0 && rainRate < 1 && consecutiveWetHours > 6) {
-        results.phenomena.push('persistent light rain');
+    } else if (rainRate > 0 && rainRate < 1 && store.precipitation.wetHours24h > 6) {
+        results.phenomena.push('persistent light precipitation');
         if (month >= 9 && month <= 11) results.phenomena.push('typical autumn drizzle');
     }
 
-    if (month >= 12 || month <= 2) {
-        // Winter
-        if (rainRate > 0 && temp > 2) {
-            results.phenomena.push('winter rain event');
-            if (snowDepth > 50) results.alerts.push('rain on snow - rapid melt risk');
-        }
-    } else if (month >= 6 && month <= 8) {
+    // -------------------------------------------------------------------------
+    // PART D: Nordic/Seasonal Context (precipitation-only)
+    // -------------------------------------------------------------------------
+
+    if (month >= 6 && month <= 8) {
         // Summer
-        if (rainRate > 8 && pressure < 1010) {
-            results.phenomena.push('summer thunderstorm likely');
-            if (hour >= 14 && hour <= 20) results.phenomena.push('afternoon/evening convection');
+        if (rainRate > THRESHOLDS.RAIN.HEAVY && hour >= 14 && hour <= 20) {
+            results.phenomena.push('afternoon/evening convection');
         }
     }
 
-    if (location.elevation < 200 && windSpeed > 5) {
-        if (windDir !== undefined && windDir > 225 && windDir < 315) {
-            // Westerly winds
-            if (rainRate < 0.5 && humidity > 70) results.phenomena.push('rain shadow effect possible');
-        }
-    }
-
-    // Forest-specific effects
+    // Forest-specific effects (location + precipitation only)
     if (location.forestCoverage === 'high' && rainRate > 0) {
-        if (rainRate < 0.5) results.phenomena.push('canopy interception reducing ground rainfall');
-        else if (consecutiveWetHours > 3) results.phenomena.push('canopy drip enhancing ground moisture');
+        if (rainRate < THRESHOLDS.RAIN.LIGHT) {
+            results.phenomena.push('canopy interception reducing ground rainfall');
+        } else if (store.precipitation.wetHours24h > 3) {
+            results.phenomena.push('canopy drip enhancing ground moisture');
+        }
     }
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretLight(results, _situation, data, data_previous, _store, _options) {
-    const { timestamp, solarRad: rad, solarUvi: uvi } = data;
+function interpretLight({ results, dataCurrent, store }) {
+    const { solarRad: rad, solarUvi: uvi } = dataCurrent;
 
-    const fiveMinutesAgo = timestamp - 5 * 60 * 1000;
-    let uviSum = uvi ?? 0,
-        uviCnt = uvi === undefined ? 0 : 1,
-        radSum = rad ?? 0,
-        radCnt = rad === undefined ? 0 : 1,
-        uviAvg,
-        radAvg;
-    Object.entries(data_previous)
-        .filter(([timestamp, entry]) => timestamp > fiveMinutesAgo && (entry.solarUvi !== undefined || entry.solarRad !== undefined))
-        .sort(([a], [b]) => a - b)
-        .forEach(([_timestamp, entry]) => {
-            if (entry.solarUvi !== undefined) {
-                uviSum += entry.solarUvi;
-                uviCnt++;
-            }
-            if (entry.solarRad !== undefined) {
-                radSum += entry.solarRad;
-                radCnt++;
-            }
-        });
-    if (uviCnt > 0) uviAvg = uviSum / uviCnt;
-    if (radCnt > 0) radAvg = radSum / radCnt;
+    // Get pre-computed trends (use 1h for short-term averaging)
+    const radTrends = store.conditions?.trends?.solarRad || {};
+    const uviTrends = store.conditions?.trends?.solarUvi || {};
+
+    // Use 1-hour averages for more stable readings
+    const radAvg = radTrends['1h']?.valid ? radTrends['1h'].avg : rad;
+    const uviAvg = uviTrends['1h']?.valid ? uviTrends['1h'].avg : uvi;
+
+    // Store for combination interpreter
+    store.light = store.light || {};
+    store.light.radAvg = radAvg;
+    store.light.uviAvg = uviAvg;
+
+    // -------------------------------------------------------------------------
+    // PART A: Solar Radiation Classification
+    // -------------------------------------------------------------------------
 
     if (radAvg !== undefined) {
-        if (radAvg > 800) results.conditions.push('intense sunlight');
-        else if (radAvg > 500) results.conditions.push('strong sunlight');
+        if (radAvg > THRESHOLDS.SOLAR.EXTREME_RAD) {
+            results.conditions.push(`extreme sunlight (> ${FormatHelper.solarToString(THRESHOLDS.SOLAR.EXTREME_RAD)})`);
+        } else if (radAvg > THRESHOLDS.SOLAR.INTENSE_RAD) {
+            results.conditions.push(`intense sunlight (> ${FormatHelper.solarToString(THRESHOLDS.SOLAR.INTENSE_RAD)})`);
+        } else if (radAvg > THRESHOLDS.SOLAR.STRONG_RAD) {
+            results.conditions.push('strong sunlight');
+        } else if (radAvg > THRESHOLDS.SOLAR.MODERATE_RAD) {
+            results.conditions.push('moderate sunlight');
+        } else if (radAvg > THRESHOLDS.SOLAR.LOW_RAD) {
+            results.conditions.push('low sunlight');
+        }
     }
 
-    if (uviAvg !== undefined && uviCnt >= 3) {
-        if (uviAvg >= 11) {
-            results.conditions.push('extreme UV');
-            results.alerts.push('extreme UV (5-min avg)');
-        } else if (uviAvg >= 8) {
-            results.conditions.push('very high UV');
-            results.alerts.push('very high UV (5-min avg)');
-        } else if (uviAvg >= 6) results.conditions.push('high UV (5-min avg)');
-        else if (uviAvg >= 3) results.conditions.push('moderate UV (5-min avg)');
+    // -------------------------------------------------------------------------
+    // PART B: UV Index Classification
+    // -------------------------------------------------------------------------
+
+    if (uviAvg !== undefined) {
+        if (uviAvg >= THRESHOLDS.SOLAR.UV_EXTREME) {
+            results.conditions.push(`extreme UV (> ${FormatHelper.uviToString(THRESHOLDS.SOLAR.UV_EXTREME)})`);
+            results.alerts.push(`extreme UV warning (> ${FormatHelper.uviToString(THRESHOLDS.SOLAR.UV_EXTREME)})`);
+        } else if (uviAvg >= THRESHOLDS.SOLAR.UV_VERY_HIGH) {
+            results.conditions.push(`very high UV (> ${FormatHelper.uviToString(THRESHOLDS.SOLAR.UV_VERY_HIGH)})`);
+            results.alerts.push(`very high UV - sun protection essential (> ${FormatHelper.uviToString(THRESHOLDS.SOLAR.UV_VERY_HIGH)})`);
+        } else if (uviAvg >= THRESHOLDS.SOLAR.UV_HIGH) {
+            results.conditions.push(`high UV (> ${FormatHelper.uviToString(THRESHOLDS.SOLAR.UV_HIGH)})`);
+            results.phenomena.push('sun protection recommended');
+        } else if (uviAvg >= THRESHOLDS.SOLAR.UV_MODERATE) {
+            results.conditions.push('moderate UV');
+        } else if (uviAvg >= THRESHOLDS.SOLAR.UV_LOW) {
+            results.conditions.push('low UV');
+        }
     }
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretSnow(results, situation, data, data_previous, store, _options) {
-    const { timestamp, snowDepth, temp, windSpeed, rainRate } = data;
+function interpretSnow({ results, situation, dataCurrent, store }) {
+    const { snowDepth } = dataCurrent;
     const { month } = situation;
 
     if (snowDepth === undefined) return;
@@ -1031,27 +1331,55 @@ function interpretSnow(results, situation, data, data_previous, store, _options)
     if (!store.snow)
         store.snow = {
             maxDepth: 0,
-            lastMeasurement: 0,
             accumulation24h: 0,
             meltRate24h: 0,
             seasonStart: undefined,
             daysWithSnow: 0,
         };
 
-    const oneDayAgo = timestamp - 24 * 60 * 60 * 1000;
-    let depth24hAgo;
+    if (snowDepth > store.snow.maxDepth) store.snow.maxDepth = snowDepth;
+    if (snowDepth > 0 && !store.snow.seasonStart) store.snow.seasonStart = new Date();
 
-    const accumulations = [];
-    Object.entries(data_previous)
-        .filter(([timestamp, entry]) => timestamp > oneDayAgo && entry.snowDepth !== undefined)
-        .sort(([a], [b]) => a - b)
-        .forEach(([_timestamp, entry]) => {
-            if (depth24hAgo === undefined) depth24hAgo = entry.snowDepth;
-            accumulations.push({ timestamp, depth: entry.snowDepth });
-        });
+    // -------------------------------------------------------------------------
+    // PART A: Basic Snow Cover Classification
+    // -------------------------------------------------------------------------
 
-    if (depth24hAgo !== undefined) {
-        const change24h = snowDepth - depth24hAgo;
+    if (snowDepth === 0) {
+        if (month >= 11 || month <= 2) {
+            results.phenomena.push('no snow cover during winter');
+            if (store.snow.maxDepth > 100) {
+                results.phenomena.push(`snow-free after ${FormatHelper.snowdepthToString(store.snow.maxDepth)} max depth`);
+            }
+        }
+    } else if (snowDepth < THRESHOLDS.SNOW.TRACE) {
+        results.conditions.push('trace snow cover');
+    } else if (snowDepth < THRESHOLDS.SNOW.LIGHT_COVER) {
+        results.conditions.push(`light snow cover (< ${FormatHelper.snowdepthToString(THRESHOLDS.SNOW.LIGHT_COVER)})`);
+        if (month >= 3 && month <= 4) results.phenomena.push('spring snow melt beginning');
+    } else if (snowDepth < THRESHOLDS.SNOW.MODERATE_COVER) {
+        results.conditions.push(`moderate snow cover (< ${FormatHelper.snowdepthToString(THRESHOLDS.SNOW.MODERATE_COVER)})`);
+    } else if (snowDepth < THRESHOLDS.SNOW.DEEP_COVER) {
+        results.conditions.push(`deep snow cover (< ${FormatHelper.snowdepthToString(THRESHOLDS.SNOW.DEEP_COVER)})`);
+        results.phenomena.push('challenging forest mobility');
+    } else if (snowDepth < THRESHOLDS.SNOW.VERY_DEEP_COVER) {
+        results.conditions.push(`very deep snow cover (< ${FormatHelper.snowdepthToString(THRESHOLDS.SNOW.VERY_DEEP_COVER)})`);
+        results.alerts.push(`extreme snow depth (< ${FormatHelper.snowdepthToString(THRESHOLDS.SNOW.VERY_DEEP_COVER)})`);
+        results.phenomena.push('restricted mobility in forest');
+    } else {
+        results.conditions.push(`exceptional snow cover (> ${FormatHelper.snowdepthToString(THRESHOLDS.SNOW.VERY_DEEP_COVER)})`);
+        results.alerts.push(`exceptional snow depth (> ${FormatHelper.snowdepthToString(THRESHOLDS.SNOW.VERY_DEEP_COVER)})`);
+    }
+
+    // -------------------------------------------------------------------------
+    // PART B: Accumulation and Melt Analysis (snow-only)
+    // -------------------------------------------------------------------------
+
+    const trends = store.conditions?.trends?.snowDepth || {};
+
+    const t24h = trends['24h'];
+    if (t24h?.valid && t24h.back !== undefined) {
+        const change24h = snowDepth - t24h.back;
+        store.snow.change24h = change24h;
         if (change24h > 0) {
             store.snow.accumulation24h = change24h;
             store.snow.meltRate24h = 0;
@@ -1060,83 +1388,52 @@ function interpretSnow(results, situation, data, data_previous, store, _options)
             store.snow.accumulation24h = 0;
         }
     }
-
-    if (snowDepth > store.snow.maxDepth) store.snow.maxDepth = snowDepth;
-    if (snowDepth > 0 && store.snow.lastMeasurement === 0) store.snow.seasonStart = new Date(timestamp);
-    store.snow.lastMeasurement = snowDepth;
-
-    if (snowDepth === 0) {
-        if (month >= 11 || month <= 2) {
-            results.phenomena.push('no snow cover during winter');
-            if (store.snow.maxDepth > 100) results.phenomena.push(`snow-free after ${FormatHelper.snowdepthToString (store.snow.maxDepth)} max depth`);
-        }
-    } else if (snowDepth < 50) {
-        results.conditions.push('light snow cover');
-        if (month >= 3 && month <= 4) results.phenomena.push('spring snow melt beginning');
-    } else if (snowDepth < 200) {
-        results.conditions.push('moderate snow cover');
-        if (temp > 0) results.phenomena.push('snow compaction likely');
-    } else if (snowDepth < 500) {
-        results.conditions.push('deep snow cover');
-        results.phenomena.push('challenging forest mobility');
-        if (windSpeed > 5) results.phenomena.push('snow drifting possible');
-    } else {
-        results.conditions.push('very deep snow cover');
-        results.alerts.push('extreme snow depth');
-        results.phenomena.push('restricted mobility in forest');
+    if (store.snow.accumulation24h > THRESHOLDS.SNOW.EXTREME_24H) {
+        results.alerts.push(`extreme 24 hour snowfall (${FormatHelper.snowdepthToString(store.snow.accumulation24h)})`);
+    } else if (store.snow.accumulation24h > THRESHOLDS.SNOW.HEAVY_24H) {
+        results.alerts.push(`heavy 24 hour snowfall (${FormatHelper.snowdepthToString(store.snow.accumulation24h)})`);
+    } else if (store.snow.accumulation24h > THRESHOLDS.SNOW.MODERATE_24H) {
+        results.phenomena.push(`moderate 24 hour snowfall (${FormatHelper.snowdepthToString(store.snow.accumulation24h)})`);
+    } else if (store.snow.accumulation24h > THRESHOLDS.SNOW.LIGHT_24H) {
+        results.phenomena.push(`light 24 hour snowfall (${FormatHelper.snowdepthToString(store.snow.accumulation24h)})`);
+    }
+    if (store.snow.meltRate24h > THRESHOLDS.SNOW.RAPID_MELT) {
+        results.phenomena.push(`rapid 24 hour snowmelt (${FormatHelper.snowdepthToString(store.snow.meltRate24h)})`);
+    } else if (store.snow.meltRate24h > THRESHOLDS.SNOW.MODERATE_MELT) {
+        results.phenomena.push(`moderate 24 hour snowmelt (${FormatHelper.snowdepthToString(store.snow.meltRate24h)})`);
     }
 
-    if (snowDepth > 30) {
-        if (temp < -15) results.phenomena.push('powder snow conditions');
-        else if (temp < -5) results.phenomena.push('dry snow conditions');
-        else if (temp < 0) results.phenomena.push('packed snow conditions');
-        else if (temp > 0) {
-            results.phenomena.push('wet snow conditions');
-            if (temp > 5) results.phenomena.push('rapid snowmelt possible');
-        }
+    const t7d = trends['7d'];
+    if (t7d?.valid && t7d.back !== undefined) {
+        store.snow.change7d = snowDepth - t7d.back;
     }
 
-    if (store.snow.accumulation24h > 100) {
-        results.alerts.push(`heavy 24 hour snowfall: ${FormatHelper.snowdepthToString (store.snow.accumulation24h)}`);
-        results.phenomena.push('significant 24 hour snow accumulation');
-    } else if (store.snow.accumulation24h > 50) results.phenomena.push(`moderate 24 hour snowfall: ${FormatHelper.snowdepthToString (store.snow.accumulation24h)}`);
-    else if (store.snow.accumulation24h > 10) results.phenomena.push(`light 24 hour snowfall: ${FormatHelper.snowdepthToString (store.snow.accumulation24h)}`);
+    // -------------------------------------------------------------------------
+    // PART C: Recreation Conditions (snow-only)
+    // -------------------------------------------------------------------------
 
-    for (let i = 1; i < accumulations.length; i++) {
-        const rate = (accumulations[i].depth - accumulations[i - 1].depth) / ((accumulations[i].time - accumulations[i - 1].time) / 3600000);
-        if (rate > 10)
-            // 10mm/hour
-            results.alerts.push('rapid snow accumulation detected');
+    if (snowDepth >= THRESHOLDS.SNOW.MIN_SKIING) {
+        results.phenomena.push('sufficient snow for skiing');
     }
 
-    if (store.snow.meltRate24h > 50) {
-        results.phenomena.push(`rapid 24 hour snowmelt: ${FormatHelper.snowdepthToString (store.snow.meltRate24h)}`);
-        if (temp > 5 && rainRate > 0) results.alerts.push('rain-on-snow event - flood risk');
-    } else if (store.snow.meltRate24h > 20) results.phenomena.push(`moderate 24 hour snowmelt: ${FormatHelper.snowdepthToString (store.snow.meltRate24h)}`);
+    // -------------------------------------------------------------------------
+    // PART D: Seasonal Context (snow-only)
+    // -------------------------------------------------------------------------
 
-    if (snowDepth > 200 && windSpeed > 10) results.phenomena.push('snow loading on trees - branch fall risk');
-
-    if (snowDepth > 300) {
-        results.phenomena.push('wildlife movement patterns altered');
-        if (month >= 12 || month <= 2) results.phenomena.push('deep snow provides insulation for small mammals');
+    if (month === 10 && snowDepth > 0) {
+        results.phenomena.push('early season snow');
+    } else if (month === 4 && snowDepth > 100) {
+        results.phenomena.push('late season persistent snow pack');
+    } else if (month >= 5 && month <= 8 && snowDepth > 0) {
+        results.phenomena.push('unusual summer snow');
     }
-
-    if (snowDepth > 30) {
-        if (temp >= -15 && temp <= -5) results.phenomena.push('excellent cross-country skiing conditions');
-        else if (temp > -5 && temp < 0) results.phenomena.push('good skiing conditions');
-        else if (temp >= 0) results.phenomena.push('wet/slow skiing conditions');
-    }
-
-    if (month === 10 && snowDepth > 0) results.phenomena.push('early season snow');
-    else if (month === 4 && snowDepth > 100) results.phenomena.push('late season persistent snow pack');
-    else if (month >= 5 && month <= 8 && snowDepth > 0) results.phenomena.push('unusual summer snow');
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretIce(results, situation, data, data_previous, store, _options) {
-    const { timestamp, iceDepth, temp, snowDepth } = data;
+function interpretIce({ results, situation, dataCurrent, store, weatherData }) {
+    const { iceDepth } = dataCurrent;
     const { hour, month } = situation;
 
     if (iceDepth === undefined) return;
@@ -1148,21 +1445,54 @@ function interpretIce(results, situation, data, data_previous, store, _options) 
             breakupDate: undefined,
             growthRate7d: 0,
             meltRate7d: 0,
-            consecutiveSafeDays: 0,
+            safeDays7d: 0,
         };
 
-    const oneWeekAgo = timestamp - 7 * 24 * 60 * 60 * 1000;
-    let depth7dAgo;
+    if (iceDepth > 0 && store.ice.maxDepth === 0) store.ice.formationDate = new Date();
+    else if (iceDepth === 0 && store.ice.maxDepth > 0) store.ice.breakupDate = new Date();
+    if (iceDepth > store.ice.maxDepth) store.ice.maxDepth = iceDepth;
 
-    Object.entries(data_previous)
-        .filter(([timestamp, entry]) => timestamp > oneWeekAgo && entry.iceDepth !== undefined)
-        .sort(([a], [b]) => a - b)
-        .forEach(([_timestamp, entry]) => {
-            if (depth7dAgo === undefined) depth7dAgo = entry.iceDepth;
-        });
+    // -------------------------------------------------------------------------
+    // PART A: Basic Ice Cover Classification
+    // -------------------------------------------------------------------------
 
-    if (depth7dAgo !== undefined) {
-        const change7d = iceDepth - depth7dAgo;
+    if (iceDepth === 0) {
+        if (month >= 11 || month <= 3) {
+            results.phenomena.push('open water');
+        }
+    } else if (iceDepth < THRESHOLDS.ICE.THIN) {
+        results.conditions.push(`thin ice cover (< ${FormatHelper.icedepthToString(THRESHOLDS.ICE.THIN)})`);
+        results.alerts.push('unsafe ice conditions - stay off ice');
+    } else if (iceDepth < THRESHOLDS.ICE.WALKABLE) {
+        results.conditions.push(`forming ice (< ${FormatHelper.icedepthToString(THRESHOLDS.ICE.WALKABLE)})`);
+        results.phenomena.push('ice may support single person on foot with caution');
+    } else if (iceDepth < THRESHOLDS.ICE.GROUP_SAFE) {
+        results.conditions.push(`moderate ice cover (< ${FormatHelper.icedepthToString(THRESHOLDS.ICE.GROUP_SAFE)})`);
+        results.phenomena.push('ice supports walking (Swedish: 10cm standard)');
+    } else if (iceDepth < THRESHOLDS.ICE.SNOWMOBILE) {
+        results.conditions.push(`thick ice cover (< ${FormatHelper.icedepthToString(THRESHOLDS.ICE.SNOWMOBILE)})`);
+        results.phenomena.push('ice supports group activities');
+    } else if (iceDepth < THRESHOLDS.ICE.VEHICLE) {
+        results.conditions.push(`very thick ice (< ${FormatHelper.icedepthToString(THRESHOLDS.ICE.VEHICLE)})`);
+        results.phenomena.push('ice supports snowmobile (Swedish: 20cm standard)');
+    } else if (iceDepth < THRESHOLDS.ICE.HEAVY_VEHICLE) {
+        results.conditions.push(`exceptional ice (< ${FormatHelper.icedepthToString(THRESHOLDS.ICE.HEAVY_VEHICLE)})`);
+        results.phenomena.push('ice supports light vehicles (Swedish: 25cm standard)');
+    } else {
+        results.conditions.push(`extreme ice thickness (> ${FormatHelper.icedepthToString(THRESHOLDS.ICE.HEAVY_VEHICLE)})`);
+        results.phenomena.push('ice supports heavy vehicles');
+    }
+
+    // -------------------------------------------------------------------------
+    // PART B: Growth and Melt Analysis (ice-only)
+    // -------------------------------------------------------------------------
+
+    const trends = store.conditions?.trends?.iceDepth || {};
+
+    const t7d = trends['7d'];
+    if (t7d?.valid && t7d.back !== undefined) {
+        const change7d = iceDepth - t7d.back;
+        store.ice.change7d = change7d;
         if (change7d > 0) {
             store.ice.growthRate7d = change7d / 7;
             store.ice.meltRate7d = 0;
@@ -1172,79 +1502,60 @@ function interpretIce(results, situation, data, data_previous, store, _options) 
         }
     }
 
-    if (iceDepth > 0 && store.ice.maxDepth === 0) store.ice.formationDate = new Date(timestamp);
-    else if (iceDepth === 0 && store.ice.maxDepth > 0) store.ice.breakupDate = new Date(timestamp);
-
-    if (iceDepth > store.ice.maxDepth) store.ice.maxDepth = iceDepth;
-
-    if (iceDepth >= 100) store.ice.consecutiveSafeDays++;
-    else store.ice.consecutiveSafeDays = 0;
-
-    if (iceDepth === 0) {
-        if (month >= 11 || month <= 3) if (temp < -5) results.phenomena.push('ice formation beginning');
-    } else if (iceDepth < 50) {
-        results.conditions.push('thin ice cover');
-        if (month >= 11 || month <= 3) results.alerts.push('unsafe ice conditions');
-    } else if (iceDepth < 150) {
-        results.conditions.push('moderate ice cover');
-        if (month >= 11 || month <= 2) results.phenomena.push('lakes partially frozen');
-    } else if (iceDepth < 300) {
-        results.conditions.push('thick ice cover');
-        results.phenomena.push('lakes solidly frozen');
-    } else {
-        results.conditions.push('very thick ice cover');
-        results.phenomena.push('exceptional ice thickness');
-    }
-
-    if (iceDepth > 0) {
-        if (temp > 0 && iceDepth < 150) results.alerts.push('weakening ice conditions');
-        if (iceDepth < 50) results.alerts.push('thin ice hazard - stay off ice');
-        else if (iceDepth >= 50 && iceDepth < 100) results.phenomena.push('ice may support single person on foot');
-        else if (iceDepth >= 100 && iceDepth < 200) {
-            results.phenomena.push('ice supports group activities');
-            if (store.ice.consecutiveSafeDays > 7) results.phenomena.push('ice fishing conditions established');
-        } else if (iceDepth >= 200 && iceDepth < 250) results.phenomena.push('ice supports snowmobile');
-        else if (iceDepth >= 250) results.phenomena.push('ice supports light vehicles');
-    }
-
-    if (iceDepth > 50) {
-        if (snowDepth > 100) {
-            results.phenomena.push('snow insulation slowing ice growth');
-            results.alerts.push('variable ice thickness possible');
-        }
-        if (store.ice.growthRate7d > 5) results.phenomena.push(`rapid ice growth: ${FormatHelper.icedepthToString(store.ice.growthRate7d)}/day`);
-        else if (store.ice.meltRate7d > 3) {
-            results.phenomena.push(`ice deteriorating: ${FormatHelper.icedepthToString(store.ice.meltRate7d)}/day loss`);
-            if (iceDepth < 150) results.alerts.push('ice becoming unsafe');
+    if (iceDepth > THRESHOLDS.ICE.THIN) {
+        if (store.ice.growthRate7d > THRESHOLDS.ICE.RAPID_GROWTH) {
+            results.phenomena.push(`rapid 7 day ice growth (${FormatHelper.icedepthToString(store.ice.growthRate7d)})`);
+        } else if (store.ice.meltRate7d > THRESHOLDS.ICE.RAPID_MELT) {
+            results.phenomena.push(`ice deteriorating over 7 days (${FormatHelper.icedepthToString(store.ice.meltRate7d)})`);
+            if (iceDepth < THRESHOLDS.ICE.GROUP_SAFE) {
+                results.alerts.push('ice becoming unsafe');
+            }
         }
     }
 
-    if (snowDepth > 100 && iceDepth > 100) results.phenomena.push('typical Nordic winter conditions');
+    // -------------------------------------------------------------------------
+    // PART C: Safety Status (ice-only)
+    // -------------------------------------------------------------------------
 
-    if (iceDepth >= 100) results.phenomena.push('ice skating safe (Swedish standard)');
-    if (iceDepth >= 200) results.phenomena.push('snowmobile safe');
-
-    if (iceDepth > 150) {
-        if (snowDepth < 50) results.phenomena.push('excellent ice skating conditions');
-        if (month >= 1 && month <= 3) results.phenomena.push('ice road conditions possible');
+    // Calculate safe days from 7d period data
+    const period7d = weatherData?.getPeriod?.('7d');
+    if (period7d?.entries.length > 0) {
+        store.ice.safeDays7d = period7d.estimateDays((e) => e.iceDepth !== undefined && e.iceDepth >= THRESHOLDS.ICE.WALKABLE);
+        if (iceDepth >= THRESHOLDS.ICE.WALKABLE && store.ice.safeDays7d > 5) {
+            results.phenomena.push('ice fishing conditions established');
+        }
     }
+
+    // -------------------------------------------------------------------------
+    // PART D: Seasonal Context (ice-only)
+    // -------------------------------------------------------------------------
 
     if (month >= 3 && month <= 4 && iceDepth > 0) {
         results.phenomena.push('spring ice - extra caution needed');
-        if (temp > 5 || (temp > 0 && hour >= 10 && hour <= 16)) results.alerts.push('daytime ice deterioration');
+        if (hour >= 10 && hour <= 16) {
+            results.phenomena.push('daytime warming may affect ice');
+        }
     }
 
-    if (month === 10 && iceDepth > 0) results.phenomena.push('early lake ice formation');
-    else if (month === 4 && iceDepth > 100) results.phenomena.push('late season persistent ice');
-    else if (month >= 5 && month <= 9 && iceDepth > 0) results.phenomena.push('unusual season ice');
+    if (month === 10 && iceDepth > 0) {
+        results.phenomena.push('early lake ice formation');
+    } else if (month === 4 && iceDepth > THRESHOLDS.ICE.WALKABLE) {
+        results.phenomena.push('late season persistent ice');
+    } else if (month >= 5 && month <= 9 && iceDepth > 0) {
+        results.phenomena.push('unusual season ice');
+    }
+
+    if (month >= 1 && month <= 3 && iceDepth > THRESHOLDS.ICE.GROUP_SAFE) {
+        results.phenomena.push('ice road conditions possible');
+    }
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretRadiation(results, situation, data, data_previous, store, _options) {
-    const { timestamp, radiationCpm, radiationAcpm, radationUsvh, rainRate, solarUvi, windSpeed, pressure } = data;
-    const { month, hour } = situation;
+function interpretRadiation({ results, situation, dataCurrent, store }) {
+    const { radiationCpm, radiationAcpm, radationUsvh } = dataCurrent;
+    const { month } = situation;
 
     if (radiationCpm === undefined && radiationAcpm === undefined) return;
 
@@ -1258,223 +1569,760 @@ function interpretRadiation(results, situation, data, data_previous, store, _opt
             doseResetTime: undefined,
         };
 
-    const radiationValue = radiationAcpm === undefined ? radiationCpm : radiationAcpm,
-        radiationSource = radiationAcpm === undefined ? 'instant' : 'average';
-
-    const oneDayAgo = timestamp - 24 * 60 * 60 * 1000;
-    const historicalReadings = [];
-    Object.entries(data_previous)
-        .filter(([timestamp, entry]) => timestamp > oneDayAgo && (entry.radiationAcpm !== undefined || entry.radiationCpm !== undefined))
-        .sort(([a], [b]) => a - b)
-        .forEach(([_, entry]) => {
-            const value = entry.radiationAcpm === undefined ? entry.radiationCpm : entry.radiationAcpm;
-            if (value !== undefined) historicalReadings.push(value);
-        });
-
-    if (historicalReadings.length > 10) {
-        historicalReadings.sort((a, b) => a - b);
-        store.radiation.baseline = historicalReadings[Math.floor(historicalReadings.length / 2)];
-    }
-
+    const radiationValue = radiationAcpm === undefined ? radiationCpm : radiationAcpm;
+    const radiationSource = radiationAcpm === undefined ? 'instant' : 'average';
+    store.radiation.currentValue = radiationValue;
+    store.radiation.source = radiationSource;
     if (radiationValue > store.radiation.maxReading) store.radiation.maxReading = radiationValue;
 
-    if (radationUsvh !== undefined) {
-        const now = new Date(timestamp);
-        const resetTime = store.radiation.doseResetTime ? new Date(store.radiation.doseResetTime) : undefined;
-        if (!resetTime || now.getDate() !== resetTime.getDate()) {
-            store.radiation.dailyDose = 0;
-            store.radiation.doseResetTime = timestamp;
-        }
-        store.radiation.dailyDose += radationUsvh / 60;
-    }
+    // -------------------------------------------------------------------------
+    // PART A: Basic Radiation Classification (radiation-only)
+    // -------------------------------------------------------------------------
 
-    if (radiationValue <= 30) {
+    if (radiationValue <= THRESHOLDS.RADIATION.NORMAL) {
         // Normal background - no mention needed
-    } else if (radiationValue > 30 && radiationValue <= 50) {
-        results.conditions.push('slightly elevated radiation');
+    } else if (radiationValue <= THRESHOLDS.RADIATION.SLIGHTLY_ELEVATED) {
+        results.conditions.push(`slightly elevated radiation (${radiationValue} CPM ${radiationSource})`);
         results.phenomena.push('above normal background radiation');
-    } else if (radiationValue > 50 && radiationValue <= 100) {
-        results.conditions.push('moderately elevated radiation');
-        results.alerts.push(`elevated radiation levels (${radiationSource})`);
+    } else if (radiationValue <= THRESHOLDS.RADIATION.MODERATELY_ELEVATED) {
+        results.conditions.push(`moderately elevated radiation (${radiationValue} CPM)`);
+        results.alerts.push(`elevated radiation levels (${radiationValue} CPM ${radiationSource})`);
         results.phenomena.push('investigate radiation source');
-    } else if (radiationValue > 100 && radiationValue <= 300) {
-        results.conditions.push('high radiation');
-        results.alerts.push(`high radiation levels (${radiationSource})`);
+    } else if (radiationValue <= THRESHOLDS.RADIATION.HIGH) {
+        results.conditions.push(`high radiation (${radiationValue} CPM)`);
+        results.alerts.push(`high radiation levels (${radiationValue} CPM ${radiationSource})`);
         results.phenomena.push('minimize prolonged exposure');
-    } else if (radiationValue > 300) {
-        results.conditions.push('extremely high radiation');
-        results.alerts.push(`dangerous radiation levels (${radiationSource})`);
+    } else if (radiationValue <= THRESHOLDS.RADIATION.DANGEROUS) {
+        results.conditions.push(`dangerous radiation (${radiationValue} CPM)`);
+        results.alerts.push(`dangerous radiation levels (${radiationValue} CPM ${radiationSource})`);
+    } else {
+        results.conditions.push(`extremely high radiation (${radiationValue} CPM)`);
+        results.alerts.push(`critical radiation levels (${radiationValue} CPM ${radiationSource})`);
         results.phenomena.push('seek immediate shelter');
     }
 
-    if (store.radiation.baseline !== undefined && radiationValue > store.radiation.baseline * 2) {
-        store.radiation.anomalyCount++;
-        store.radiation.lastAnomaly = timestamp;
-        if (radiationValue > store.radiation.baseline * 3) results.phenomena.push(`radiation ${(radiationValue / store.radiation.baseline).toFixed(1)}x above baseline`);
+    // -------------------------------------------------------------------------
+    // PART B: Anomaly Detection (radiation-only)
+    // -------------------------------------------------------------------------
+
+    const cpmTrends = store.conditions?.trends?.radiationCpm || {};
+    const acpmTrends = store.conditions?.trends?.radiationAcpm || {};
+
+    const t24h = radiationAcpm === undefined ? cpmTrends['24h'] : acpmTrends['24h'];
+    if (t24h?.valid && t24h.avg !== undefined) {
+        store.radiation.baseline = t24h.avg;
+    }
+    if (store.radiation.baseline > 0) {
+        const ratio = radiationValue / store.radiation.baseline;
+        if (ratio > THRESHOLDS.RADIATION.CRITICAL_ANOMALY_MULTIPLIER) {
+            store.radiation.anomalyCount++;
+            store.radiation.lastAnomaly = Date.now();
+            results.alerts.push(`radiation critical (${ratio.toFixed(1)}x baseline)`);
+        } else if (ratio > THRESHOLDS.RADIATION.SEVERE_ANOMALY_MULTIPLIER) {
+            store.radiation.anomalyCount++;
+            store.radiation.lastAnomaly = Date.now();
+            results.phenomena.push(`radiation severe (${ratio.toFixed(1)}x baseline)`);
+        } else if (ratio > THRESHOLDS.RADIATION.ANOMALY_MULTIPLIER) {
+            results.phenomena.push(`radiation elevated (${ratio.toFixed(1)}x baseline)`);
+        }
     }
 
-    if (radiationValue > 30) {
-        if (rainRate > 0) {
-            results.phenomena.push('possible radon washout in precipitation');
-            if (radiationValue > 50) results.phenomena.push('enhanced radon progeny deposition');
-        }
-        if (month >= 9 || month <= 3) {
-            results.phenomena.push('seasonal radon fluctuation possible');
-            if (pressure < 1000) results.phenomena.push('low pressure enhancing radon emission');
-        }
-        if (hour >= 18 || hour <= 6) {
-            if (windSpeed < 1) results.phenomena.push('calm conditions concentrating radon');
-        }
-    }
+    // -------------------------------------------------------------------------
+    // PART C: Dose Rate Analysis (radiation-only)
+    // -------------------------------------------------------------------------
 
     if (radationUsvh !== undefined) {
-        if (radationUsvh > 0.5) results.alerts.push(`radiation dose rate: ${FormatHelper.radiationToString(radationUsvh)}/h`);
-        if (radationUsvh > 0.3 && radationUsvh <= 1) results.phenomena.push('above typical background dose rate');
-        else if (radationUsvh > 1 && radationUsvh <= 5) results.phenomena.push('elevated dose rate - limit prolonged exposure');
-        else if (radationUsvh > 5) results.phenomena.push('significant dose rate - health concern');
-        if (store.radiation.dailyDose > 2.4) results.phenomena.push(`daily dose: ${FormatHelper.radiationToString(store.radiation.dailyDose)} (above average)`);
+        if (radationUsvh > THRESHOLDS.RADIATION.DOSE_DANGEROUS) {
+            results.alerts.push(`dangerous dose rate (> ${FormatHelper.radiationToString(THRESHOLDS.RADIATION.DOSE_DANGEROUS)})`);
+        } else if (radationUsvh > THRESHOLDS.RADIATION.DOSE_HIGH) {
+            results.alerts.push(`high dose rate (> ${FormatHelper.radiationToString(THRESHOLDS.RADIATION.DOSE_HIGH)})`);
+            results.phenomena.push('limit prolonged exposure');
+        } else if (radationUsvh > THRESHOLDS.RADIATION.DOSE_ELEVATED) {
+            results.phenomena.push(`elevated dose rate (> ${FormatHelper.radiationToString(THRESHOLDS.RADIATION.DOSE_ELEVATED)})`);
+        }
+        store.radiation.doseRate = radationUsvh;
+        const now = new Date();
+        const resetTime = store.radiation.doseResetTime ? new Date(store.radiation.doseResetTime) : undefined;
+        if (!resetTime || now.getDate() !== resetTime.getDate()) {
+            store.radiation.dailyDose = 0;
+            store.radiation.doseResetTime = now.getTime();
+        }
+        store.radiation.dailyDose += radationUsvh / 60;
+        if (store.radiation.dailyDose > 2.4) {
+            results.phenomena.push(`daily dose ${FormatHelper.radiationToString(store.radiation.dailyDose)} (above average ${FormatHelper.radiationToString(2.4)})`);
+        }
     }
 
-    if (radiationValue > 50 && solarUvi > 5) results.phenomena.push('combined radiation and UV exposure');
+    // -------------------------------------------------------------------------
+    // PART D: Seasonal Context (radiation + time only)
+    // -------------------------------------------------------------------------
 
-    if (radiationValue > 25 && radiationValue <= 40) if (month >= 11 || month <= 2) results.phenomena.push('typical winter indoor radon accumulation');
+    if (radiationValue > THRESHOLDS.RADIATION.NORMAL) {
+        // Seasonal radon patterns
+        if (month >= 9 || month <= 3) {
+            results.phenomena.push('seasonal radon fluctuation possible');
+        }
+        // Winter indoor radon
+        if (radiationValue > 25 && radiationValue <= 40 && (month >= 11 || month <= 2)) {
+            results.phenomena.push('typical winter indoor radon accumulation');
+        }
+    }
 
-    if (store.radiation.anomalyCount > 5 && store.radiation.lastAnomaly && timestamp - store.radiation.lastAnomaly < 3600000) results.alerts.push('sustained elevated radiation - investigate source');
+    // Sustained anomaly warning
+    if (store.radiation.anomalyCount > 5 && store.radiation.lastAnomaly && Date.now() - store.radiation.lastAnomaly < 3600000) {
+        results.alerts.push('sustained elevated radiation - investigate source');
+    }
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretCombination(results, situation, data, data_previous) {
-    const { month, hour, location, dewPoint, windChill } = situation;
-    const { timestamp, temp, humidity, pressure, windSpeed, rainRate, snowDepth, cloudCover } = data;
+function interpretCombination({ results, situation, dataCurrent, store, weatherData }) {
+    const { month, hour, location, dewPoint, windChill, heatIndex, daylight } = situation;
+    const { temp, humidity, pressure, windSpeed, windDir, rainRate, snowDepth, cloudCover, iceDepth, solarUvi } = dataCurrent;
 
-    // Snow type determination
-    if (temp < 0 && humidity > 70 && rainRate > 0) {
-        if (temp < -10) {
-            results.phenomena.push('light powder snow likely');
-            if (windSpeed > 5) results.phenomena.push('blowing snow conditions');
-        } else if (temp < -5) results.phenomena.push('dry snow likely');
-        else results.phenomena.push('wet snow likely');
-    }
+    // Get pre-computed trends
+    const tempTrends = store.conditions?.trends?.temp || {};
+    const pressureTrends = store.conditions?.trends?.pressure || {};
 
-    // Frost conditions (not during precipitation)
-    if (temp < -2 && humidity > 70 && rainRate === 0) {
-        if (humidity > 90 && windSpeed < 2) {
-            results.phenomena.push('heavy frost likely');
-            if (hour >= 4 && hour <= 8) results.phenomena.push('morning hoar frost possible');
-        } else results.phenomena.push('frost likely');
-    }
+    // ==========================================================================
+    // SECTION 1: TEMPERATURE + HUMIDITY COMBINATIONS
+    // ==========================================================================
 
-    // Snow load on trees
-    if ((temp < 0 || snowDepth > 0) && cloudCover > 70 && month >= 10 && month <= 3) {
-        results.phenomena.push('snow accumulation on trees possible');
-        if (windSpeed > 5) {
-            results.alerts.push('risk of snow-laden branches');
-            if (windSpeed > 10 && snowDepth > 100) results.alerts.push('significant tree damage risk');
+    if (temp !== undefined && humidity !== undefined) {
+        // Ice crystal formation
+        if (temp < THRESHOLDS.TEMP.VERY_COLD && humidity > 80) {
+            results.phenomena.push('ice crystal formation likely');
+        }
+
+        // Oppressive humidity
+        if (humidity > THRESHOLDS.HUMIDITY.VERY_HUMID && temp > THRESHOLDS.TEMP.WARM) {
+            results.phenomena.push('oppressive humidity');
+            if (heatIndex && heatIndex > temp + 5) {
+                results.phenomena.push(`humidity making it feel ${FormatHelper.temperatureToString(heatIndex - temp)} warmer`);
+            }
+        }
+
+        // Heat index warnings
+        if (heatIndex !== undefined) {
+            if (heatIndex >= THRESHOLDS.COMPOUND.HEAT_INDEX_EXTREME) {
+                results.alerts.push(`extreme heat index ${FormatHelper.temperatureToString(heatIndex)} (> ${FormatHelper.temperatureToString(THRESHOLDS.COMPOUND.HEAT_INDEX_EXTREME)})`);
+            } else if (heatIndex >= THRESHOLDS.COMPOUND.HEAT_INDEX_DANGER) {
+                results.alerts.push(`dangerous heat index ${FormatHelper.temperatureToString(heatIndex)} (> ${FormatHelper.temperatureToString(THRESHOLDS.COMPOUND.HEAT_INDEX_DANGER)})`);
+            } else if (heatIndex >= THRESHOLDS.COMPOUND.HEAT_INDEX_WARNING) {
+                results.alerts.push(`high heat index ${FormatHelper.temperatureToString(heatIndex)} (> ${FormatHelper.temperatureToString(THRESHOLDS.COMPOUND.HEAT_INDEX_WARNING)})`);
+            } else if (heatIndex >= THRESHOLDS.COMPOUND.HEAT_INDEX_CAUTION) {
+                results.phenomena.push(`heat index ${FormatHelper.temperatureToString(heatIndex)} (> ${FormatHelper.temperatureToString(THRESHOLDS.COMPOUND.HEAT_INDEX_CAUTION)})`);
+            }
+        }
+
+        // Maritime influence detection
+        const t24h = tempTrends['24h'];
+        if (t24h?.valid) {
+            if (t24h.min !== undefined && t24h.max !== undefined) {
+                const range24h = t24h.max - t24h.min;
+                if (range24h < THRESHOLDS.TEMP.STABLE_DIURNAL_RANGE && humidity > 80) {
+                    results.phenomena.push('maritime influence likely');
+                }
+            }
+        }
+
+        // Precipitation type by temperature (moved from interpretPrecipitation)
+        if (rainRate > 0) {
+            if (temp < -5) {
+                results.phenomena.push('snow (powder)');
+                results.phenomena.push(`snow accumulation rate: ~${FormatHelper.snowdepthToString(rainRate * 10)}/hour`);
+            } else if (temp < -2) {
+                results.phenomena.push('snow');
+            } else if (temp < THRESHOLDS.TEMP.FREEZING) {
+                results.phenomena.push('wet snow or sleet');
+                results.alerts.push('slippery conditions');
+            } else if (temp < 2) {
+                results.phenomena.push('mixed precipitation possible');
+            } else {
+                results.phenomena.push('rain');
+            }
+        }
+
+        // Imminent precipitation
+        if (humidity > THRESHOLDS.HUMIDITY.SATURATED && rainRate === 0) {
+            results.phenomena.push('saturated air - precipitation imminent');
         }
     }
 
-    // Freezing rain - very specific conditions
-    if (temp < 2 && temp > -8 && rainRate > 0) {
-        if (temp > -2 && temp < 1 && humidity > 90) {
-            results.phenomena.push('freezing rain likely');
-            results.alerts.push('severe ice hazard');
-            if (location.forestCoverage === 'high') results.alerts.push('forest ice damage risk');
-        } else {
-            results.phenomena.push('freezing rain possible');
-            results.alerts.push('ice hazard warning');
+    // ==========================================================================
+    // SECTION 2: FOG PREDICTION (temp + humidity + dewPoint + wind)
+    // ==========================================================================
+
+    if (dewPoint !== undefined && temp !== undefined) {
+        const dewPointSpread = temp - dewPoint;
+
+        if (dewPointSpread < THRESHOLDS.DEW_POINT.DENSE_FOG_SPREAD && humidity > THRESHOLDS.HUMIDITY.SATURATED) {
+            results.conditions.push('foggy conditions');
+            if (temp < THRESHOLDS.TEMP.FREEZING) {
+                results.phenomena.push('freezing fog');
+                results.alerts.push('freezing fog - ice accumulation on surfaces');
+            }
+        } else if (dewPointSpread < THRESHOLDS.DEW_POINT.FOG_SPREAD && humidity > 85) {
+            if (windSpeed !== undefined && windSpeed < 2) {
+                results.phenomena.push('fog formation likely');
+                if (hour >= 22 || hour <= 8) results.phenomena.push('overnight fog probable');
+            } else if (windSpeed !== undefined && windSpeed < 5) {
+                results.phenomena.push('patchy fog possible');
+            }
+        } else if (dewPointSpread < THRESHOLDS.DEW_POINT.MIST_SPREAD && humidity > 80) {
+            results.phenomena.push('mist possible');
         }
-    }
 
-    // Nordic humidity comfort
-    if (temp > 20 && humidity > 75) {
-        results.phenomena.push('humid for Nordic climate');
-        if (temp > 25 && humidity > 80) results.phenomena.push('unusually humid conditions');
-    }
-
-    // Forest-specific fog prediction
-    if (Math.abs(temp - dewPoint) < 3 && temp > 0) {
-        if (location.forestCoverage === 'high') {
+        // Forest-specific fog
+        if (location.forestCoverage === 'high' && dewPointSpread < THRESHOLDS.DEW_POINT.PATCHY_FOG_SPREAD && temp > THRESHOLDS.TEMP.FREEZING) {
             if (hour < 10 || hour > 18) {
                 results.phenomena.push('forest fog likely');
-                if (Math.abs(temp - dewPoint) < 1) results.phenomena.push('dense fog in forest valleys');
-            } else results.phenomena.push('patchy forest fog possible');
-        } else results.phenomena.push('fog likely');
-    }
-
-    // Forest fire risk assessment
-    if (month >= 5 && month <= 8 && temp > 22 && humidity < 40 && rainRate === 0) {
-        results.phenomena.push('dry forest conditions');
-        const past3Days = toolsData.getRecentData(data_previous, timestamp, 3 * 24);
-        if (past3Days.isReasonablyDistributed()) {
-            const dryHours = past3Days.entries.filter((e) => e.rainRate !== undefined && e.rainRate === 0 && e.humidity < 40).length;
-            if (humidity < 30 && temp > 25) {
-                results.alerts.push('high forest fire risk');
-                if (windSpeed > 10) results.alerts.push('extreme fire danger - rapid spread possible');
-            } else if (dryHours > 48) results.alerts.push('elevated forest fire risk');
-            // Additional: check for rain in past week
-            const pastWeek = toolsData.getRecentData(data_previous, timestamp, 7 * 24);
-            if (pastWeek.isReasonablyDistributed()) {
-                const rainEvents = pastWeek.entries.filter((e) => e.rainRate > 0).length;
-                if (rainEvents < 5 && dryHours > 60) results.alerts.push('prolonged dry conditions - extreme fire risk');
+                if (dewPointSpread < THRESHOLDS.DEW_POINT.DENSE_FOG_SPREAD) {
+                    results.phenomena.push('dense fog in forest valleys');
+                }
+            } else {
+                results.phenomena.push('patchy forest fog possible');
             }
         }
     }
 
-    // Complex precipitation predictions
+    // ==========================================================================
+    // SECTION 3: TEMPERATURE + WIND COMBINATIONS
+    // ==========================================================================
+
+    if (temp !== undefined && windSpeed !== undefined) {
+        // Wind chill (moved from interpretWind)
+        if (temp < 10 && windSpeed > 3 && windChill !== undefined) {
+            const windChillDiff = Math.round(temp - windChill);
+            if (windChillDiff >= 3) {
+                results.phenomena.push(`feels ${FormatHelper.temperatureToString(windChillDiff)} colder due to wind`);
+                if (windChill < THRESHOLDS.COMPOUND.WIND_CHILL_DANGEROUS) {
+                    results.alerts.push(`extreme wind chill ${FormatHelper.temperatureToString(windChill)} (< ${FormatHelper.temperatureToString(THRESHOLDS.COMPOUND.WIND_CHILL_DANGEROUS)}) - frostbite in minutes`);
+                } else if (windChill < THRESHOLDS.COMPOUND.WIND_CHILL_EXTREME) {
+                    results.alerts.push(`extreme wind chill ${FormatHelper.temperatureToString(windChill)} (< ${FormatHelper.temperatureToString(THRESHOLDS.COMPOUND.WIND_CHILL_EXTREME)})`);
+                } else if (windChill < THRESHOLDS.COMPOUND.WIND_CHILL_SEVERE) {
+                    results.alerts.push(`severe wind chill: ${FormatHelper.temperatureToString(windChill)} (< ${FormatHelper.temperatureToString(THRESHOLDS.COMPOUND.WIND_CHILL_SEVERE)}) - limit exposure`);
+                } else if (windChill < THRESHOLDS.COMPOUND.WIND_CHILL_COLD) {
+                    results.phenomena.push('significant wind chill factor');
+                }
+            }
+        }
+
+        // Still arctic air
+        if (temp < THRESHOLDS.TEMP.VERY_COLD && windSpeed < THRESHOLDS.WIND.CALM) {
+            results.phenomena.push('still arctic air');
+            if (store.wind?.calmHours24h > 12) {
+                results.phenomena.push('temperature inversion likely');
+            }
+        }
+
+        // Arctic wind direction effects
+        if (windDir !== undefined && (month >= 11 || month <= 2)) {
+            const cardinalDir = store.wind?.cardinalDirection || cardinalDirection(windDir);
+            if ((cardinalDir === 'N' || cardinalDir === 'NE') && temp < THRESHOLDS.TEMP.COLD) {
+                results.phenomena.push('arctic wind - severe chill');
+            }
+        }
+
+        // Hot still conditions
+        if (temp > THRESHOLDS.TEMP.HOT && windSpeed < 2 && hour >= 10 && hour <= 16) {
+            results.phenomena.push('still, hot conditions');
+        }
+    }
+
+    // ==========================================================================
+    // SECTION 4: TEMPERATURE + SNOW COMBINATIONS
+    // ==========================================================================
+
+    if (temp !== undefined && snowDepth !== undefined && snowDepth > 0) {
+        // Snow type by temperature (moved from interpretSnow)
+        if (snowDepth > 30) {
+            if (temp < THRESHOLDS.TEMP.VERY_COLD) {
+                results.phenomena.push('powder snow conditions');
+            } else if (temp < THRESHOLDS.TEMP.COLD) {
+                results.phenomena.push('dry snow conditions');
+            } else if (temp < THRESHOLDS.TEMP.FREEZING) {
+                results.phenomena.push('packed snow conditions');
+            } else {
+                results.phenomena.push('wet snow conditions');
+                if (temp > THRESHOLDS.TEMP.CHILLY) results.phenomena.push('rapid snowmelt possible');
+            }
+        }
+
+        // Skiing conditions
+        if (snowDepth >= THRESHOLDS.SNOW.MIN_SKIING) {
+            if (temp >= -15 && temp <= -5) {
+                results.phenomena.push('excellent cross-country skiing conditions');
+            } else if (temp > -5 && temp < THRESHOLDS.TEMP.FREEZING) {
+                results.phenomena.push('good skiing conditions');
+            } else if (temp >= THRESHOLDS.TEMP.FREEZING) {
+                results.phenomena.push('wet/slow skiing conditions');
+            }
+        }
+
+        // Winter warmth causing melt
+        if ((month >= 11 || month <= 2) && temp > THRESHOLDS.TEMP.WINTER_WARM) {
+            results.phenomena.push('rapid snowmelt likely');
+        }
+    }
+
+    // ==========================================================================
+    // SECTION 5: RAIN + SNOW COMBINATIONS (Rain on snow)
+    // ==========================================================================
+
+    if (rainRate !== undefined && rainRate > 0 && snowDepth !== undefined && snowDepth > THRESHOLDS.SNOW.LIGHT_COVER) {
+        if (temp !== undefined && temp > 2) {
+            results.alerts.push('rain on snow - rapid melt and flood risk');
+            if (store.snow?.meltRate24h > THRESHOLDS.SNOW.RAPID_MELT) {
+                results.alerts.push('significant rain-on-snow flood risk');
+            }
+        } else if (temp !== undefined && temp > THRESHOLDS.TEMP.FREEZING) {
+            results.phenomena.push('rain on snow event');
+        }
+    }
+
+    // ==========================================================================
+    // SECTION 6: WIND + SNOW COMBINATIONS (Blizzard, drifting)
+    // ==========================================================================
+
+    if (windSpeed !== undefined && snowDepth !== undefined) {
+        // Snow drifting
+        if (windSpeed > THRESHOLDS.WIND.SNOW_DRIFT && temp !== undefined && temp < THRESHOLDS.TEMP.FREEZING && snowDepth > THRESHOLDS.SNOW.TRACE) {
+            results.phenomena.push('snow drifting possible');
+            if (windSpeed > THRESHOLDS.WIND.MODERATE_BREEZE) {
+                results.phenomena.push('blowing snow conditions');
+            }
+        }
+
+        // Blizzard conditions
+        if (windSpeed >= THRESHOLDS.COMPOUND.BLIZZARD_WIND && rainRate > 0 && temp !== undefined && temp < THRESHOLDS.TEMP.FREEZING) {
+            results.alerts.push('blizzard conditions');
+        }
+
+        // Snow loading on trees with wind
+        if (snowDepth > THRESHOLDS.SNOW.MODERATE_COVER && windSpeed > 10 && location.forestCoverage === 'high') {
+            results.phenomena.push('snow loading on trees - branch fall risk');
+            if (rainRate > 0) {
+                results.alerts.push('increased risk of tree damage - wet snow and wind');
+            }
+        }
+    }
+
+    // ==========================================================================
+    // SECTION 7: WIND + RAIN COMBINATIONS
+    // ==========================================================================
+
+    if (windSpeed !== undefined && rainRate !== undefined && rainRate > 0) {
+        if (windSpeed > THRESHOLDS.WIND.MODERATE_BREEZE) {
+            results.phenomena.push('driving rain');
+        }
+        if (windSpeed > THRESHOLDS.WIND.FRESH_BREEZE && rainRate > THRESHOLDS.RAIN.MODERATE) {
+            results.phenomena.push('horizontal precipitation');
+        }
+
+        // Forest tree damage risk
+        if (location.forestCoverage === 'high' && windSpeed > 15 && (rainRate > 0 || snowDepth > 0)) {
+            results.alerts.push('increased risk of tree damage');
+        }
+    }
+
+    // ==========================================================================
+    // SECTION 8: PRESSURE + HUMIDITY COMBINATIONS
+    // ==========================================================================
+
     if (pressure !== undefined && humidity !== undefined) {
-        // Check pressure trend
-        const past3Hours = toolsData.getRecentData(data_previous, timestamp, 3);
+        const pressureAdjusted = store.pressure?.adjusted || pressure;
         let pressureTrend = 'stable';
-        if (past3Hours.isReasonablyDistributed()) {
-            const oldestPressure = past3Hours.oldest('pressure');
-            if (oldestPressure !== undefined) {
-                const pressureChange = pressure - oldestPressure;
-                if (pressureChange < -2) pressureTrend = 'falling';
-                else if (pressureChange > 2) pressureTrend = 'rising';
-            }
+
+        // Check pressure trend
+        const t3h = pressureTrends['3h'];
+        if (t3h?.valid && t3h.back !== undefined) {
+            const pressureChange = pressure - t3h.back;
+            if (pressureChange < -THRESHOLDS.PRESSURE.MODERATE_3H_CHANGE) pressureTrend = 'falling';
+            else if (pressureChange > THRESHOLDS.PRESSURE.MODERATE_3H_CHANGE) pressureTrend = 'rising';
         }
-        // More nuanced precipitation forecasting
-        if (pressure < 1000 && humidity > 75) {
-            if (pressure < 990 && humidity > 85) {
-                results.phenomena.push('rain very likely');
-                if (temp < 5 && month >= 10 && month <= 3) results.phenomena.push('winter precipitation imminent');
-            } else results.phenomena.push('rain likely');
-            if (pressureTrend === 'falling' && humidity > 80) results.phenomena.push('precipitation approaching');
-        } else if (pressure > 1020 && humidity < 40) {
+
+        // Precipitation forecasting
+        if (pressureAdjusted < THRESHOLDS.PRESSURE.STORMY && humidity > 85) {
+            results.phenomena.push('precipitation very likely');
+            if (temp !== undefined && temp < THRESHOLDS.TEMP.CHILLY && (month >= 10 || month <= 3)) {
+                results.phenomena.push('winter precipitation imminent');
+            }
+        } else if (pressureAdjusted < THRESHOLDS.PRESSURE.UNSETTLED && humidity > 75) {
+            results.phenomena.push('precipitation likely');
+            if (pressureTrend === 'falling' && humidity > 80) {
+                results.phenomena.push('precipitation approaching');
+            }
+        } else if (pressureAdjusted > THRESHOLDS.PRESSURE.SETTLED && humidity < 40) {
             results.phenomena.push('clear and dry conditions');
-            if (temp < -5 && month >= 11 && month <= 2) results.phenomena.push('arctic high pressure - very cold');
-        } else if (pressure > 1015 && pressure < 1020 && humidity > 60 && humidity < 75) results.phenomena.push('fair weather');
-    }
+        }
 
-    // Enhanced wind chill communication
-    if (temp !== undefined && windSpeed !== undefined && temp < 10 && windSpeed > 3) {
-        const windChillDiff = Math.round(temp - windChill);
-        if (windChillDiff >= 3) {
-            results.phenomena.push(`feels ${FormatHelper.temperatureToString (windChillDiff)} colder due to wind`);
-            // More detailed wind chill warnings
-            if (windChill < -25) results.alerts.push('extreme wind chill - frostbite risk in minutes');
-            else if (windChill < -15) results.alerts.push('severe wind chill - limit outdoor exposure');
-            else if (windChill < -10 && windChillDiff >= 5) results.phenomena.push('significant wind chill factor');
+        // Summer showers
+        if (month >= 6 && month <= 8 && pressureAdjusted < THRESHOLDS.PRESSURE.NORMAL_LOW && humidity > THRESHOLDS.HUMIDITY.HUMID) {
+            results.phenomena.push('summer showers possible');
         }
     }
 
-    // Thunderstorm potential
-    if (temp > 20 && humidity > 70 && pressure < 1010) {
-        const past2Hours = toolsData.getRecentData(data_previous, timestamp, 2);
-        if (past2Hours.isReasonablyDistributed()) {
-            const tempChange = temp - past2Hours.oldest('temp');
-            const tempRateOfChange = tempChange / 2; // °C per hour
-            if (tempRateOfChange > 2) {
-                results.phenomena.push('thunderstorm development likely');
-                if (windSpeed !== undefined && windSpeed < 5 && month >= 6 && month <= 8) results.phenomena.push('conditions favorable for strong thunderstorms');
-            } else if (tempRateOfChange > 1) {
-                results.phenomena.push('convective development possible');
+    // ==========================================================================
+    // SECTION 9: PRESSURE + TEMPERATURE COMBINATIONS
+    // ==========================================================================
+
+    if (pressure !== undefined && temp !== undefined) {
+        const pressureAdjusted = store.pressure?.adjusted || pressure;
+
+        // Cold high pressure
+        if (pressureAdjusted > THRESHOLDS.PRESSURE.SETTLED && temp < THRESHOLDS.TEMP.VERY_COLD) {
+            results.phenomena.push('cold high pressure system');
+            if (month >= 11 || month <= 2) {
+                results.phenomena.push('arctic high pressure - very cold');
             }
-            // Also check for rapid pressure drops
-            const pressureChange = pressure - past2Hours.oldest('pressure');
-            if (pressureChange < -3 && tempRateOfChange > 1) results.phenomena.push('rapid atmospheric destabilization');
+        }
+
+        // Winter rain
+        if ((month >= 11 || month <= 2) && pressureAdjusted < THRESHOLDS.PRESSURE.STORMY && temp > THRESHOLDS.TEMP.FREEZING) {
+            results.phenomena.push('winter rain likely');
+            if (store.pressure?.change3h < -THRESHOLDS.PRESSURE.MODERATE_3H_CHANGE) {
+                results.alerts.push('winter storm developing');
+            }
+        }
+
+        // Storm with active wind
+        if (pressureAdjusted < THRESHOLDS.PRESSURE.STORMY && windSpeed !== undefined && windSpeed > 10) {
+            results.alerts.push('storm system active');
+        }
+
+        // Variable wind near low pressure
+        if (pressureAdjusted < THRESHOLDS.PRESSURE.UNSETTLED && store.wind?.directionChanges > 3) {
+            results.phenomena.push('unstable conditions near low pressure');
+        }
+    }
+
+    // ==========================================================================
+    // SECTION 10: PRESSURE + WIND COMBINATIONS
+    // ==========================================================================
+
+    if (pressure !== undefined && windSpeed !== undefined) {
+        const pressureAdjusted = store.pressure?.adjusted || pressure;
+
+        if (pressureAdjusted < THRESHOLDS.PRESSURE.STORMY && windSpeed > THRESHOLDS.WIND.NEAR_GALE) {
+            results.phenomena.push('deep low pressure system');
+        }
+
+        // Autumn/winter storm
+        if ((month >= 9 || month <= 3) && windSpeed > 15 && pressureAdjusted < THRESHOLDS.PRESSURE.STORMY) {
+            results.phenomena.push('deep low pressure system - strong storm');
+        }
+    }
+
+    // ==========================================================================
+    // SECTION 11: HUMIDITY + WIND COMBINATIONS
+    // ==========================================================================
+
+    if (humidity !== undefined && windSpeed !== undefined) {
+        // Moisture source by wind direction
+        if (humidity > 80 && windDir !== undefined && windDir >= 180 && windDir <= 270) {
+            results.phenomena.push('moisture from Baltic Sea region');
+        }
+
+        // Evaporation/drying
+        if (humidity < THRESHOLDS.HUMIDITY.DRY && windSpeed > THRESHOLDS.WIND.EVAPORATION_SIGNIFICANT) {
+            results.phenomena.push('desiccating conditions');
+            if (location.forestCoverage === 'high') {
+                results.phenomena.push('rapid drying in forest');
+            }
+        }
+
+        // Damp raw conditions
+        if ((month >= 11 || month <= 2) && humidity > 85 && temp !== undefined && temp > -5 && windSpeed > 5) {
+            results.phenomena.push('raw winter weather');
+        }
+    }
+
+    // ==========================================================================
+    // SECTION 12: CLOUD + OTHER COMBINATIONS
+    // ==========================================================================
+
+    if (cloudCover !== undefined) {
+        // Cloud type inference
+        if (cloudCover > THRESHOLDS.CLOUDS.PARTLY_CLOUDY && rainRate === 0 && humidity !== undefined && humidity < 80) {
+            results.phenomena.push('high cloud layer likely');
+        } else if (cloudCover > THRESHOLDS.CLOUDS.MOSTLY_CLOUDY && humidity !== undefined && humidity > THRESHOLDS.HUMIDITY.VERY_HUMID) {
+            results.phenomena.push('low stratus cloud');
+            if (dewPoint !== undefined && temp !== undefined && temp - dewPoint < THRESHOLDS.DEW_POINT.FOG_SPREAD) {
+                results.phenomena.push('cloud base near ground level');
+            }
+        }
+
+        // Sun breaking through
+        if (daylight?.isDaytime && cloudCover > THRESHOLDS.CLOUDS.PARTLY_CLOUDY && cloudCover < THRESHOLDS.CLOUDS.MOSTLY_CLOUDY) {
+            if (store.light?.radAvg > 300) {
+                results.phenomena.push('sun breaking through clouds');
+            }
+        }
+
+        // Cloud thermal effects
+        if (cloudCover > THRESHOLDS.CLOUDS.OVERCAST) {
+            if (month >= 11 || month <= 2) {
+                results.phenomena.push('clouds providing insulation');
+            } else if (month >= 6 && month <= 8 && daylight?.isDaytime) {
+                results.phenomena.push('clouds limiting heating');
+            }
+        } else if (cloudCover < THRESHOLDS.CLOUDS.CLEAR) {
+            if (!daylight?.isDaytime && temp !== undefined && temp < THRESHOLDS.TEMP.CHILLY) {
+                results.phenomena.push('clear skies enhancing cooling');
+            } else if (daylight?.isDaytime && month >= 6 && month <= 8) {
+                results.phenomena.push('strong solar heating');
+            }
+            // Clear arctic conditions
+            if (temp !== undefined && temp < THRESHOLDS.TEMP.VERY_COLD && (month >= 11 || month <= 2)) {
+                results.phenomena.push('clear arctic conditions');
+                results.phenomena.push('strong radiational cooling');
+            }
+        }
+
+        // Summer convection
+        if (month >= 6 && month <= 8 && cloudCover > THRESHOLDS.CLOUDS.MOSTLY_CLEAR && cloudCover < THRESHOLDS.CLOUDS.PARTLY_CLOUDY) {
+            if (hour >= 12 && hour <= 18 && humidity !== undefined && humidity > THRESHOLDS.HUMIDITY.HUMID && temp !== undefined && temp > THRESHOLDS.TEMP.WARM) {
+                results.phenomena.push('building cumulus - showers possible');
+            }
+        }
+
+        // Approaching weather system
+        if (store.clouds?.change6h > 50 && pressure !== undefined && pressure < THRESHOLDS.PRESSURE.NORMAL_HIGH) {
+            results.phenomena.push('weather system approaching');
+        } else if (store.clouds?.change6h < -50 && pressure !== undefined && pressure > THRESHOLDS.PRESSURE.NORMAL_HIGH) {
+            results.phenomena.push('high pressure building');
+        }
+    }
+
+    // ==========================================================================
+    // SECTION 13: ICE + TEMPERATURE/SNOW COMBINATIONS
+    // ==========================================================================
+
+    if (iceDepth !== undefined && iceDepth > 0) {
+        // Weakening ice
+        if (temp !== undefined && temp > THRESHOLDS.TEMP.FREEZING && iceDepth < THRESHOLDS.ICE.GROUP_SAFE) {
+            results.alerts.push('weakening ice conditions');
+        }
+
+        // Spring ice deterioration
+        if (month >= 3 && month <= 4 && temp !== undefined) {
+            if (temp > THRESHOLDS.TEMP.CHILLY || (temp > THRESHOLDS.TEMP.FREEZING && hour >= 10 && hour <= 16)) {
+                results.alerts.push('daytime ice deterioration');
+            }
+        }
+
+        // Ice formation conditions
+        if (iceDepth === 0 && temp !== undefined && temp < THRESHOLDS.TEMP.COLD && (month >= 11 || month <= 3)) {
+            results.phenomena.push('ice formation beginning');
+        }
+
+        // Snow insulation on ice
+        if (snowDepth !== undefined && snowDepth > 100 && iceDepth > THRESHOLDS.ICE.THIN) {
+            results.phenomena.push('snow insulation slowing ice growth');
+            results.alerts.push('variable ice thickness possible');
+        }
+
+        // Nordic winter conditions
+        if (snowDepth !== undefined && snowDepth > 100 && iceDepth > THRESHOLDS.ICE.WALKABLE) {
+            results.phenomena.push('typical Nordic winter conditions');
+        }
+
+        // Ice skating conditions
+        if (iceDepth > THRESHOLDS.ICE.GROUP_SAFE && snowDepth !== undefined && snowDepth < THRESHOLDS.SNOW.LIGHT_COVER) {
+            results.phenomena.push('excellent ice skating conditions');
+        }
+    }
+
+    // ==========================================================================
+    // SECTION 14: UV + CLOUD COMBINATIONS
+    // ==========================================================================
+
+    if (solarUvi !== undefined && cloudCover !== undefined) {
+        if (solarUvi > THRESHOLDS.SOLAR.UV_HIGH && cloudCover < THRESHOLDS.CLOUDS.PARTLY_CLOUDY) {
+            results.phenomena.push('high UV exposure - sun protection essential');
+        } else if (solarUvi > THRESHOLDS.SOLAR.UV_MODERATE && cloudCover > THRESHOLDS.CLOUDS.MOSTLY_CLOUDY) {
+            results.phenomena.push('UV still moderate despite clouds');
+        }
+    }
+
+    // ==========================================================================
+    // SECTION 15: RADIATION + ENVIRONMENTAL COMBINATIONS
+    // ==========================================================================
+
+    if (store.radiation?.currentValue > THRESHOLDS.RADIATION.NORMAL) {
+        // Radon washout during rain
+        if (rainRate !== undefined && rainRate > 0) {
+            results.phenomena.push('possible radon washout in precipitation');
+            if (store.radiation.currentValue > THRESHOLDS.RADIATION.SLIGHTLY_ELEVATED) {
+                results.phenomena.push('enhanced radon progeny deposition');
+            }
+        }
+
+        // Low pressure enhancing radon
+        if (pressure !== undefined && pressure < THRESHOLDS.PRESSURE.UNSETTLED) {
+            results.phenomena.push('low pressure enhancing radon emission');
+        }
+
+        // Calm nighttime accumulation
+        if ((hour >= 18 || hour <= 6) && windSpeed !== undefined && windSpeed < 1) {
+            results.phenomena.push('calm conditions concentrating radon');
+        }
+
+        // Combined radiation + UV exposure
+        if (solarUvi !== undefined && solarUvi > THRESHOLDS.SOLAR.UV_HIGH) {
+            results.phenomena.push('combined radiation and UV exposure');
+        }
+    }
+
+    // ==========================================================================
+    // SECTION 16: THUNDERSTORM POTENTIAL (temp + humidity + pressure)
+    // ==========================================================================
+
+    if (temp !== undefined && humidity !== undefined && pressure !== undefined) {
+        if (temp > THRESHOLDS.COMPOUND.THUNDER_TEMP && humidity > THRESHOLDS.COMPOUND.THUNDER_HUMIDITY && pressure < THRESHOLDS.COMPOUND.THUNDER_PRESSURE) {
+            const t1h = tempTrends['1h'];
+            if (t1h?.valid && t1h.back !== undefined) {
+                const tempChange = temp - t1h.back;
+                if (tempChange > 2) {
+                    results.phenomena.push('thunderstorm development likely');
+                    if (windSpeed !== undefined && windSpeed < 5 && month >= 6 && month <= 8) {
+                        results.phenomena.push('conditions favorable for strong thunderstorms');
+                    }
+                } else if (tempChange > 1) {
+                    results.phenomena.push('convective development possible');
+                }
+
+                // Rapid pressure drop with warming
+                const p1h = pressureTrends['1h'];
+                if (p1h?.valid && p1h.back !== undefined) {
+                    const pressureChange = pressure - p1h.back;
+                    if (pressureChange < -THRESHOLDS.PRESSURE.RAPID_HOURLY_CHANGE && tempChange > 1) {
+                        results.phenomena.push('rapid atmospheric destabilization');
+                    }
+                }
+            }
+        }
+
+        // Summer thunderstorm with heavy rain
+        if (month >= 6 && month <= 8 && rainRate !== undefined && rainRate > THRESHOLDS.RAIN.HEAVY && pressure < THRESHOLDS.PRESSURE.NORMAL_HIGH) {
+            results.phenomena.push('summer thunderstorm likely');
+        }
+    }
+
+    // ==========================================================================
+    // SECTION 17: FROST CONDITIONS (temp + humidity + wind)
+    // ==========================================================================
+
+    if (temp !== undefined && humidity !== undefined) {
+        if (temp < -2 && humidity > THRESHOLDS.HUMIDITY.HUMID && (rainRate === undefined || rainRate === 0)) {
+            if (humidity > THRESHOLDS.HUMIDITY.VERY_HUMID && (windSpeed === undefined || windSpeed < 2)) {
+                results.phenomena.push('heavy frost likely');
+                if (hour >= 4 && hour <= 8) results.phenomena.push('morning hoar frost possible');
+            } else {
+                results.phenomena.push('frost likely');
+            }
+        }
+    }
+
+    // ==========================================================================
+    // SECTION 18: FREEZING RAIN/ICE (temp + humidity + rain)
+    // ==========================================================================
+
+    if (temp !== undefined && rainRate !== undefined && rainRate > 0) {
+        if (temp >= THRESHOLDS.COMPOUND.FREEZING_RAIN_TEMP_LOW && temp < THRESHOLDS.COMPOUND.FREEZING_RAIN_TEMP_HIGH) {
+            if (temp > -2 && temp < 1 && humidity !== undefined && humidity > THRESHOLDS.HUMIDITY.VERY_HUMID) {
+                results.phenomena.push('freezing rain likely');
+                results.alerts.push('severe ice hazard');
+                if (location.forestCoverage === 'high') results.alerts.push('forest ice damage risk');
+            } else if (humidity !== undefined && humidity > THRESHOLDS.HUMIDITY.SATURATED) {
+                results.phenomena.push('freezing rain risk');
+                results.alerts.push('ice hazard warning');
+            } else {
+                results.phenomena.push('freezing precipitation possible');
+            }
+        }
+    }
+
+    // ==========================================================================
+    // SECTION 19: FOREST FIRE RISK (temp + humidity + wind + rain)
+    // ==========================================================================
+
+    if (month >= 5 && month <= 8 && temp !== undefined && humidity !== undefined) {
+        if (temp > THRESHOLDS.COMPOUND.FIRE_RISK_TEMP && humidity < THRESHOLDS.COMPOUND.FIRE_RISK_HUMIDITY && (rainRate === undefined || rainRate === 0)) {
+            results.phenomena.push('dry forest conditions');
+
+            const period3d = weatherData?.getPeriod?.('3d');
+            if (period3d?.isReasonablyDistributed()) {
+                const dryHours = period3d.estimateHours((e) => (e.rainRate === undefined || e.rainRate === 0) && e.humidity !== undefined && e.humidity < 40);
+                if (humidity < THRESHOLDS.COMPOUND.FIRE_EXTREME_HUMIDITY && temp > THRESHOLDS.COMPOUND.FIRE_EXTREME_TEMP) {
+                    results.alerts.push('high forest fire risk');
+                    if (windSpeed !== undefined && windSpeed > 10) {
+                        results.alerts.push('extreme fire danger - rapid spread possible');
+                    }
+                } else if (dryHours > 48) {
+                    results.alerts.push('elevated forest fire risk');
+                }
+                const period7d = weatherData?.getPeriod?.('7d');
+                if (period7d?.isReasonablyDistributed()) {
+                    const wetHours7d = period7d.estimateHours((e) => e.rainRate !== undefined && e.rainRate > 0);
+                    if (wetHours7d < 5 && dryHours > 60) {
+                        results.alerts.push('prolonged dry conditions - extreme fire risk');
+                    }
+                }
+            }
+        }
+    }
+
+    // ==========================================================================
+    // SECTION 20: BLACK ICE RISK (temp + humidity + recent conditions)
+    // ==========================================================================
+
+    if (temp !== undefined && humidity !== undefined) {
+        if (temp >= THRESHOLDS.COMPOUND.BLACK_ICE_TEMP_LOW && temp <= THRESHOLDS.COMPOUND.BLACK_ICE_TEMP_HIGH && humidity > THRESHOLDS.COMPOUND.BLACK_ICE_HUMIDITY) {
+            // Check for recent rain or melt conditions
+            const recentRain = store.precipitation?.wetHours24h > 0 || (rainRate !== undefined && rainRate > 0);
+            const recentMelt = store.snow?.meltRate24h > 10;
+            if (recentRain || recentMelt) {
+                results.alerts.push('black ice risk');
+                if (hour >= 18 || hour <= 8) {
+                    results.alerts.push('black ice very likely overnight/morning');
+                }
+            } else if (humidity > THRESHOLDS.HUMIDITY.SATURATED) {
+                results.phenomena.push('potential for black ice');
+            }
+        }
+    }
+
+    // ==========================================================================
+    // SECTION 21: SPECIAL NORDIC PHENOMENA
+    // ==========================================================================
+
+    // Ice fog (extremely cold + high humidity)
+    if (temp !== undefined && temp < -20 && humidity !== undefined && humidity > 70) {
+        results.phenomena.push('ice fog possible');
+    }
+
+    // Diamond dust (extremely cold + clear + humidity)
+    if (temp !== undefined && temp < THRESHOLDS.TEMP.EXTREME_COLD && cloudCover !== undefined && cloudCover < THRESHOLDS.CLOUDS.CLEAR && humidity !== undefined && humidity > 60) {
+        results.phenomena.push('diamond dust possible');
+    }
+
+    // ==========================================================================
+    // SECTION 23: SNOW TYPE DURING PRECIPITATION
+    // ==========================================================================
+
+    if (temp !== undefined && humidity !== undefined && rainRate !== undefined && rainRate > 0 && temp < THRESHOLDS.TEMP.FREEZING) {
+        if (temp < -10) {
+            results.phenomena.push('light powder snow');
+            if (windSpeed !== undefined && windSpeed > THRESHOLDS.WIND.SNOW_DRIFT) {
+                results.phenomena.push('blowing snow conditions');
+            }
+        } else if (temp < THRESHOLDS.TEMP.COLD) {
+            results.phenomena.push('dry snow');
+        } else {
+            results.phenomena.push('wet snow');
         }
     }
 }

@@ -28,7 +28,8 @@ const weatherLocation = {
     timezone: 'Europe/Stockholm',
 };
 
-const weatherOptions = { debug: true, solarEclipse: { daysAhead: 512 }, lunarEclipse: { daysAhead: 512 }, suppress: { stable: true } };
+const n2yoApiKey = process.env.N2YO_API_KEY;
+const weatherOptions = { debug: true, solarEclipse: { daysAhead: 512 }, lunarEclipse: { daysAhead: 512 }, suppress: { stable: true }, n2yoApiKey };
 
 const weatherModule = require('server-function-weather.js')(weatherLocation, weatherOptions);
 

@@ -14,11 +14,11 @@ class StatisticalAlgorithms {
 
     static basicStatistics(data, options = {}) {
         if (data.length === 0) return { count: 0 };
-        const min = data.reduce((a, b) => (a < b ? a : b));
-        const max = data.reduce((a, b) => (a > b ? a : b));
+        const min = data.reduce((a, b) => Math.min(a, b));
+        const max = data.reduce((a, b) => Math.max(a, b));
         const sum = data.reduce((a, b) => a + b, 0);
         const avg = sum / data.length;
-        const variance = data.length > 1 ? data.reduce((sum, r) => sum + Math.pow(r - avg, 2), 0) / (data.length - 1) : 0;
+        const variance = data.length > 1 ? data.reduce((sum, r) => sum + (r - avg) ** 2, 0) / (data.length - 1) : 0;
         const result = {
             count: data.length,
             sum,
@@ -50,8 +50,8 @@ class StatisticalAlgorithms {
         const slope = (n * sumXY - sumX * sumY) / denominator;
         const intercept = (sumY - slope * sumX) / n;
         const yAvg = sumY / n;
-        const ssTotal = points.reduce((sum, p) => sum + Math.pow(p.y - yAvg, 2), 0);
-        const ssResidual = points.reduce((sum, p) => sum + Math.pow(p.y - (intercept + slope * p.x), 2), 0);
+        const ssTotal = points.reduce((sum, p) => sum + (p.y - yAvg) ** 2, 0);
+        const ssResidual = points.reduce((sum, p) => sum + (p.y - (intercept + slope * p.x)) ** 2, 0);
         const r2 = ssTotal > 0 ? Math.max(0, 1 - ssResidual / ssTotal) : 0;
         const predictions = points.map((p) => ({ x: p.x, y: p.y, predicted: intercept + slope * p.x, residual: p.y - (intercept + slope * p.x) }));
         const r = (n * sumXY - sumX * sumY) / Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
@@ -99,7 +99,7 @@ class StatisticalAlgorithms {
     static confidenceInterval(data, confidence = 0.95) {
         if (data.length === 0) return { count: 0 };
         const avg = data.reduce((a, b) => a + b, 0) / data.length;
-        const variance = data.length > 1 ? data.reduce((sum, x) => sum + Math.pow(x - avg, 2), 0) / (data.length - 1) : 0;
+        const variance = data.length > 1 ? data.reduce((sum, x) => sum + (x - avg) ** 2, 0) / (data.length - 1) : 0;
         const stdDev = Math.sqrt(variance);
         const stdError = stdDev / Math.sqrt(data.length);
         const zScores = { 0.9: 1.645, 0.95: 1.96, 0.99: 2.576 };
@@ -108,8 +108,8 @@ class StatisticalAlgorithms {
         return {
             count: data.length,
             avg,
-            min: data.reduce((a, b) => (a < b ? a : b)),
-            max: data.reduce((a, b) => (a > b ? a : b)),
+            min: data.reduce((a, b) => Math.min(a, b)),
+            max: data.reduce((a, b) => Math.max(a, b)),
             current: data[data.length - 1],
             lower: avg - marginOfError,
             upper: avg + marginOfError,
@@ -122,8 +122,8 @@ class StatisticalAlgorithms {
 
     static percentile(data, percentile) {
         if (data.length === 0) return 0;
-        if (percentile <= 0) return data.reduce((a, b) => (a < b ? a : b));
-        if (percentile >= 100) return data.reduce((a, b) => (a > b ? a : b));
+        if (percentile <= 0) return data.reduce((a, b) => Math.min(a, b));
+        if (percentile >= 100) return data.reduce((a, b) => Math.max(a, b));
         const sorted = [...data].sort((a, b) => a - b);
         const index = (percentile / 100) * (sorted.length - 1);
         const lower = Math.floor(index);
@@ -139,7 +139,7 @@ class StatisticalAlgorithms {
             if (i < period - 1) return { ...d, movingStdDev: undefined };
             const window = data.slice(i - period + 1, i + 1).map((item) => item[field]);
             const avg = window.reduce((sum, val) => sum + val, 0) / period;
-            const variance = window.reduce((sum, val) => sum + Math.pow(val - avg, 2), 0) / period;
+            const variance = window.reduce((sum, val) => sum + (val - avg) ** 2, 0) / period;
             return { ...d, movingStdDev: Math.sqrt(variance) };
         });
     }
@@ -168,14 +168,14 @@ class StatisticalAlgorithms {
         let numerator = 0;
         let denominator = 0;
         for (let i = 0; i < n - lag; i++) numerator += (values[i] - avg) * (values[i + lag] - avg);
-        for (let i = 0; i < n; i++) denominator += Math.pow(values[i] - avg, 2);
+        for (let i = 0; i < n; i++) denominator += (values[i] - avg) ** 2;
         return denominator === 0 ? 0 : numerator / denominator;
     }
 
     static histogram(data, bins = 10) {
         if (data.length === 0) return [];
-        const min = data.reduce((a, b) => (a < b ? a : b));
-        const max = data.reduce((a, b) => (a > b ? a : b));
+        const min = data.reduce((a, b) => Math.min(a, b));
+        const max = data.reduce((a, b) => Math.max(a, b));
         const binWidth = (max - min) / bins;
         const histogram = Array.from({ length: bins }, (_, i) => ({
             min: min + i * binWidth,
@@ -244,8 +244,8 @@ class StatisticalAlgorithmsHelper {
             r2: regression.r2,
             length: data.length,
             range: {
-                min: data.map((p) => p[xField]).reduce((a, b) => (a < b ? a : b)),
-                max: data.map((p) => p[xField]).reduce((a, b) => (a > b ? a : b)),
+                min: data.map((p) => p[xField]).reduce((a, b) => Math.min(a, b)),
+                max: data.map((p) => p[xField]).reduce((a, b) => Math.max(a, b)),
             },
         };
     }
@@ -373,7 +373,7 @@ class PeriodHelper {
     static add(duration1, duration2) {
         return this.fromMillis(this.toMillis(duration1) + this.toMillis(duration2));
     }
-    
+
     static format(duration) {
         const parsed = this.parse(duration);
         if (!parsed) return 'invalid';
@@ -413,11 +413,25 @@ class RecentData {
     }
     min(field) {
         const values = this.entries.map((e) => e[field]).filter((v) => v !== undefined);
-        return values.length > 0 ? values.reduce ((a, b) => a < b ? a : b) : undefined;
+        return values.length > 0 ? values.reduce((a, b) => Math.min(a, b)) : undefined;
     }
     max(field) {
         const values = this.entries.map((e) => e[field]).filter((v) => v !== undefined);
-        return values.length > 0 ? values.reduce ((a, b) => a > b ? a : b) : undefined;
+        return values.length > 0 ? values.reduce((a, b) => Math.max(a, b)) : undefined;
+    }
+    minWithTime(field) {
+        const validEntries = this.entries.filter((e) => e[field] !== undefined);
+        if (validEntries.length === 0) return { value: undefined, time: undefined };
+        let [minEntry] = validEntries;
+        for (const entry of validEntries) if (entry[field] < minEntry[field]) minEntry = entry;
+        return { value: minEntry[field], time: minEntry._timestamp };
+    }
+    maxWithTime(field) {
+        const validEntries = this.entries.filter((e) => e[field] !== undefined);
+        if (validEntries.length === 0) return { value: undefined, time: undefined };
+        let [maxEntry] = validEntries;
+        for (const entry of validEntries) if (entry[field] > maxEntry[field]) maxEntry = entry;
+        return { value: maxEntry[field], time: maxEntry._timestamp };
     }
     avg(field) {
         const values = this.entries.map((e) => e[field]).filter((v) => v !== undefined);
@@ -496,7 +510,48 @@ class RecentData {
         return values.length > 0 ? values.reduce((a, b) => a + b, 0) : undefined;
     }
     count(predicate) {
-        return predicate ? this.entries.filter(predicate).length : this.entries.length;
+        return predicate ? this.entries.filter((x) => predicate(x)).length : this.entries.length;
+    }
+    _estimatePeriod(period, predicate) {
+        if (this.entries.length === 0) return 0;
+        const buckets = new Set();
+        for (const entry of this.entries) if (!predicate || predicate(entry)) buckets.add(Math.floor(entry._timestamp / period));
+        return buckets.size;
+    }
+    estimateHours(predicate) {
+        return this._estimatePeriod(60 * 60 * 1000, predicate);
+    }
+    estimateDays(predicate) {
+        return this._estimatePeriod(24 * 60 * 60 * 1000, predicate);
+    }
+    _consecutivePeriodsFromRecent(period, predicate) {
+        if (this.entries.length === 0) return 0;
+        let currentBucket = Math.floor(this.timestamp / period);
+        let currentMatches = 0;
+        let count = 0;
+        for (let i = this.entries.length - 1; i >= 0; i--) {
+            const entryBucket = Math.floor(this.entries[i]._timestamp / period);
+            if (entryBucket !== currentBucket) {
+                if (currentMatches === 0) return count;
+                count++;
+                if (entryBucket < currentBucket - 1) return count;
+                currentBucket = entryBucket;
+                currentMatches = 0;
+            }
+            if (predicate(this.entries[i])) currentMatches++;
+        }
+        return currentMatches > 0 ? count + 1 : count;
+    }
+    consecutiveHoursFromRecent(predicate) {
+        return this._consecutivePeriodsFromRecent(60 * 60 * 1000, predicate);
+    }
+    consecutiveDaysFromRecent(predicate) {
+        return this._consecutivePeriodsFromRecent(24 * 60 * 60 * 1000, predicate);
+    }
+    timeSpanMs(predicate) {
+        const matching = predicate ? this.entries.filter((x) => predicate(x)) : this.entries;
+        if (matching.length < 2) return 0;
+        return matching[matching.length - 1]._timestamp - matching[0]._timestamp;
     }
     delta(field) {
         const first = this.oldest(field),
@@ -526,12 +581,90 @@ function getRecentData(data_previous, timestamp, hoursBack) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+class WeatherData {
+    // Standard periods: key -> { hours, recomputeMs }
+    // recomputeMs: 0 = always fresh, >0 = cache for this duration
+    static PERIODS = {
+        '1h': { hours: 1, recomputeMs: 0 },
+        '3h': { hours: 3, recomputeMs: 0 },
+        '6h': { hours: 6, recomputeMs: 0 },
+        '12h': { hours: 12, recomputeMs: 15 * 60 * 1000 }, // 15 minutes
+        '24h': { hours: 24, recomputeMs: 30 * 60 * 1000 }, // 30 minutes
+        '3d': { hours: 3 * 24, recomputeMs: 60 * 60 * 1000 }, // 1 hour
+        '7d': { hours: 7 * 24, recomputeMs: 60 * 60 * 1000 }, // 1 hour
+        '14d': { hours: 14 * 24, recomputeMs: 60 * 60 * 1000 }, // 1 hour
+        '28d': { hours: 28 * 24, recomputeMs: 60 * 60 * 1000 }, // 1 hour
+    };
+    constructor(initialData = {}) {
+        this._raw = { ...initialData };
+        this._periods = {};
+        this._lastPrepared = {};
+        this._timestamp = 0;
+    }
+    add(timestamp, data) {
+        this._raw[timestamp] = data;
+    }
+    prepare(timestamp) {
+        this._timestamp = timestamp;
+        const now = Date.now();
+
+        for (const [key, config] of Object.entries(WeatherData.PERIODS)) {
+            const lastPrepared = this._lastPrepared[key] || 0;
+            const isStale = config.recomputeMs === 0 || now - lastPrepared > config.recomputeMs;
+
+            if (isStale) {
+                this._periods[key] = new RecentData(this._raw, timestamp, config.hours);
+                this._lastPrepared[key] = now;
+            }
+        }
+    }
+    getPeriod(key) {
+        return this._periods[key];
+    }
+    getPeriodKeys() {
+        return Object.keys(WeatherData.PERIODS);
+    }
+    getPeriodHours(key) {
+        return WeatherData.PERIODS[key]?.hours;
+    }
+    prune(maxAgeMs) {
+        const cutoff = Date.now() - maxAgeMs;
+        const before = Object.keys(this._raw).length;
+        for (const ts of Object.keys(this._raw)) {
+            if (Number.parseInt(ts) < cutoff) {
+                delete this._raw[ts];
+            }
+        }
+        return before - Object.keys(this._raw).length;
+    }
+    get raw() {
+        return this._raw;
+    }
+    get timestamp() {
+        return this._timestamp;
+    }
+    get size() {
+        return Object.keys(this._raw).length;
+    }
+    static fromRaw(rawData) {
+        return new WeatherData(rawData || {});
+    }
+    toJSON() {
+        return this._raw;
+    }
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 module.exports = {
     StatisticalAlgorithms,
     StatisticalAlgorithmsHelper,
     MathematicalAlgorithms,
     TimeSeriesHelper,
     PeriodHelper,
+    RecentData,
+    WeatherData,
     getRecentData,
 };
 

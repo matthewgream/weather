@@ -9,9 +9,8 @@
 function proximity(type_, days_) {
     if (Math.abs(days_) < 1) return `${type_} today`;
     const rounded = Math.round(Math.abs(days_));
-    const plural = rounded !== 1 ? 's' : '';
-    if (days_ > 0) return `${type_} in ${rounded} day${plural}`;
-    return `${type_} ${rounded} day${plural} ago`;
+    if (days_ > 0) return `${type_} in ${rounded} day${rounded === 1 ? '' : 's'}`;
+    return `${type_} ${rounded} day${rounded === 1 ? '' : 's'} ago`;
 }
 function altitude(altitude_) {
     return `${Math.round(altitude_)}°`;
@@ -104,6 +103,9 @@ class FormatHelper {
     static rainfallToString(rainfall, options = {}) {
         return FormatHelper._valueToString(rainfall, (v) => v.toFixed(1) + (options.noUnits ? '' : 'mm'));
     }
+    static windspeedToString(windspeed, options = {}) {
+        return FormatHelper._valueToString(windspeed, (v) => v.toFixed(1) + (options.noUnits ? '' : 'm/s'));
+    }
     static snowdepthToString(snowdepth, options = {}) {
         return FormatHelper._valueToString(snowdepth, (v) => v.toFixed(1) + (options.noUnits ? '' : 'mm'));
     }
@@ -116,8 +118,11 @@ class FormatHelper {
     static litresToString(litres, options = {}) {
         return FormatHelper._valueToString(litres, (v) => v.toFixed(1) + (options.noUnits ? '' : 'L'));
     }
-    static litresRateToString(litres, type = 'h', options = {}) {
-        return FormatHelper._valueToString(litres, (v) => v.toFixed(1) + (options.noUnits ? '' : `L/${type}`));
+    static solarToString(solar, options = {}) {
+        return FormatHelper._valueToString(solar, (v) => v.toFixed(1) + (options.noUnits ? '' : 'W/m²'));
+    }
+    static uviToString(uvi) {
+        return FormatHelper._valueToString(uvi, (v) => v.toFixed(0));
     }
     static bytesToString(bytes, options = {}) {
         return FormatHelper._valueToString(bytes, (v) => {
@@ -131,7 +136,10 @@ class FormatHelper {
         if (Array.isArray(object)) return object.join(', ');
         if (typeof object !== 'object') return `${object}`;
         return Object.entries(object)
-            .map(([name, string], index) => (typeof string !== 'string' || string) && (index == 0 && options.skipFirstKey ? (options.formatter ? options.formatter(string) : string) : `${name}=${options.formatter ? options.formatter(string) : string}`))
+            .map(
+                ([name, string], index) =>
+                    (typeof string !== 'string' || string) && (index == 0 && options.skipFirstKey ? (options.formatter ? options.formatter(string) : string) : `${name}=${options.formatter ? options.formatter(string) : string}`)
+            )
             .filter(Boolean)
             .join(options.separator ?? ', ');
     }
@@ -144,12 +152,12 @@ class FormatHelper {
     static capitalise(string) {
         return string[0].toUpperCase() + string.slice(1);
     }
-    static joinand(items) {
-       if (!items || items.length === 0) return '';
+    static joinand(items, separator = ',') {
+        if (!items || items.length === 0) return '';
         else if (items.length === 1) return items[0];
-        else if (items.length === 2) return `${items[0]} and ${items[1]}`;
+        else if (items.length === 2) return `${items[0]}${separator} and ${items[1]}`;
         const lastItem = items.pop();
-        return `${items.join(', ')}, and ${lastItem}`;
+        return `${items.join(separator + ' ')}${separator} and ${lastItem}`;
     }
 }
 

@@ -56,15 +56,16 @@ function pruneEvents(store, daysAgo = 30) {
     const CLEANUP_INTERVAL = 60 * 60 * 1000;
     if (!store.events || store.eventsCleanedUp > now - CLEANUP_INTERVAL) return;
     const expiry = now - daysAgo * helpers.constants.MILLISECONDS_PER_DAY;
-    Object.entries(store.events).forEach(([category, events]) => 
+    Object.entries(store.events).forEach(([category, events]) =>
         Object.entries(events)
             .filter(([_, event]) => event.expires < expiry)
-            .forEach(([eventId]) => delete store.events[category][eventId]));
+            .forEach(([eventId]) => delete store.events[category][eventId])
+    );
     store.eventsCleanedUp = now;
 }
 
 function hasEvent(store, category, eventId) {
-    return !!(store.events && store.events[category] && store.events[category][eventId]);
+    return Boolean(store.events && store.events[category] && store.events[category][eventId]);
 }
 
 function removeEvent(store, category, eventId) {

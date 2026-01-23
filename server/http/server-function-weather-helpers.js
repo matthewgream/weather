@@ -18,8 +18,8 @@ function normalizeAngle(angle) {
     return ((angle % 360) + 360) % 360;
 }
 
-function azimuthToCardinal(azimuth) {
-    return ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'][Math.round(((azimuth + 22.5) % 360) / 45) % 8];
+function cardinalDirection(degrees) {
+    return degrees === undefined ? undefined : ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(degrees / 45) % 8];
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -161,7 +161,7 @@ module.exports = {
     constants,
     //
     normalizeAngle,
-    azimuthToCardinal,
+    cardinalDirection,
     //
     getDST,
     daysIntoYear,

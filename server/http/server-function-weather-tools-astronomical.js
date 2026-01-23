@@ -509,7 +509,7 @@ function getSolarPosition(date, latitude, longitude, includeRefraction = false) 
     return {
         altitude,
         azimuth,
-        direction: helpers.azimuthToCardinal(azimuth),
+        direction: helpers.cardinalDirection(azimuth),
         declination: delta,
         rightAscension: alpha,
         hourAngle: H,
@@ -736,7 +736,7 @@ function getLunarPosition(date, latitude, longitude, includeParallax = true) {
     return {
         altitude,
         azimuth,
-        direction: helpers.azimuthToCardinal(azimuth),
+        direction: helpers.cardinalDirection(azimuth),
         illuminatedFraction,
         ra,
         dec,

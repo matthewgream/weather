@@ -49,7 +49,7 @@ function calculateWindChill(temp, windSpeed) {
     const windSpeedKmh = windSpeed * 3.6;
     if (temp >= 10 || windSpeedKmh < 4.8) return temp;
     // Environment Canada formula
-    const windPow = Math.pow(windSpeedKmh, 0.16);
+    const windPow = windSpeedKmh ** 0.16;
     return 13.12 + 0.6215 * temp - 11.37 * windPow + 0.3965 * temp * windPow;
 }
 
