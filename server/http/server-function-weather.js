@@ -127,39 +127,6 @@ function storageExit(options) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function coalescePhenomena(phenomena) {
-    const groups = new Map();
-    const result = [];
-    for (const item of phenomena) {
-        const colonIndex = item.indexOf(':');
-        if (colonIndex > 0 && colonIndex < 25) {
-            // Reasonable prefix length
-            const prefix = item.slice(0, Math.max(0, colonIndex)).trim();
-            const suffix = item.slice(Math.max(0, colonIndex + 1)).trim();
-            if (!groups.has(prefix)) groups.set(prefix, []);
-            groups.get(prefix).push(suffix);
-        } else {
-            result.push(item);
-        }
-    }
-    for (const [prefix, suffixes] of groups) result.push(`${prefix}: ${suffixes.join(', ')}`);
-    return result;
-}
-
-function __weatherDetails(results) {
-    let details = '';
-    if (results.conditions.length > 0) details = FormatHelper.joinand([...new Set(results.conditions)]);
-    if (results.phenomena.length > 0) details += (details ? ': ' : '') + FormatHelper.joinand(coalescePhenomena([...new Set(results.phenomena)]), ';');
-    if (details) {
-        details = FormatHelper.capitalise(details);
-        if (!details.endsWith('.')) details += '.';
-    }
-    return details || undefined;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
 let weatherLocation;
 let weatherOptions = {},
     weatherInterpreters = {};
@@ -347,7 +314,6 @@ function getWeatherInterpretationImpl(interpreters, location, dataCurrent, weath
     Object.entries(toolsEvents.new(store)).forEach(([category, events]) => events.forEach((event) => results.phenomena.push(`${category}: ${event.message}`)));
     results.feelsLike = situation.feelsLike;
     results.comfort = situation.comfort;
-    results.details = __weatherDetails(results);
     return results;
 }
 

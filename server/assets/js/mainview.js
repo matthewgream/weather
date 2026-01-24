@@ -365,9 +365,7 @@ function createSectionDataSummary(data_location, vars) {
     ////
     if (aircraft?.alerts?.length) {
         const flights = aircraft.alerts.reduce((flights, alert) => ({ ...flights, [alert.flight]: [...(flights[alert.flight] || []), encodehtml(alert.text)] }), {});
-        const text = Object.entries(flights)
-            .map(([flight, alerts]) => `${flight} ${alerts.join(', ')}`)
-            .join('; ');
+        const text = Object.entries(flights).map(([flight, alerts]) => `${flight} ${alerts.join(', ')}`).join('; ');
         summary.push('', `<div class="type-aircraft" style="display: ${displayIsEnabled('aircraft') ? 'block' : 'none'}"><span style="font-size:90%;line-height:1.3em;display: inline-block;"><span style="font-weight:bold;">aircraft:</span> ${text}.</span></div>`);
     }
 
