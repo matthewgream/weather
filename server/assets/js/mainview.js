@@ -8,12 +8,15 @@ let timezone;
 function encodehtml(s) {
     return s.replaceAll('&', '&amp;').replaceAll('>', '&gt;').replaceAll('<', '&lt;').replaceAll('"', '&quot;');
 }
-function joinand(items) {
+function joinand(items, separator = ',') {
     if (!items || items.length === 0) return '';
     else if (items.length === 1) return items[0];
-    else if (items.length === 2) return `${items[0]} and ${items[1]}`;
+    else if (items.length === 2) return `${items[0]}${separator} and ${items[1]}`;
     const lastItem = items.pop();
-    return `${items.join(', ')}, and ${lastItem}`;
+    return `${items.join(separator + ' ')}${separator} and ${lastItem}`;
+}
+function capitalise(string) {
+    return string[0].toUpperCase() + string.slice(1);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -208,6 +211,26 @@ function createBanner(timestamp) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+function coalescePhenomena(phenomena) {
+    const groups = new Map();
+    const result = [];
+    for (const item of phenomena) {
+        const colonIndex = item.indexOf(':');
+        if (colonIndex > 0 && colonIndex < 25) {
+            // Reasonable prefix length
+            const prefix = item.slice(0, Math.max(0, colonIndex)).trim();
+            const suffix = item.slice(Math.max(0, colonIndex + 1)).trim();
+            if (!groups.has(prefix)) groups.set(prefix, []);
+            groups.get(prefix).push(suffix);
+        } else {
+            if (!groups.has('conditions')) groups.set('conditions', []);
+            groups.get('conditions').push(item);
+        }
+    }
+    for (const [prefix, suffixes] of groups) result.push(`<b>${prefix}:</b> ${suffixes.join(', ')}`);
+    return result;
+}
+
 function createSectionDataSummary(data_location, vars) {
     const outside = formatList[0].elems;
     const lake = formatList[1].elems;
@@ -331,30 +354,21 @@ function createSectionDataSummary(data_location, vars) {
     const solar = new SolarCalc(new Date(), data_location.latitude, data_location.longitude);
     timeinfo += `, daylight <span class="value">${formatTime(solar.sunrise)}</span><sup>-${Math.round((solar.sunrise - solar.civilDawn) / 60 / 1000)}</sup> to <span class="value">${formatTime(solar.sunset)}</span><sup>+${Math.round((solar.civilDusk - solar.sunset) / 60 / 1000)}</sup>`;
     timeinfo += `.`;
-
     summary.push(timeinfo);
 
-    summary.push('');
+	////
+    if (interpretation.conditions?.length > 0) summary.push ('', capitalise (joinand([...new Set(interpretation.conditions)])) + '.');
+    if (interpretation.phenomena?.length > 0) summary.push ('', capitalise (joinand(coalescePhenomena([...new Set(interpretation.phenomena)]), ';')) + '.');
+    const alerts = [ ...(interpretation?.alerts || []), ...(internalBatteryWH65 === 'OFF' ? [] : ['faulty battery for WH66'])];
+    if (alerts.length > 0) summary.push('', '<span style="font-weight:bold;">' +capitalise (joinand(alerts)) + '.</span>');
 
     ////
-    let alerts = [];
-    let analysis = '';
-    if (interpretation?.details) analysis += `${interpretation.details}`;
-    if (interpretation?.alerts?.length > 0) alerts.push(...interpretation.alerts);
-    if (analysis) summary.push(analysis);
-    if (internalBatteryWH65 !== 'OFF') alerts.push('faulty battery for WH66');
-    if (alerts.length > 0) summary.push(`WARNING: ${joinand(alerts)}.`);
-
-    ////
-    if (aircraft?.alerts?.length > 0) {
+    if (aircraft?.alerts?.length) {
         const flights = aircraft.alerts.reduce((flights, alert) => ({ ...flights, [alert.flight]: [...(flights[alert.flight] || []), encodehtml(alert.text)] }), {});
         const text = Object.entries(flights)
             .map(([flight, alerts]) => `${flight} ${alerts.join(', ')}`)
             .join('; ');
-        summary.push('');
-        summary.push(
-            `<div class="type-aircraft" style="display: ${displayIsEnabled('aircraft') ? 'block' : 'none'}"><span style="font-size:90%;line-height:1.3em;display: inline-block;"><span style="font-weight:bold;">Aircraft:</span> ${text}.</span></div>`
-        );
+        summary.push('', `<div class="type-aircraft" style="display: ${displayIsEnabled('aircraft') ? 'block' : 'none'}"><span style="font-size:90%;line-height:1.3em;display: inline-block;"><span style="font-weight:bold;">aircraft:</span> ${text}.</span></div>`);
     }
 
     ////
