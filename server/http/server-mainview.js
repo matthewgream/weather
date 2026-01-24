@@ -151,12 +151,11 @@ const weather_options = { debug: false, suppress: { stable: true }, n2yoApiKey: 
 const weather_module = require('./server-function-weather.js')(configData.LOCATION, weather_options);
 function getWeatherInterpretation(vars) {
     const dataConditions = vars['weather/branna'];
-    const dataSensorRadiation = vars['sensors/radiation'] || {};
-    const timestamp = dataConditions.timestamp || Date.now();
     if (!dataConditions) return undefined;
+    const dataSensorRadiation = vars['sensors/radiation'] || {};
     try {
         const interpretation = weather_module.getWeatherInterpretation({
-            timestamp,
+            timestamp: dataConditions.timestamp || Date.now(),
             temp: dataConditions.temp,
             humidity: dataConditions.humidity,
             pressure: dataConditions.baromrel,
@@ -173,7 +172,6 @@ function getWeatherInterpretation(vars) {
             snowDepth: undefined,
             iceDepth: undefined,
         });
-        // console.error(`weather: [${new Date().toISOString()}] process, response: <<<`, interpretation, `>>>`);
         return interpretation;
     } catch (e) {
         console.error(`getWeatherInterpretation, error:`, e);

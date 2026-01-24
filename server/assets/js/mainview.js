@@ -357,10 +357,10 @@ function createSectionDataSummary(data_location, vars) {
     summary.push(timeinfo);
 
 	////
-    if (interpretation.conditions?.length > 0) summary.push ('', capitalise (joinand([...new Set(interpretation.conditions)])) + '.');
-    if (interpretation.phenomena?.length > 0) summary.push ('', capitalise (joinand(coalescePhenomena([...new Set(interpretation.phenomena)]), ';')) + '.');
-    const alerts = [ ...(interpretation?.alerts || []), ...(internalBatteryWH65 === 'OFF' ? [] : ['faulty battery for WH66'])];
-    if (alerts.length > 0) summary.push('', '<span style="font-weight:bold;">' +capitalise (joinand(alerts)) + '.</span>');
+	const { alerts, conditions, phenomena } = interpretation;
+    if (alerts?.length || internalBatteryWH65 !== 'OFF') summary.push('', '<span style="font-weight:bold;">' + capitalise (joinand([ ...(alerts || []), ...(internalBatteryWH65 === 'OFF' ? [] : ['faulty battery for WH66'])])) + '.</span>');
+    if (conditions?.length) summary.push ('', capitalise (joinand([...new Set(conditions)])) + '.');
+    if (phenomena?.length) summary.push ('', joinand(coalescePhenomena([...new Set(phenomena)]), ';') + '.');
 
     ////
     if (aircraft?.alerts?.length) {
