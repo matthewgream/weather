@@ -173,7 +173,7 @@ function interpretSkyPolarization({ results, situation }) {
 
     // Sky polarization is strongest 90° from sun, useful for photography
     if (altitude > 0 && altitude < 30) {
-        results.phenomena.push(`sky: maximum polarization at 90° from sun (azimuth ~${Math.round((azimuth + 90) % 360)}°)`);
+        results.phenomena.push(`sun: maximum sky polarization at 90° (azimuth ~${Math.round((azimuth + 90) % 360)}°)`);
     }
 }
 

@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
-// Heliophysics Module - Solar-terrestrial interactions and space weather
+// Astronomy Heliophysics Module - Solar-terrestrial interactions and space weather
 // -----------------------------------------------------------------------------------------------------------------------------------------
 //
 //   - Aurora predictions and real-time monitoring
@@ -136,6 +136,7 @@ function predictAuroraVisibility(location, kp) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 async function fetchKpIndex(state) {
+    if (!state.kpIndex) state.kpIndex = {};
     try {
         const response = await fetch(ENDPOINTS.kpIndex1m);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -150,7 +151,6 @@ async function fetchKpIndex(state) {
         const ago1h = kpData[kpData.length - 60];
         const ago3h = kpData[kpData.length - 180] ?? kpData[0];
         const current = latestFinalized ? latestFinalized.kp_index : latestEstimate?.kp_index;
-        if (!state.kpIndex) state.kpIndex = { data: undefined, lastUpdate: 0, lastError: undefined };
         state.kpIndex.data = {
             current,
             estimated: latestEstimate?.estimated_kp,
@@ -180,6 +180,7 @@ async function fetchKpIndex(state) {
 }
 
 async function fetchKpForecast(state) {
+    if (!state.kpForecast) state.kpForecast = {};
     try {
         const response = await fetch(ENDPOINTS.kpForecast);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -190,7 +191,6 @@ async function fetchKpForecast(state) {
             .filter((f) => !Number.isNaN(f.kp));
         const next24h = forecasts.slice(0, 8);
         const max24h = next24h.length > 0 ? Math.max(...next24h.map((f) => f.kp)) : undefined;
-        if (!state.kpForecast) state.kpForecast = { data: undefined, lastUpdate: 0, lastError: undefined };
         state.kpForecast.data = { forecasts, next24h, max24h, stormExpected: max24h !== undefined && max24h >= KP_THRESHOLDS.minorStorm };
         state.kpForecast.lastUpdate = Date.now();
         state.kpForecast.lastError = undefined;
@@ -204,6 +204,7 @@ async function fetchKpForecast(state) {
 }
 
 async function fetchSolarWind(state) {
+    if (!state.solarWind) state.solarWind = {};
     try {
         const response = await fetch(ENDPOINTS.solarWind);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -213,7 +214,6 @@ async function fetchSolarWind(state) {
         if (!latest) throw new Error('No data');
         const speeds = recent.map((d) => Number.parseFloat(d[2])).filter((v) => !Number.isNaN(v));
         const densities = recent.map((d) => Number.parseFloat(d[1])).filter((v) => !Number.isNaN(v));
-        if (!state.solarWind) state.solarWind = { data: undefined, lastUpdate: 0, lastError: undefined };
         state.solarWind.data = {
             timestamp: latest[0],
             density: Number.parseFloat(latest[1]),
@@ -242,46 +242,42 @@ async function fetchSolarWind(state) {
 }
 
 async function fetchSolarWindMag(state) {
+    if (!state.solarWindMag) state.solarWindMag = {};
     try {
         const response = await fetch(ENDPOINTS.solarWindMag);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
-
         // Data format: [time_tag, bx_gsm, by_gsm, bz_gsm, lon_gsm, lat_gsm, bt]
         const recent = data.slice(-60); // Last hour
         const latest = recent[recent.length - 1];
         if (!latest) throw new Error('No data');
-
         const bzValues = recent.map((d) => Number.parseFloat(d[3])).filter((v) => !Number.isNaN(v));
-        const currentBz = Number.parseFloat(latest[3]);
-        const avgBz = bzValues.length > 0 ? bzValues.reduce((a, b) => a + b, 0) / bzValues.length : undefined;
-        const minBz = bzValues.length > 0 ? Math.min(...bzValues) : undefined;
-
+        const bzCurrent = Number.parseFloat(latest[3]);
+        const bzAvg = bzValues.length > 0 ? bzValues.reduce((a, b) => a + b, 0) / bzValues.length : undefined;
+        const bzMin = bzValues.length > 0 ? Math.min(...bzValues) : undefined;
         // Check for sustained southward Bz (important for aurora)
-        const recentBz = bzValues.slice(-15); // Last 15 minutes
-        const sustainedSouth = recentBz.length > 10 && recentBz.every((bz) => bz < BZ_THRESHOLDS.slightlySouth);
-
-        if (!state.solarWindMag) state.solarWindMag = { data: undefined, lastUpdate: 0, lastError: undefined };
+        const bzRecent = bzValues.slice(-15); // Last 15 minutes
+        const sustainedSouth = bzRecent.length > 10 && bzRecent.every((bz) => bz < BZ_THRESHOLDS.slightlySouth);
         state.solarWindMag.data = {
             timestamp: latest[0],
             bx: Number.parseFloat(latest[1]),
             by: Number.parseFloat(latest[2]),
-            bz: currentBz,
+            bz: bzCurrent,
             bt: Number.parseFloat(latest[6]), // Total field
             stats: {
-                avgBz: avgBz === undefined ? undefined : Math.round(avgBz * 10) / 10,
-                minBz: minBz === undefined ? undefined : Math.round(minBz * 10) / 10,
+                avgBz: bzAvg === undefined ? undefined : Math.round(bzAvg * 10) / 10,
+                minBz: bzMin === undefined ? undefined : Math.round(bzMin * 10) / 10,
             },
             derived: {
-                isSouth: currentBz < BZ_THRESHOLDS.slightlySouth,
-                isStronglySouth: currentBz < BZ_THRESHOLDS.stronglySouth,
+                isSouth: bzCurrent < BZ_THRESHOLDS.slightlySouth,
+                isStronglySouth: bzCurrent < BZ_THRESHOLDS.stronglySouth,
                 sustainedSouth,
-                auroraFavorable: currentBz < BZ_THRESHOLDS.moderatelySouth || sustainedSouth,
+                auroraFavorable: bzCurrent < BZ_THRESHOLDS.moderatelySouth || sustainedSouth,
             },
         };
         state.solarWindMag.lastUpdate = Date.now();
         state.solarWindMag.lastError = undefined;
-        console.error(`heliophysics: update Bz success (Bz=${currentBz.toFixed(1)} nT)`);
+        console.error(`heliophysics: update Bz success (Bz=${bzCurrent.toFixed(1)} nT)`);
         return state.solarWindMag.data;
     } catch (e) {
         state.solarWindMag.lastError = e.message;
@@ -291,27 +287,22 @@ async function fetchSolarWindMag(state) {
 }
 
 async function fetchOvation(state, location) {
-    // Only fetch if we have a location to check
     if (!location?.latitude || !location?.longitude) return undefined;
-
+    if (!state.ovation) state.ovation = {};
     try {
         const response = await fetch(ENDPOINTS.auroraOvation);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
-
         // Ovation data is a grid of aurora probabilities
         // Format: { "Observation Time": "...", "Forecast Time": "...", "coordinates": [[lon, lat, prob], ...] }
         const { coordinates } = data;
-        if (!coordinates || coordinates.length === 0) throw new Error('No coordinate data');
-
+        if (!coordinates?.length) throw new Error('No coordinate data');
         // Find nearest grid point to our location
         // Ovation uses longitude 0-360, we need to convert
         const targetLon = location.longitude < 0 ? location.longitude + 360 : location.longitude;
         const targetLat = location.latitude;
-
-        let nearest = undefined;
+        let nearest;
         let nearestDist = Infinity;
-
         for (const point of coordinates) {
             const [lon, lat, prob] = point;
             // eslint-disable-next-line
@@ -321,16 +312,12 @@ async function fetchOvation(state, location) {
                 nearest = { lon, lat, probability: prob };
             }
         }
-
         // Also find max probability in northern region for context
         const northernPoints = coordinates.filter(([, lat]) => lat > 50);
         const maxNorthern = northernPoints.length > 0 ? Math.max(...northernPoints.map(([_a, _b, prob]) => prob)) : undefined;
-
         // Find the aurora oval boundary (where probability > 10%)
         const ovalPoints = coordinates.filter(([_a, _b, prob]) => prob > 10);
         const southernmostOval = ovalPoints.length > 0 ? Math.min(...ovalPoints.map(([, lat]) => lat)) : undefined;
-
-        if (!state.ovation) state.ovation = { data: undefined, lastUpdate: 0, lastError: undefined };
         state.ovation.data = {
             observationTime: data['Observation Time'],
             forecastTime: data['Forecast Time'],
@@ -362,13 +349,12 @@ async function fetchOvation(state, location) {
 }
 
 async function fetchAlerts(state) {
+    if (!state.alerts) state.alerts = {};
     try {
         const response = await fetch(ENDPOINTS.alerts);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
-        const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-        const recentAlerts = data.filter((alert) => new Date(alert.issue_datetime).getTime() > cutoff);
-        if (!state.alerts) state.alerts = { data: undefined, lastUpdate: 0, lastError: undefined };
+        const recentAlerts = data.filter((alert) => new Date(alert.issue_datetime).getTime() > Date.now() - 24 * 60 * 60 * 1000);
         state.alerts.data = {
             all: recentAlerts,
             geomagnetic: recentAlerts.filter((a) => a.message?.includes('Geomagnetic') || a.message?.includes('K-index')),

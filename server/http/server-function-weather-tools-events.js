@@ -1,3 +1,4 @@
+/* eslint-disable unicorn/no-keyword-prefix */
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -26,20 +27,26 @@ function addEvent(store, category, eventId, message, durationHours = 24) {
     return false;
 }
 
-// Note: marks events as shown (mutates store) - intentional for "show once" semantics
 function getEvents(store, category) {
     if (!store.events || !store.events[category]) return [];
     const now = Date.now(),
         active = [];
-    for (const [eventId, event] of Object.entries(store.events[category]))
-        if (now <= event.expires) {
-            active.push({
-                id: eventId,
-                ...event,
-                isNew: !event.shown,
-            });
-            event.shown = true;
-        }
+    for (const [eventId, event] of Object.entries(store.events[category])) if (now <= event.expires) active.push({ id: eventId, ...event });
+    return active;
+}
+
+// Note: marks events as shown (mutates store) - intentional for "show once" semantics
+function newEvents(store) {
+    if (!store.events) return {};
+    const now = Date.now(),
+        active = {};
+    for (const category of Object.keys(store.events))
+        for (const [eventId, event] of Object.entries(store.events[category]))
+            if (!event.shown && now <= event.expires) {
+                if (!active[category]) active[category] = [];
+                active[category].push({ id: eventId, ...event });
+                event.shown = true;
+            }
     return active;
 }
 
@@ -76,17 +83,24 @@ function removeEvent(store, category, eventId) {
     return false;
 }
 
+function countEvents(store) {
+    if (!store.events) return 0;
+    return Object.keys(store.events).reduce((count, category) => count + Object.keys(store.events[category]).length, 0);
+}
+
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 module.exports = {
     add: addEvent,
     get: getEvents,
+    new: newEvents,
     has: hasEvent,
     remove: removeEvent,
     canTrigger,
     isCooldown: canTrigger, // deprecated alias - use canTrigger
     prune: pruneEvents,
+    count: countEvents,
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

@@ -7,8 +7,6 @@
 //
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-// const helpers = require('./server-function-weather-helpers.js');
-
 const ENDPOINTS = {
     nasaFireball: 'https://ssd-api.jpl.nasa.gov/fireball.api',
 };
@@ -71,25 +69,21 @@ function assessActivityLevel(recentCount, typicalZHR, hours = 24) {
 
 function isNearLocation(fireball, location, radiusDeg = 15) {
     if (!fireball.lat || !fireball.lon || !location?.latitude || !location?.longitude) return true; // If no location data, include it
-    const latDiff = Math.abs(fireball.lat - location.latitude);
-    const lonDiff = Math.abs(fireball.lon - location.longitude);
-    return latDiff < radiusDeg && lonDiff < radiusDeg;
+    return Math.abs(fireball.lat - location.latitude) < radiusDeg && Math.abs(fireball.lon - location.longitude) < radiusDeg;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 async function fetchNASAFireballs(state, location) {
-    if (!state.fireballs) state.fireballs = { data: undefined, lastUpdate: 0, lastError: undefined };
+    if (!state.fireballs) state.fireballs = {};
     try {
         // NASA Fireball API - documented at https://ssd-api.jpl.nasa.gov/doc/fireball.html
         // Returns fireballs detected by US Government sensors
-        const endDate = new Date();
-        const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // Last 30 days
         const params = new URLSearchParams({
-            'date-min': startDate.toISOString().split('T')[0],
-            'date-max': endDate.toISOString().split('T')[0],
-            'req-loc': 'true', // Require location data
+            'date-min': new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            'date-max': new Date().toISOString().split('T')[0],
+            'req-loc': 'true',
         });
         const response = await fetch(`${ENDPOINTS.nasaFireball}?${params}`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -275,7 +269,7 @@ function interpretFireballAlert({ results, situation, store }) {
 
 function interpretShowerForecast({ results, situation }) {
     const { month, day } = situation;
-    for (const [, shower] of Object.entries(MAJOR_SHOWERS)) {
+    for (const shower of Object.values(MAJOR_SHOWERS)) {
         const peakDate = new Date(2024, shower.peakMonth, shower.peakDay);
         const currentDate = new Date(2024, month, day);
         const daysToPeak = Math.round((peakDate - currentDate) / (24 * 60 * 60 * 1000));
@@ -297,20 +291,12 @@ function interpretShowerForecast({ results, situation }) {
 function interpretTauridSeason({ results, situation, store }) {
     const { month, day } = situation;
 
-    // Taurid "swarm" years - enhanced fireball activity
-    // This is roughly every 7 years, last was 2022, next ~2029
-    const year = new Date().getFullYear();
-    const isSwarmYear = (year - 2022) % 7 === 0;
-
     if ((month === 9 || month === 10) && day >= 20 && day <= 15) {
-        const fireballs = getFireballs(store.astronomy_meteors_realtime);
         let text = 'meteors: Taurid fireball season active';
-        if (isSwarmYear) {
-            text += ' (SWARM YEAR - enhanced fireball rates expected)';
-        }
-        if (fireballs?.counts.last24h > 3) {
-            text += ` - ${fireballs.counts.last24h} fireballs reported in 24h`;
-        }
+        // Taurid "swarm" years - enhanced fireball activity: this is roughly every 7 years, last was 2022, next ~2029
+        if ((new Date().getFullYear() - 2022) % 7 === 0) text += ' (SWARM YEAR - enhanced fireball rates expected)';
+        const fireballs = getFireballs(store.astronomy_meteors_realtime);
+        if (fireballs?.counts.last24h > 3) text += ` - ${fireballs.counts.last24h} fireballs reported in 24h`;
         results.phenomena.push(text);
     }
 }

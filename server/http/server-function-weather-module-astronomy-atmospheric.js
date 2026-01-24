@@ -131,21 +131,20 @@ const CREPUSCULAR_WINDOW = 1; // Hours around sunrise/sunset
 
 async function fetchSeeingForecast(state, location) {
     if (!location?.latitude || !location?.longitude) return undefined;
-
+    if (!state.seeing) state.seeing = {};
     try {
         const params = new URLSearchParams({ lon: location.longitude.toFixed(2), lat: location.latitude.toFixed(2), product: 'astro', output: 'json' });
         const response = await fetch(`${ENDPOINTS.sevenTimer}?${params}`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         if (!data.dataseries || !Array.isArray(data.dataseries)) throw new Error('Invalid response format');
-        const now = Date.now();
-        const initTime = data.init ? parseSevenTimerInit(data.init) : now;
+        const initTime = data.init ? parseSevenTimerInit(data.init) : Date.now();
         const forecasts = data.dataseries.map((point) => {
             const forecastTime = initTime + point.timepoint * 3600000;
             return {
                 timepoint: point.timepoint,
                 forecastTime,
-                hoursFromNow: Math.round((forecastTime - now) / 3600000),
+                hoursFromNow: Math.round((forecastTime - Date.now()) / 3600000),
                 seeing: point.seeing,
                 seeingDesc: SEEING_SCALE[point.seeing]?.desc || 'unknown',
                 seeingArcsec: SEEING_SCALE[point.seeing]?.arcsec || 'unknown',
@@ -176,7 +175,6 @@ async function fetchSeeingForecast(state, location) {
                       cloudCover: Math.round((tonight.reduce((sum, f) => sum + f.cloudCover, 0) / tonight.length) * 10) / 10,
                   }
                 : undefined;
-        if (!state.seeing) state.seeing = {};
         state.seeing.data = {
             initTime,
             forecasts,

@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
-// Weather Conditions Module - Interprets basic weather variables and their combinations
+// Conditions Module - Interprets basic weather variables and their combinations
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const { cardinalDirection } = require('./server-function-weather-helpers.js');

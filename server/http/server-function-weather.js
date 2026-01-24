@@ -238,8 +238,7 @@ function weatherStorageStartup(options) {
 
 function __weatherTrendPeriod(weatherData, field, periodKey) {
     const period = weatherData.getPeriod(periodKey);
-    if (!period) 
-        return { valid: false };
+    if (!period) return { valid: false };
     const trend = {
         back: period.back(field, weatherData.getPeriodHours(periodKey) * 3600),
         min: period.min(field),
@@ -259,11 +258,11 @@ function __weatherTrendPeriod(weatherData, field, periodKey) {
 }
 
 function __weatherTrend(weatherData, field) {
-    return Object.fromEntries (Object.keys(WeatherData.PERIODS).map (periodKey => [periodKey, __weatherTrendPeriod (weatherData, field, periodKey)]));
+    return Object.fromEntries(Object.keys(WeatherData.PERIODS).map((periodKey) => [periodKey, __weatherTrendPeriod(weatherData, field, periodKey)]));
 }
 
 function __weatherTrends(weatherData, fields) {
-    return Object.fromEntries (fields.map (field => [field, __weatherTrend(weatherData, field)]));
+    return Object.fromEntries(fields.map((field) => [field, __weatherTrend(weatherData, field)]));
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -335,7 +334,7 @@ function getWeatherInterpretationImpl(interpreters, location, dataCurrent, weath
             results.conditions = [...results.conditions, ...result.conditions];
             results.phenomena = [...results.phenomena, ...result.phenomena];
             results.alerts = [...results.alerts, ...result.alerts];
-            if (options?.debug && (result.conditions.length > 0 || result.phenomena.length > 0 || result.alerts.length > 0)) {
+            if (options?.debug && result.conditions.length + result.phenomena.length + result.alerts.length > 0) {
                 if (result.conditions.length === 0) delete result.conditions;
                 if (result.phenomena.length === 0) delete result.phenomena;
                 if (result.alerts.length === 0) delete result.alerts;
@@ -345,6 +344,7 @@ function getWeatherInterpretationImpl(interpreters, location, dataCurrent, weath
             console.error(`weather: interpret '${name}', error:`, e);
         }
     });
+    Object.entries(toolsEvents.new(store)).forEach(([category, events]) => events.forEach((event) => results.phenomena.push(`${category}: ${event.message}`)));
     results.feelsLike = situation.feelsLike;
     results.comfort = situation.comfort;
     results.details = __weatherDetails(results);
@@ -404,7 +404,7 @@ function initialise(location, options) {
         ...require('./server-function-weather-module-astronomy-heliophysics.js')(parameters),
         ...require('./server-function-weather-module-astronomy-celestial.js')(parameters),
         ...require('./server-function-weather-module-astronomy-planets-and-stars.js')(parameters),
-        ...require('./server-function-weather-module-astronomy-meteors-realtime.js')(parameters),
+        ...require('./server-function-weather-module-astronomy-meteors.js')(parameters),
         ...require('./server-function-weather-module-astronomy-satellites.js')(parameters),
         ...require('./server-function-weather-module-eclipses.js')(parameters),
         ...require('./server-function-weather-module-phenology.js')(parameters),

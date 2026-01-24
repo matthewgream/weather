@@ -12,26 +12,15 @@
 //
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const https = require('https');
-
-/* eslint-disable sonarjs/cognitive-complexity */
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// Constants
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
 const API_BASE = 'https://api.pollenrapporten.se/v1';
 
-// Cache durations
 const STATIC_CACHE_DURATION_MS = 28 * 24 * 60 * 60 * 1000; // 28 days for regions/types/levels
 const FORECAST_CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours default
 const FORECAST_CACHE_HIGH_SEASON_MS = 6 * 60 * 60 * 1000; // 6 hours during high season
 
-// High pollen season (approximately March-September in Sweden)
 const HIGH_SEASON_START_MONTH = 3;
 const HIGH_SEASON_END_MONTH = 9;
 
-// Pollen type metadata (English translations and allergy info)
 const POLLEN_METADATA = {
     'Hassel': {
         english: 'Hazel',
@@ -112,27 +101,14 @@ const POLLEN_METADATA = {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function fetchJSON(url) {
-    return new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error('Request timeout')), 30000);
-        https
-            .get(url, (res) => {
-                let data = '';
-                res.on('data', (chunk) => (data += chunk));
-                res.on('end', () => {
-                    clearTimeout(timeout);
-                    try {
-                        resolve(JSON.parse(data));
-                    } catch (e) {
-                        reject(new Error(`Failed to parse JSON: ${e.message}`));
-                    }
-                });
-            })
-            .on('error', (e) => {
-                clearTimeout(timeout);
-                reject(e);
-            });
-    });
+async function fetchJSON(url) {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    try {
+        return await response.json();
+    } catch (e) {
+        throw new Error(`Failed to parse JSON: ${e.message}`);
+    }
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -147,7 +123,7 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
 }
 
 function findNearestRegion(latitude, longitude, regions) {
-    let nearest = undefined;
+    let nearest;
     let minDistance = Infinity;
     for (const region of regions) {
         if (!region.latitude || !region.longitude) continue;
@@ -187,8 +163,7 @@ function summarizeSwedishText(text) {
         { match: /blommar/i, english: 'in bloom' },
         { match: /säsongen (är|har) avslutad/i, english: 'season ended' },
     ];
-    const matches = [];
-    for (const p of patterns) if (p.match.test(text)) matches.push(p.english);
+    const matches = patterns.filter((p) => p.match.test(text)).map((p) => p.english);
     if (matches.length > 0) return matches.slice(0, 2).join('; ');
     return text.length > 100 ? text.slice(0, 97) + '...' : text;
 }
@@ -205,12 +180,16 @@ async function fetchPollenTypes() {
 }
 
 async function fetchForecast(regionId) {
-    const today = new Date();
-    const endDate = new Date(today);
+    const startDate = new Date();
+    const endDate = new Date(startDate);
     endDate.setDate(endDate.getDate() + 7);
-    const [startStr] = today.toISOString().split('T');
-    const [endStr] = endDate.toISOString().split('T');
-    return (await fetchJSON(`${API_BASE}/forecasts?region_id=${regionId}&start_date=${startStr}&end_date=${endStr}&current=true`)).items || [];
+    const params = new URLSearchParams({
+        region_id: regionId,
+        start_date: startDate.toISOString().split('T')[0],
+        end_date: endDate.toISOString().split('T')[0],
+        current: true,
+    });
+    return (await fetchJSON(`${API_BASE}/forecasts?${params}`)).items || [];
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -230,14 +209,13 @@ function updateForecast(state) {
         });
 }
 
-function updateStaticData(state) {
+function updateStaticData(state, location) {
     Promise.all([fetchRegions(), fetchPollenTypes()])
         .then(([regions, pollenTypes]) => {
             state.staticData.regions = regions;
             state.staticData.pollenTypes = pollenTypes;
             state.staticData.lastUpdate = Date.now();
             state.staticData.lastError = undefined;
-            // Select nearest region
             if (location.latitude && location.longitude) {
                 state.selectedRegion = findNearestRegion(location.latitude, location.longitude, regions);
                 if (state.selectedRegion) {
@@ -261,7 +239,7 @@ function updateSchedule(state, location) {
         _updateSchedule.currentInterval = interval;
         _updateSchedule.intervalId = setInterval(() => updateSchedule(state, location), interval);
     }
-    if (!isCacheValid(state.staticData.lastUpdate, STATIC_CACHE_DURATION_MS)) updateStaticData(state);
+    if (!isCacheValid(state.staticData.lastUpdate, STATIC_CACHE_DURATION_MS)) updateStaticData(state, location);
     else if (state.selectedRegion && !isCacheValid(state.forecast.lastUpdate, getForecastCacheDuration())) updateForecast(state);
 }
 
@@ -273,10 +251,10 @@ function interpretPollen({ results, situation, dataCurrent, store }) {
 
     const { date } = situation;
     const { cloudCover, precipitation, humidity, windSpeed } = dataCurrent;
+
     const forecast = store.pollen.forecast.data;
     const regionName = store.pollen.selectedRegion.name;
     const { pollenTypes } = store.pollen.staticData;
-    const [todayStr] = new Date(date).toISOString().split('T');
 
     if (forecast.isEndOfSeason) {
         const month = new Date(date).getMonth() + 1;
@@ -302,14 +280,10 @@ function interpretPollen({ results, situation, dataCurrent, store }) {
         levelsByDate[entryDate].push(entry);
     }
 
-    const todayLevels = levelsByDate[todayStr] || [];
-    if (todayLevels.length === 0) return;
-
-    // Categorize by severity
     const high = [],
         moderate = [],
         low = [];
-    for (const entry of todayLevels) {
+    for (const entry of levelsByDate[new Date(date).toISOString().split('T')[0]] || []) {
         const pollenType = getPollenTypeById(entry.pollenId, pollenTypes);
         const meta = pollenType ? getPollenMetadata(pollenType.name) : undefined;
         const name = pollenType ? pollenType.name : 'Unknown';
@@ -362,22 +336,17 @@ function interpretPollen({ results, situation, dataCurrent, store }) {
 
     const tomorrow = new Date(date);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const [tomorrowStr] = tomorrow.toISOString().split('T');
-    const tomorrowLevels = levelsByDate[tomorrowStr];
-
-    if (tomorrowLevels) {
-        const tomorrowHigh = tomorrowLevels.filter((e) => e.level >= 5);
-        if (tomorrowHigh.length > 0 && high.length === 0) {
-            const names = tomorrowHigh
-                .map((e) => {
-                    const pollenType = getPollenTypeById(e.pollenId, pollenTypes);
-                    const meta = pollenType ? getPollenMetadata(pollenType.name) : undefined;
-                    const name = pollenType ? pollenType.name : 'Unknown';
-                    return meta ? meta.english : name;
-                })
-                .join(', ');
-            results.phenomena.push(`pollen: high levels of ${names} expected tomorrow`);
-        }
+    const tomorrowHigh = levelsByDate[tomorrow.toISOString().split('T')[0]].filter((e) => e.level >= 5);
+    if (tomorrowHigh.length > 0 && high.length === 0) {
+        const names = tomorrowHigh
+            .map((e) => {
+                const pollenType = getPollenTypeById(e.pollenId, pollenTypes);
+                const meta = pollenType ? getPollenMetadata(pollenType.name) : undefined;
+                const name = pollenType ? pollenType.name : 'Unknown';
+                return meta ? meta.english : name;
+            })
+            .join(', ');
+        results.phenomena.push(`pollen: high levels of ${names} expected tomorrow`);
     }
 }
 

@@ -8,8 +8,8 @@ const ADSB_MQTT_RECONNECT_PERIOD = 30 * 1000;
 const ADSB_MQTT_CONNECT_TIMEOUT = 10 * 1000;
 
 function initialise(config) {
-    let reconnect_attempts = 0,
-        last_log_time = 0;
+    let reconnect_attempts = 0;
+    let last_log_time = 0;
 
     const mqtt_client = require('mqtt').connect(config.mqtt?.server || 'mqtt://localhost', {
         clientId: config.mqtt?.client || 'client-adsb-' + Math.random().toString(16).slice(2, 8),
@@ -27,8 +27,8 @@ function initialise(config) {
         try {
             //console.log(`aircraft-adsb: mqtt received: topic='${topic}', message='${message}'`);
             if (topic === 'adsb/alert/insert') {
-                const alert = JSON.parse(message.toString()),
-                    id = alert?.id;
+                const alert = JSON.parse(message.toString());
+                const id = alert?.id;
                 if (config.onAlertInserted && id) config.onAlertInserted(id, alert.warn, alert.flight, alert.text);
             } else if (topic === 'adsb/alert/remove') {
                 const id = message.toString();
@@ -47,8 +47,7 @@ function initialise(config) {
         }
     });
     mqtt_client.on('offline', () => {
-        reconnect_attempts++;
-        if (reconnect_attempts === 1) console.log('aircraft-adsb: mqtt offline, will attempt to reconnect');
+        if (++reconnect_attempts === 1) console.log('aircraft-adsb: mqtt offline, will attempt to reconnect');
         else if (reconnect_attempts === ADSB_MAX_RECONNECT_ATTEMPTS) console.log(`aircraft-adsb: mqtt reconnect #${ADSB_MAX_RECONNECT_ATTEMPTS}, will continue trying silently`);
     });
     mqtt_client.on('reconnect', () => {});

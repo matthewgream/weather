@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
-// Astronomy Satellites Realtime Module - Live satellite pass predictions
+// Astronomy Satellites Module - Live satellite pass predictions
 // -----------------------------------------------------------------------------------------------------------------------------------------
 //
 //   - N2YO API (https://www.n2yo.com/api/) - requires free API key
@@ -27,9 +27,9 @@ const ENDPOINTS = {
 };
 
 const SATELLITES = {
-    ISS: { id: 25544, name: 'ISS', minMag: -4 },
-    TIANGONG: { id: 54216, name: 'Tiangong', minMag: -3 },
-    HST: { id: 20580, name: 'Hubble', minMag: 1.5 },
+    iss: { id: 25544, name: 'ISS', minMag: -4 },
+    tiangong: { id: 54216, name: 'Tiangong', minMag: -3 },
+    hst: { id: 20580, name: 'Hubble', minMag: 1.5 },
 };
 
 const INTERVALS = {
@@ -50,11 +50,11 @@ const PASS_QUALITY = {
 };
 
 const STARLINK = {
-    minTrainMeanMotion: 15.5,      // rev/day - satellites still raising orbit
-    operationalMeanMotion: 15.2,   // above this they're at operational altitude
-    minTrainSize: 15,              // minimum satellites to be a "train"
-    raanTolerance: 2,            // degrees - same orbital plane
-    inclinationTolerance: 0.5,     // degrees
+    minTrainMeanMotion: 15.5, // rev/day - satellites still raising orbit
+    operationalMeanMotion: 15.2, // above this they're at operational altitude
+    minTrainSize: 15, // minimum satellites to be a "train"
+    raanTolerance: 2, // degrees - same orbital plane
+    inclinationTolerance: 0.5, // degrees
 };
 
 const INTERVALS_STARLINK = {
@@ -86,7 +86,7 @@ function isViewingWindowApproaching(hour, month) {
 }
 
 function formatPassTime(timestamp) {
-    return (new Date(timestamp * 1000)).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    return new Date(timestamp * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 
 function formatDirection(azimuth) {
@@ -120,9 +120,9 @@ function parseTLEEpochFromLine(epochStr) {
 
 function identifyTrains(satellites) {
     // Filter for satellites still in low orbit (high mean motion = low altitude)
-    const lowOrbitSats = satellites.filter(sat => sat.meanMotion >= STARLINK.minTrainMeanMotion);    
+    const lowOrbitSats = satellites.filter((sat) => sat.meanMotion >= STARLINK.minTrainMeanMotion);
     if (lowOrbitSats.length === 0) return [];
-    
+
     // Group by orbital plane (similar inclination + RAAN)
     const planes = [];
     for (const sat of lowOrbitSats) {
@@ -139,11 +139,11 @@ function identifyTrains(satellites) {
         }
         if (!foundPlane) planes.push({ inclination: sat.inclination, raan: sat.raan, satellites: [sat] });
     }
-    
+
     // Filter for planes with enough satellites to be a visible train
     return planes
-        .filter(plane => plane.satellites.length >= STARLINK.minTrainSize)
-        .map(plane => {
+        .filter((plane) => plane.satellites.length >= STARLINK.minTrainSize)
+        .map((plane) => {
             // Estimate how "fresh" the train is by mean motion (higher = lower = fresher)
             const avgMeanMotion = plane.satellites.reduce((sum, s) => sum + s.meanMotion, 0) / plane.satellites.length;
             return {
@@ -156,7 +156,7 @@ function identifyTrains(satellites) {
                 satellites: plane.satellites,
             };
         })
-        .sort((a, b) => b.avgMeanMotion - a.avgMeanMotion);  // Most recent (lowest orbit) first
+        .sort((a, b) => b.avgMeanMotion - a.avgMeanMotion); // Most recent (lowest orbit) first
 }
 
 function predictTrainPass(train, location, targetTime) {
@@ -202,10 +202,9 @@ function findNextTrainPass(train, location, maxHoursAhead = 24) {
 
     const now = Date.now();
     const stepMinutes = 5; // Check every 5 minutes
-    let passStart = undefined;
+    let passStart, passEnd;
     let maxElevation = 0;
-    let maxElevationTime = undefined;
-    let passEnd = undefined;
+    let maxElevationTime;
     for (let i = 0; i < (maxHoursAhead * 60) / stepMinutes; i++) {
         const checkTime = now + i * stepMinutes * 60 * 1000;
         const position = predictTrainPass(train, location, checkTime);
@@ -229,8 +228,6 @@ function findNextTrainPass(train, location, maxHoursAhead = 24) {
     const endPosition = predictTrainPass(train, location, passEnd);
     return {
         train: {
-            launchDate: train.launchDate,
-            ageDays: train.ageDays,
             satelliteCount: train.satelliteCount,
             spectacularity: train.spectacularity,
         },
@@ -267,43 +264,43 @@ async function fetchVisualPasses(state, satellite, location, apiKey) {
     const { id, name } = satellite;
 
     try {
-        const alt = location.elevation || 0;
         const days = 3; // Look ahead 3 days
         const minVisibility = 120; // Minimum 2 minutes visible
-        const url = `${ENDPOINTS.n2yoBase}/visualpasses/${id}/${location.latitude}/${location.longitude}/${alt}/${days}/${minVisibility}&apiKey=${apiKey}`;
-        const response = await fetch(url);
+        const response = await fetch(`${ENDPOINTS.n2yoBase}/visualpasses/${id}/${location.latitude}/${location.longitude}/${location.elevation || 0}/${days}/${minVisibility}&apiKey=${apiKey}`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         if (data.error) throw new Error(data.error);
         // Sort by brightness (best first)
-        const passes = (data.passes || []).map((pass) => ({
-            satellite: name,
-            noradId: id,
-            start: {
-                time: pass.startUTC,
-                timeFormatted: formatPassTime(pass.startUTC),
-                azimuth: pass.startAz,
-                azimuthCompass: formatDirection(pass.startAz),
-                elevation: pass.startEl,
-            },
-            max: {
-                time: pass.maxUTC,
-                timeFormatted: formatPassTime(pass.maxUTC),
-                azimuth: pass.maxAz,
-                azimuthCompass: formatDirection(pass.maxAz),
-                elevation: pass.maxEl,
-            },
-            end: {
-                time: pass.endUTC,
-                timeFormatted: formatPassTime(pass.endUTC),
-                azimuth: pass.endAz,
-                azimuthCompass: formatDirection(pass.endAz),
-                elevation: pass.endEl,
-            },
-            magnitude: pass.mag,
-            duration: pass.duration,
-            quality: getPassQuality(pass.mag),
-        })).sort((a, b) => a.magnitude - b.magnitude);
+        const passes = (data.passes || [])
+            .map((pass) => ({
+                satellite: name,
+                noradId: id,
+                start: {
+                    time: pass.startUTC,
+                    timeFormatted: formatPassTime(pass.startUTC),
+                    azimuth: pass.startAz,
+                    azimuthCompass: formatDirection(pass.startAz),
+                    elevation: pass.startEl,
+                },
+                max: {
+                    time: pass.maxUTC,
+                    timeFormatted: formatPassTime(pass.maxUTC),
+                    azimuth: pass.maxAz,
+                    azimuthCompass: formatDirection(pass.maxAz),
+                    elevation: pass.maxEl,
+                },
+                end: {
+                    time: pass.endUTC,
+                    timeFormatted: formatPassTime(pass.endUTC),
+                    azimuth: pass.endAz,
+                    azimuthCompass: formatDirection(pass.endAz),
+                    elevation: pass.endEl,
+                },
+                magnitude: pass.mag,
+                duration: pass.duration,
+                quality: getPassQuality(pass.mag),
+            }))
+            .sort((a, b) => a.magnitude - b.magnitude);
         console.error(`satellites: update ${name} success`);
         return {
             satellite: name,
@@ -319,16 +316,15 @@ async function fetchVisualPasses(state, satellite, location, apiKey) {
     }
 }
 
-async function fetchAllSatellites(state, location, apiKey) {
+async function fetchSatellites(state, location, apiKey) {
     if (!apiKey || !location?.latitude) return;
 
-    const [iss, tiangong, hst] = await Promise.all([fetchVisualPasses(state, SATELLITES.ISS, location, apiKey), fetchVisualPasses(state, SATELLITES.TIANGONG, location, apiKey), fetchVisualPasses(state, SATELLITES.HST, location, apiKey)]);
-    if (iss) state.iss = { data: iss, lastUpdate: Date.now() };
-    if (tiangong) state.tiangong = { data: tiangong, lastUpdate: Date.now() };
-    if (hst) state.hst = { data: hst, lastUpdate: Date.now() };
-    const allPasses = [...(iss?.passes || []), ...(tiangong?.passes || []), ...(hst?.passes || [])].sort((a, b) => a.start.time - b.start.time);
-
     if (!state.combined) state.combined = {};
+
+    const results = await Promise.all(Object.entries(SATELLITES).map(async ([key, sat]) => ({ key, data: await fetchVisualPasses(state, sat, location, apiKey) })));
+    for (const { key, data } of results) if (data) state[key] = { data, lastUpdate: Date.now() };
+    const allPasses = results.flatMap(({ data }) => data?.passes || []).sort((a, b) => a.start.time - b.start.time);
+
     state.combined.data = {
         allPasses,
         tonight: allPasses.filter((p) => {
@@ -343,6 +339,7 @@ async function fetchAllSatellites(state, location, apiKey) {
 }
 
 async function fetchStarlinkTLEs(state) {
+    if (!state.starlink) state.starlink = {};
     try {
         const response = await fetch(ENDPOINTS.celestrakStarlink);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -357,8 +354,7 @@ async function fetchStarlinkTLEs(state) {
             // Validate TLE lines
             if (!line1.startsWith('1 ') || !line2.startsWith('2 ')) continue;
             // Extract epoch from line 1 (columns 19-32)
-            const epochStr = line1.slice(18, 32).trim();
-            const epoch = parseTLEEpochFromLine(epochStr);
+            const epoch = parseTLEEpochFromLine(line1.slice(18, 32).trim());
             satellites.push({
                 name,
                 line1,
@@ -369,7 +365,6 @@ async function fetchStarlinkTLEs(state) {
         }
         if (satellites.length === 0) throw new Error('No TLE data parsed');
         const trains = identifyTrains(satellites);
-        if (!state.starlink) state.starlink = {};
         state.starlink.data = {
             totalSatellites: satellites.length,
             recentTrains: trains,
@@ -392,8 +387,8 @@ async function updateStarlinkPasses(state, location) {
 
     // Only report decent passes, sort by time
     const passes = state.starlink.data.recentTrains
-        .map (train => findNextTrainPass(train, location, 24))
-        .filter (nextPass => nextPass?.max?.elevation > 15)
+        .map((train) => findNextTrainPass(train, location, 24))
+        .filter((nextPass) => nextPass?.max?.elevation > 15)
         .sort((a, b) => a.start.time - b.start.time);
 
     if (!state.starlinkPasses) state.starlinkPasses = {};
@@ -471,7 +466,7 @@ function updateIntervalCalculator(state, situation) {
 }
 const _updateSchedule = { intervalId: undefined, currentInterval: undefined };
 function updateSchedule(state, situation, location, apiKey) {
-    fetchAllSatellites(state, location, apiKey).then(() => {
+    fetchSatellites(state, location, apiKey).then(() => {
         const [interval, reason] = updateIntervalCalculator(state, situation);
         if (_updateSchedule.currentInterval !== interval) {
             if (_updateSchedule.intervalId) clearInterval(_updateSchedule.intervalId);
@@ -574,9 +569,9 @@ function interpretStarlinkTrain({ results, situation, store }) {
     // Alert about active train
     const train = starlinkData.mostRecentTrain;
     if (train.isVeryRecent) {
-        results.alerts.push(`satellites: STARLINK TRAIN active! ${train.satelliteCount} satellites launched ${train.ageDays.toFixed(0)} days ago - ${train.spectacularity} viewing`);
+        results.alerts.push(`satellites: STARLINK TRAIN active! (${train.satelliteCount} satellites) - ${train.spectacularity} viewing`);
     } else {
-        results.phenomena.push(`satellites: Starlink train visible (${train.satelliteCount} sats, ${train.ageDays.toFixed(0)} days old)`);
+        results.phenomena.push(`satellites: Starlink train visible (${train.satelliteCount} satellites)`);
     }
 
     // Report upcoming passes
