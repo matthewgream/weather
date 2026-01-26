@@ -1,7 +1,7 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const FILTER_CATEGORIES_DISPLAY = ['aircraft', 'astronomy'];
+const FILTER_CATEGORIES_DISPLAY = ['aviation', 'astronomy'];
 const FILTER_CATEGORIES_ALERTS = ['weather', ...FILTER_CATEGORIES_DISPLAY];
 const STORAGE_KEY_FILTERS_ALERTS = 'weather-prefs-filter-alerts';
 

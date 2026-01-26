@@ -254,7 +254,7 @@ function createSectionDataSummary(data_location, vars) {
     const lakeSubmerged = locate(vars, lake[1].path);
     const lakeIceDepth = undefined;
     const internalBatteryWH65 = locate(vars, internal[0].path);
-    const { interpretation, aircraft } = vars;
+    const { interpretation, aviation_alerts, aviation_weather } = vars;
 
     let summary = [];
 
@@ -363,10 +363,16 @@ function createSectionDataSummary(data_location, vars) {
     if (phenomena?.length) summary.push ('', coalescePhenomena([...new Set(phenomena)]).join ('; ') + '.');
 
     ////
-    if (aircraft?.alerts?.length) {
-        const flights = aircraft.alerts.reduce((flights, alert) => ({ ...flights, [alert.flight]: [...(flights[alert.flight] || []), encodehtml(alert.text)] }), {});
-        const text = Object.entries(flights).map(([flight, alerts]) => `${flight} ${alerts.join(', ')}`).join('; ');
-        summary.push('', `<div class="type-aircraft" style="display: ${displayIsEnabled('aircraft') ? 'block' : 'none'}"><span style="font-size:90%;line-height:1.3em;display: inline-block;"><span style="font-weight:bold;">aircraft:</span> ${text}.</span></div>`);
+    if (aviation_alerts?.alerts?.length || aviation_weather?.weather?.length) {
+        const flights = aviation_alerts?.alerts?.reduce((flights, alert) => ({ ...flights, [alert.flight]: [...(flights[alert.flight] || []), encodehtml(alert.text)] }), {});
+        const text_flights = flights ? Object.entries(flights).map(([flight, alerts]) => `${flight} ${alerts.join(', ')}`).join('; ') : '';
+        const text_weather = aviation_weather?.weather?.flatMap (w => [w.taf?.text, w.metar?.text]).filter (Boolean).join (' * ').trim().replaceAll ('\n', ': ');
+		if (text_flights || text_weather) {
+			let text = [];
+			if (text_flights) text.push(`<span style="font-weight:bold;">flights:</span> ${text_flights}`);
+			if (text_weather) text.push(`<span style="font-weight:bold;">weather:</span> ${text_weather}`);
+            summary.push('', `<div class="type-aviation" style="display: ${displayIsEnabled('aviation') ? 'block' : 'none'}"><span style="font-size:90%;line-height:1.3em;display: inline-block;">${text.join(';<br>')}</span></div>`);
+	    }
     }
 
     ////

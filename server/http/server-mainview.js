@@ -8,11 +8,9 @@ const path = require('path');
 
 const configPath = process.argv[2] || 'secrets.txt';
 const configData = require('./server-function-config.js')(configPath);
-const configList = Object.entries(configData)
-    .map(([k, v]) => k.toLowerCase() + '=' + v)
-    .join(', ');
+const configList = Object.entries(configData).map(([k, v]) => k.toLowerCase() + '=' + v).join(', ');
 configData.CONTENT_DATA_SUBS = ['weather/#', 'sensors/#', 'snapshots/#', 'alert/#'];
-configData.CONTENT_VIEW_VARS = ['weather/ulrikashus', 'weather/branna', 'sensors/radiation', 'aircraft', 'interpretation'];
+configData.CONTENT_VIEW_VARS = ['weather/ulrikashus', 'weather/branna', 'sensors/radiation', 'aviation_alerts', 'aviation_weather', 'interpretation'];
 configData.DIAGNOSTICS_PUBLISH_TOPIC = 'server/mainview';
 configData.DIAGNOSTICS_PUBLISH_PERIOD = 60;
 configData.DATA_VIEWS = path.join(configData.DATA, 'http');
@@ -82,7 +80,8 @@ diagnostics.registerDiagnosticsSource('Auth::/status', () => authentication.getD
 app.use(exp.static(configData.DATA_CACHE));
 console.log(`Loaded 'static' using '${configData.DATA_CACHE}'`);
 
-//app.use('/static', exp.static(configData.DATA_ASSETS));
+app.use('/static', exp.static(configData.DATA_ASSETS));
+/*
 const cache_static = require('./server-function-cache.js')({
     directory: configData.DATA_ASSETS,
     path: '/static',
@@ -97,6 +96,7 @@ const cache_static = require('./server-function-cache.js')({
 app.use(cache_static.middleware);
 diagnostics.registerDiagnosticsSource('Cache::/static', () => cache_static.getDiagnostics());
 console.log(`Loaded 'cache' using 'directory=${configData.DATA_ASSETS}, path=/static, minify=true': ${cache_static.stats()}`);
+*/
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -135,9 +135,7 @@ console.log(`Loaded 'vars' on '/vars' using 'vars=[${configData.CONTENT_VIEW_VAR
 
 const cacheMainview = require('./server-function-cache-ejs.js')(path.join(configData.DATA_VIEWS, 'server-mainview.ejs'), { minifyOutput: false });
 diagnostics.registerDiagnosticsSource('Cache::/mainview', () => cacheMainview.getDiagnostics());
-app.get(
-    '/',
-    cacheMainview.routeHandler(async () => ({
+app.get('/', cacheMainview.routeHandler(async () => ({
         vars: server_vars.render(),
         data: await server_data.render(),
     }))
@@ -215,11 +213,12 @@ function receive_snapshots(topic, message) {
     if (topic === 'snapshots/imagedata') __snapshotImagedata(message);
     else if (topic === 'snapshots/metadata') __snapshotMetadata(message);
 }
+console.log(`Loaded 'snapshot processing'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const __weatherAlerts = {},
-    __weatherExpiry = 60 * 60 * 1000; // 60 minutes
+const __weatherAlerts = {};
+const __weatherExpiry = 60 * 60 * 1000;
 function __weatherAlerts_update(alerts) {
     const now = Date.now();
     alerts
@@ -230,7 +229,7 @@ function __weatherAlerts_update(alerts) {
         });
     Object.entries(__weatherAlerts)
         .filter(([alert, timestamp]) => !alerts.includes(alert) && timestamp < now - __weatherExpiry)
-        .forEach(([alert, _]) => delete __weatherAlerts[alert]);
+        .forEach(([alert]) => delete __weatherAlerts[alert]);
 }
 
 const pending_variables = [];
@@ -255,6 +254,7 @@ function process_variables() {
     }
 }
 setInterval(process_variables, 15 * 1000);
+console.log(`Loaded 'weather variable processing'`);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -278,27 +278,23 @@ console.log(`Loaded 'mqtt:publisher' using 'topic=${configData.DIAGNOSTICS_PUBLI
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-if (configData.SOURCE_AIRCRAFT_ADSB_MQTT_SERVER) {
-    const alerts_active = {},
-        alerts_expiry = 30 * 60 * 1000,
-        alerts_check = 1 * 60 * 1000;
-    setInterval(
-        () =>
-            Object.entries(alerts_active)
-                .filter(([_id, alert]) => alert.expiry < Date.now())
-                .forEach(([id, _alert]) => delete alerts_active[id]),
-        alerts_check
-    );
-    const alerts_update = () => server_vars.update('aircraft', { alerts: Object.values(alerts_active) });
-    require('./server-function-source-aircraft-adsb.js')({
+if (configData.SOURCE_AVIATION_MQTT_SERVER) {
+    const alerts_active = {};
+    const weather_active = {};
+    const alerts_expiry = 30 * 60 * 1000;
+    const alerts_check = 1 * 60 * 1000;
+    setInterval(() => Object.entries(alerts_active).filter(([_id, alert]) => alert.expiry < Date.now()).forEach(([id, _alert]) => delete alerts_active[id]), alerts_check);
+    const alerts_update = () => server_vars.update('aviation_alerts', { alerts: Object.values(alerts_active) });
+    const weather_update = () => server_vars.update('aviation_weather', { weather: Object.values(weather_active) });
+    require('./server-function-source-aviation.js')({
         mqtt: {
-            server: configData.SOURCE_AIRCRAFT_ADSB_MQTT_SERVER,
+            server: configData.SOURCE_AVIATION_MQTT_SERVER,
             client: configData.MQTT_CLIENT,
         },
         onAlertInserted: (id, warn, flight, text) => {
             if (warn && text) {
                 alerts_active[id] = { flight, text, expiry: Date.now() + alerts_expiry };
-                notifications.notify({ title: 'aircraft', message: `${flight}: ${text}`, category: 'aircraft' });
+                notifications.notify({ title: 'aviation', message: `${flight}: ${text}`, category: 'aviation' });
                 alerts_update();
             }
         },
@@ -308,8 +304,14 @@ if (configData.SOURCE_AIRCRAFT_ADSB_MQTT_SERVER) {
                 alerts_update();
             }
         },
+        onWeatherReceived: (weather) => {
+            if (weather?.airport?.icao) {
+                weather_active[weather?.airport?.icao] = weather;
+                weather_update();
+            }
+        }
     });
-    console.log(`Loaded 'source-aircraft-adsb' using 'server=${configData.SOURCE_AIRCRAFT_ADSB_MQTT_SERVER}'`);
+    console.log(`Loaded 'source-aviation' using 'server=${configData.SOURCE_AVIATION_MQTT_SERVER}'`);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -326,13 +328,9 @@ app.use((req, res) => {
 });
 
 const httpServer = require('http').createServer(app);
-httpServer.listen(80, () => {
-    console.log(`Loaded 'http' using 'port=${httpServer.address().port}'`);
-});
+httpServer.listen(80, () => console.log(`Loaded 'http' using 'port=${httpServer.address().port}'`));
 const httpsServer = require('https').createServer(credentials, app);
-httpsServer.listen(443, () => {
-    console.log(`Loaded 'https' using 'port=${httpsServer.address().port}'`);
-});
+httpsServer.listen(443, () => console.log(`Loaded 'https' using 'port=${httpsServer.address().port}'`));
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
