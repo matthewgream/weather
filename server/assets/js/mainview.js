@@ -366,7 +366,13 @@ function createSectionDataSummary(data_location, vars) {
     if (aviation_alerts?.alerts?.length || aviation_weather?.weather?.length) {
         const flights = aviation_alerts?.alerts?.reduce((flights, alert) => ({ ...flights, [alert.flight]: [...(flights[alert.flight] || []), encodehtml(alert.text)] }), {});
         const text_flights = flights ? Object.entries(flights).map(([flight, alerts]) => `${flight} ${alerts.join(', ')}`).join('; ') : '';
-        const text_weather = aviation_weather?.weather?.flatMap (w => [w.taf?.text, w.metar?.text]).filter (Boolean).join (' * ').trim().replaceAll ('\n', ': ');
+        const text_weather = aviation_weather?.weather?.map (w => {
+			if (!w.taf?.text && !w.metar?.text) return undefined;
+			let text = [];
+			if (w.metar?.text) text.push (w.metar.text.trim ().replace (/issued ([^Z]+Z)/, '($1)').replaceAll ('\n', ' ').toLowerCase());
+			if (w.taf?.text) text.push ('forecast ' + w.taf.text.trim ().replace (/issued ([^\n]+)/, ' ($1)').replaceAll ('\n', ' ').toLowerCase());
+			return `<u>${w.airport.name} (${w.airport.icao})</u> - ` + text.join('; ');
+		}).filter (Boolean).join (' * ').replaceAll ('\n', ': ');
 		if (text_flights || text_weather) {
 			let text = [];
 			if (text_flights) text.push(`<span style="font-weight:bold;">flights:</span> ${text_flights}`);
