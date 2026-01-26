@@ -371,7 +371,7 @@ function createSectionDataSummary(data_location, vars) {
 			let text = [];
 			if (text_flights) text.push(`<span style="font-weight:bold;">flights:</span> ${text_flights}`);
 			if (text_weather) text.push(`<span style="font-weight:bold;">weather:</span> ${text_weather}`);
-            summary.push('', `<div class="type-aviation" style="display: ${displayIsEnabled('aviation') ? 'block' : 'none'}"><span style="font-size:90%;line-height:1.3em;display: inline-block;">${text.join(';<br>')}</span></div>`);
+            summary.push('', `<div class="type-aviation" style="display: ${displayIsEnabled('aviation') ? 'block' : 'none'}"><span style="font-size:90%;line-height:1.3em;display: inline-block;">${text.join('<br>')}</span></div>`);
 	    }
     }
 

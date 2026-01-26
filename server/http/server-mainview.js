@@ -80,8 +80,7 @@ diagnostics.registerDiagnosticsSource('Auth::/status', () => authentication.getD
 app.use(exp.static(configData.DATA_CACHE));
 console.log(`Loaded 'static' using '${configData.DATA_CACHE}'`);
 
-app.use('/static', exp.static(configData.DATA_ASSETS));
-/*
+// app.use('/static', exp.static(configData.DATA_ASSETS));
 const cache_static = require('./server-function-cache.js')({
     directory: configData.DATA_ASSETS,
     path: '/static',
@@ -96,7 +95,6 @@ const cache_static = require('./server-function-cache.js')({
 app.use(cache_static.middleware);
 diagnostics.registerDiagnosticsSource('Cache::/static', () => cache_static.getDiagnostics());
 console.log(`Loaded 'cache' using 'directory=${configData.DATA_ASSETS}, path=/static, minify=true': ${cache_static.stats()}`);
-*/
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
