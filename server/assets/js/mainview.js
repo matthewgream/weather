@@ -371,7 +371,7 @@ function createSectionDataSummary(data_location, vars) {
 			let text = [];
 			if (w.metar?.text) text.push (w.metar.text.trim ().replace (/issued ([^Z]+Z)/, '($1)').replaceAll ('\n', ' ').toLowerCase());
 			if (w.taf?.text) text.push ('forecast ' + w.taf.text.trim ().replace (/issued ([^\n]+)/, ' ($1)').replaceAll ('\n', ' ').toLowerCase());
-			return `<u>${w.airport.name} (${w.airport.icao})</u> - ` + text.join('; ');
+			return `<u>${w.airport.name}</u> ` + text.join('; ');
 		}).filter (Boolean).join (' * ').replaceAll ('\n', ': ');
 		if (text_flights || text_weather) {
 			let text = [];

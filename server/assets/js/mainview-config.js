@@ -95,15 +95,22 @@ async function configurationSelectorInit(element, type, categories, storageKey, 
     element.append(wrapper);
 }
 
-async function configurationUpdateAlerts(element) {
+async function configurationUpdateAlerts(element, category) {
     if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {
         element.textContent = '[alerts blocked]';
         element.style.color = '#999';
     } else {
         const wantSubscribed = Object.values(filtersAlerts).some(Boolean);
         let isSubscribed = weatherPushNotifications.isSubscribed();
-        if (wantSubscribed && !isSubscribed) await weatherPushNotifications.subscribe();
-        else if (!wantSubscribed && isSubscribed) await weatherPushNotifications.unsubscribe();
+        if (wantSubscribed && !isSubscribed) {
+            // Subscribe with current filter preferences
+            await weatherPushNotifications.subscribe(filtersAlerts);
+        } else if (!wantSubscribed && isSubscribed) {
+            await weatherPushNotifications.unsubscribe();
+        } else if (isSubscribed && category !== undefined) {
+            // Already subscribed, just update preferences on server
+            await weatherPushNotifications.updatePreferences(filtersAlerts);
+        }
         isSubscribed = weatherPushNotifications.isSubscribed();
         if (wantSubscribed && !isSubscribed) {
             element.textContent = '[configure alerts \u26A0]';

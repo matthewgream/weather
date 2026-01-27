@@ -13,19 +13,19 @@ const weatherPushNotifications = (function () {
     let vapidPublicKey;
     let serviceWorker;
     let isSubscribed = false;
+    let currentEndpoint = null;
 
-    async function subscribe() {
+    async function subscribe(filters) {
         try {
             const subscription = await serviceWorker.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey: __urlBase64ToUint8Array(vapidPublicKey),
             });
+            currentEndpoint = subscription.endpoint;
             await fetch('/push/subscribe', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(subscription),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ subscription, filters }),
             });
             isSubscribed = true;
             console.log('push: user subscription enable success:', subscription);
@@ -35,6 +35,7 @@ const weatherPushNotifications = (function () {
             return false;
         }
     }
+
     async function unsubscribe() {
         try {
             const subscription = await serviceWorker.pushManager.getSubscription();
@@ -43,17 +44,36 @@ const weatherPushNotifications = (function () {
                 await subscription.unsubscribe();
                 await fetch('/push/unsubscribe', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ endpoint }),
                 });
             }
             isSubscribed = false;
+            currentEndpoint = null;
             console.log('push: user subscription disable success' + (subscription ? '' : ' (was not active)'));
             return true;
         } catch (e) {
             console.error('push: user subscription disable error:', e);
+            return false;
+        }
+    }
+
+    async function updatePreferences(filters) {
+        if (!isSubscribed || !currentEndpoint) {
+            console.warn('push: cannot update preferences - not subscribed');
+            return false;
+        }
+        try {
+            const response = await fetch('/push/preferences', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ endpoint: currentEndpoint, filters }),
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            console.log('push: preferences updated on server');
+            return true;
+        } catch (e) {
+            console.error('push: preferences update error:', e);
             return false;
         }
     }
@@ -66,7 +86,9 @@ const weatherPushNotifications = (function () {
         try {
             vapidPublicKey = (await (await fetch('/push/vapidPublicKey'))?.json())?.publicKey;
             serviceWorker = await navigator.serviceWorker.register('/static/js/mainview-worker.js');
-            isSubscribed = Boolean(await serviceWorker.pushManager.getSubscription());
+            const subscription = await serviceWorker.pushManager.getSubscription();
+            isSubscribed = Boolean(subscription);
+            currentEndpoint = subscription?.endpoint || null;
             console.log(`push: initialised with service-worker (isSubscribed=${isSubscribed}):`, serviceWorker);
             return true;
         } catch (e) {
@@ -79,6 +101,7 @@ const weatherPushNotifications = (function () {
         init,
         subscribe,
         unsubscribe,
+        updatePreferences,
         isSubscribed: () => isSubscribed,
     };
 })();

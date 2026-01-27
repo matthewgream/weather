@@ -45,7 +45,17 @@ class PushNotificationManager {
     loadSubscriptions() {
         const subscriptionsPath = path.join(this.options.dataDir, this.options.subscriptionsFile);
         try {
-            if (fs.existsSync(subscriptionsPath)) return JSON.parse(fs.readFileSync(subscriptionsPath, 'utf8'));
+            if (fs.existsSync(subscriptionsPath)) {
+                const data = JSON.parse(fs.readFileSync(subscriptionsPath, 'utf8'));
+                if (Array.isArray(data) && data.length > 0 && data[0].endpoint) {
+                    console.log('push: migrating old subscription format to new format with filters');
+                    return data.map(subscription => ({
+                        subscription,
+                        filters: { weather: true, aviation: true, astronomy: true }
+                    }));
+                }
+                return data;
+            }
         } catch (e) {
             console.warn(`push: subscription load error, starting with empty list, error:`, e);
         }
@@ -67,21 +77,43 @@ class PushNotificationManager {
         this.app.get(`${this.route}/vapidPublicKey`, (req, res) => res.json({ publicKey: this.vapidKeys.publicKey }));
 
         this.app.post(`${this.route}/subscribe`, (req, res) => {
-            const subscription = req.body;
-            if (!subscription || !subscription.endpoint) return res.status(400).json({ error: 'Invalid subscription object' });
-            if (!this.subscriptions.some((sub) => sub.endpoint === subscription.endpoint)) {
-                this.subscriptions.push(subscription);
+            const { subscription, filters } = req.body;
+            const sub = subscription || req.body;
+            if (!sub || !sub.endpoint) return res.status(400).json({ error: 'Invalid subscription object' });
+            const existingIndex = this.subscriptions.findIndex((s) => s.subscription?.endpoint === sub.endpoint || s.endpoint === sub.endpoint);
+            if (existingIndex === -1) {
+                this.subscriptions.push({
+                    subscription: sub,
+                    filters: filters || { weather: true, aviation: true, astronomy: true }
+                });
                 this.saveSubscriptions();
                 console.log(`push: subscription inserted, size=${this.subscriptions.length}`);
+            } else if (filters) {
+                // Update filters for existing subscription
+                this.subscriptions[existingIndex].filters = filters;
+                this.saveSubscriptions();
+                console.log(`push: subscription filters updated`);
             }
             return res.status(201).json({ success: true });
+        });
+
+        this.app.post(`${this.route}/preferences`, (req, res) => {
+            const { endpoint, filters } = req.body;
+            if (!endpoint || !filters) return res.status(400).json({ error: 'Invalid request: need endpoint and filters' });
+            const existingIndex = this.subscriptions.findIndex((s) => s.subscription?.endpoint === endpoint);
+            if (existingIndex === -1)
+                return res.status(404).json({ error: 'Subscription not found' });
+            this.subscriptions[existingIndex].filters = filters;
+            this.saveSubscriptions();
+            console.log(`push: subscription preferences updated for endpoint: ${JSON.stringify(filters)}`);
+            return res.json({ success: true });
         });
 
         this.app.post(`${this.route}/unsubscribe`, (req, res) => {
             const { endpoint } = req.body;
             if (!endpoint) return res.status(400).json({ error: 'Invalid request' });
             const initialCount = this.subscriptions.length;
-            this.subscriptions = this.subscriptions.filter((sub) => sub.endpoint !== endpoint);
+            this.subscriptions = this.subscriptions.filter((s) => s.subscription?.endpoint !== endpoint && s.endpoint !== endpoint);
             if (initialCount !== this.subscriptions.length) {
                 this.saveSubscriptions();
                 console.log(`push: subscription removed, size=${this.subscriptions.length}`);
@@ -91,32 +123,51 @@ class PushNotificationManager {
     }
 
     async sendNotification(payload, options = {}) {
+        const category = typeof payload === 'object' ? payload.category : undefined;
         console.log(
-            `push: subscriptions notify request, title='${typeof payload === 'object' && payload.title ? payload.title : '-'}', body='${typeof payload === 'object' && payload.body ? payload.body : '-'}', category='${typeof payload === 'object' && payload.category ? payload.category : '-'}'`
+            `push: subscriptions notify request, title='${typeof payload === 'object' && payload.title ? payload.title : '-'}', body='${typeof payload === 'object' && payload.body ? payload.body : '-'}', category='${category || '-'}'`
         );
 
         const startTime = Date.now();
-        const promises = this.subscriptions.map(async (subscription, index) => {
+        
+        const eligibleSubscriptions = this.subscriptions.filter((s) => {
+            if (!category) return true; // No category = send to all
+            const filters = s.filters || { weather: true, aviation: true, astronomy: true };
+            return filters[category] !== false; // Send unless explicitly disabled
+        });
+        
+        console.log(`push: eligible subscriptions for category '${category || 'all'}': ${eligibleSubscriptions.length}/${this.subscriptions.length}`);
+
+        const promises = eligibleSubscriptions.map(async (s, index) => {
+            const subscription = s.subscription || s;
             try {
                 await webpush.sendNotification(subscription, typeof payload === 'string' ? payload : JSON.stringify(payload), options);
-                return undefined; // Success
+                return { success: true, index };
             } catch (e) {
-                return e.statusCode === 404 || e.statusCode === 410 ? index : undefined;
+                return { success: false, index, invalid: e.statusCode === 404 || e.statusCode === 410, endpoint: subscription.endpoint };
             }
         });
+        
         const results = await Promise.all(promises);
-        const invalidIndices = results.filter((index) => index !== undefined).sort((a, b) => b - a);
-        const initialCount = this.subscriptions.length;
-        invalidIndices.forEach((index) => this.subscriptions.splice(index, 1));
-        if (invalidIndices.length > 0) this.saveSubscriptions();
-        console.log(`push: subscriptions notified, total=${initialCount}, invalid=${invalidIndices.length}, size=${this.subscriptions.length}`);
+        
+        // Remove invalid subscriptions
+        const invalidEndpoints = results.filter((r) => r.invalid).map((r) => r.endpoint);
+        if (invalidEndpoints.length > 0) {
+            this.subscriptions = this.subscriptions.filter((s) => !invalidEndpoints.includes(s.subscription?.endpoint));
+            this.saveSubscriptions();
+        }
+        
+        console.log(`push: subscriptions notified, eligible=${eligibleSubscriptions.length}, invalid=${invalidEndpoints.length}, size=${this.subscriptions.length}`);
+        
         const endTime = Date.now();
         const stats = {
             timestamp: new Date().toISOString(),
             duration: endTime - startTime,
-            total: this.subscriptions.length + invalidIndices.length,
-            sent: this.subscriptions.length,
-            failed: invalidIndices.length,
+            total: this.subscriptions.length,
+            eligible: eligibleSubscriptions.length,
+            sent: eligibleSubscriptions.length - invalidEndpoints.length,
+            failed: invalidEndpoints.length,
+            category: category || 'all',
             type: typeof payload === 'object' && payload.title ? payload.title : 'Notification',
         };
         this.notificationHistory.unshift(stats);
@@ -134,8 +185,6 @@ class PushNotificationManager {
         const options = {
             TTL: 5 * 60, // seconds
             topic: category,
-            // topic: 32 chars
-            // urgency: very-low,low,normal,high
         };
         return this.sendNotification(payload, options);
     }

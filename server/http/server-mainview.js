@@ -223,7 +223,7 @@ function __weatherAlerts_update(alerts) {
         .filter((alert) => !__weatherAlerts[alert])
         .forEach((alert) => {
             __weatherAlerts[alert] = now;
-            notifications.notify({ message: alert });
+            notifications.notify({ title: 'weather', message: alert, category: 'weather' });
         });
     Object.entries(__weatherAlerts)
         .filter(([alert, timestamp]) => !alerts.includes(alert) && timestamp < now - __weatherExpiry)

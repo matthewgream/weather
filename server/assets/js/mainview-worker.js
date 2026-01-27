@@ -1,23 +1,6 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const FILTER_CATEGORIES_DISPLAY = ['aviation', 'astronomy'];
-const FILTER_CATEGORIES_ALERTS = ['weather', ...FILTER_CATEGORIES_DISPLAY];
-const STORAGE_KEY_FILTERS_ALERTS = 'weather-prefs-filter-alerts';
-
-function preferencesLoadFilters(key, categories) {
-    try {
-        const stored = localStorage.getItem(key);
-        if (stored) return JSON.parse(stored);
-    } catch (e) {
-        console.error(`prefs: failed to load, key=${key}:`, e);
-    }
-    return Object.fromEntries(categories.map((category) => [category, true]));
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
 self.addEventListener('install', (_) => {
     self.skipWaiting();
     console.log('push: service-worker installed');
@@ -33,7 +16,6 @@ self.addEventListener('push', (event) => {
     let notification = {
         title: 'Weather Alert',
         body: 'New weather alert',
-        category: 'general', // default category
     };
     try {
         if (event.data) {
@@ -48,34 +30,21 @@ self.addEventListener('push', (event) => {
             console.log('push: notification data fallback text:', notification.body);
         }
     }
-    const filters = preferencesLoadFilters(STORAGE_KEY_FILTERS_ALERTS, FILTER_CATEGORIES_ALERTS);
-    if (notification.category && filters[notification.category] !== undefined && !filters[notification.category]) {
-        console.log('push: notification filtered out for category:', notification.category);
-        return;
-    }
-    const icon = '/static/images/weather-icon.png';
-    const badge = '/static/images/weather-badge.png';
-    const tag = 'weather-alert';
-    const requireInteraction = true;
     event.waitUntil(
         self.registration
             .showNotification(notification.title, {
                 body: notification.body,
-                icon,
-                badge,
+                icon: '/static/images/weather-icon.png',
+                badge: '/static/images/weather-badge.png',
                 timestamp: notification.timestamp || Date.now(),
-                tag,
-                requireInteraction,
+                tag: 'weather-alert',
+                requireInteraction: true,
                 data: { url: '/' },
                 vibrate: [200, 100, 200],
                 renotify: true,
             })
-            .then(() => {
-                console.log('push: service-worker notification display success');
-            })
-            .catch((e) => {
-                console.error('push: service-worker notification display error:', e);
-            })
+            .then(() => console.log('push: service-worker notification display success'))
+            .catch((e) => console.error('push: service-worker notification display error:', e))
     );
 });
 
@@ -84,12 +53,10 @@ self.addEventListener('notificationclick', (event) => {
     event.notification.close();
     event.waitUntil(
         self.clients
-            .matchAll({
-                type: 'window',
-                includeUncontrolled: true,
-            })
+            .matchAll({ type: 'window', includeUncontrolled: true })
             .then((windowClients) => {
-                for (let i = 0; i < windowClients.length; i++) if ('focus' in windowClients[i]) return windowClients[i].focus();
+                for (let i = 0; i < windowClients.length; i++)
+                    if ('focus' in windowClients[i]) return windowClients[i].focus();
                 if (self.clients.openWindow) return self.clients.openWindow('/');
                 return undefined;
             })
