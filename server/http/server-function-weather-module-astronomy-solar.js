@@ -142,7 +142,7 @@ function interpretUvIndex({ results, situation, dataCurrent }) {
         const category = getUvCategory(solarUvi);
         results.phenomena.push(`sun: UV index ${solarUvi} (${category}) - protection advised`);
         if (solarUvi >= UV_INDEX.VERY_HIGH) {
-            results.alerts.push(`UV warning: index ${solarUvi} (${category}) - limit sun exposure`);
+            results.alerts.push(`sun: warning, UV index ${solarUvi} (${category}) - limit sun exposure`);
         }
     }
 }

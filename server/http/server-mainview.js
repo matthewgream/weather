@@ -8,7 +8,9 @@ const path = require('path');
 
 const configPath = process.argv[2] || 'secrets.txt';
 const configData = require('./server-function-config.js')(configPath);
-const configList = Object.entries(configData).map(([k, v]) => k.toLowerCase() + '=' + v).join(', ');
+const configList = Object.entries(configData)
+    .map(([k, v]) => k.toLowerCase() + '=' + v)
+    .join(', ');
 configData.CONTENT_DATA_SUBS = ['weather/#', 'sensors/#', 'snapshots/#', 'alert/#'];
 configData.CONTENT_VIEW_VARS = ['weather/ulrikashus', 'weather/branna', 'sensors/radiation', 'aviation_alerts', 'aviation_weather', 'interpretation'];
 configData.DIAGNOSTICS_PUBLISH_TOPIC = 'server/mainview';
@@ -133,7 +135,9 @@ console.log(`Loaded 'vars' on '/vars' using 'vars=[${configData.CONTENT_VIEW_VAR
 
 const cacheMainview = require('./server-function-cache-ejs.js')(path.join(configData.DATA_VIEWS, 'server-mainview.ejs'), { minifyOutput: false });
 diagnostics.registerDiagnosticsSource('Cache::/mainview', () => cacheMainview.getDiagnostics());
-app.get('/', cacheMainview.routeHandler(async () => ({
+app.get(
+    '/',
+    cacheMainview.routeHandler(async () => ({
         vars: server_vars.render(),
         data: await server_data.render(),
     }))
@@ -281,7 +285,13 @@ if (configData.SOURCE_AVIATION_MQTT_SERVER) {
     const weather_active = {};
     const alerts_expiry = 30 * 60 * 1000;
     const alerts_check = 1 * 60 * 1000;
-    setInterval(() => Object.entries(alerts_active).filter(([_id, alert]) => alert.expiry < Date.now()).forEach(([id, _alert]) => delete alerts_active[id]), alerts_check);
+    setInterval(
+        () =>
+            Object.entries(alerts_active)
+                .filter(([_id, alert]) => alert.expiry < Date.now())
+                .forEach(([id, _alert]) => delete alerts_active[id]),
+        alerts_check
+    );
     const alerts_update = () => server_vars.update('aviation_alerts', { alerts: Object.values(alerts_active) });
     const weather_update = () => server_vars.update('aviation_weather', { weather: Object.values(weather_active) });
     require('./server-function-source-aviation.js')({
@@ -307,7 +317,7 @@ if (configData.SOURCE_AVIATION_MQTT_SERVER) {
                 weather_active[weather?.airport?.icao] = weather;
                 weather_update();
             }
-        }
+        },
     });
     console.log(`Loaded 'source-aviation' using 'server=${configData.SOURCE_AVIATION_MQTT_SERVER}'`);
 }

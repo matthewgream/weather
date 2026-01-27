@@ -356,29 +356,52 @@ function createSectionDataSummary(data_location, vars) {
     timeinfo += `.`;
     summary.push(timeinfo);
 
-	////
-	const { alerts, conditions, phenomena } = interpretation;
-    if (alerts?.length || internalBatteryWH65 !== 'OFF') summary.push('', '<span style="font-weight:bold;">' + capitalise (joinand([ ...(alerts || []), ...(internalBatteryWH65 === 'OFF' ? [] : ['faulty battery for WH66'])])) + '.</span>');
-    if (conditions?.length) summary.push ('', capitalise (joinand([...new Set(conditions)])) + '.');
-    if (phenomena?.length) summary.push ('', coalescePhenomena([...new Set(phenomena)]).join ('; ') + '.');
+    ////
+    const { alerts, conditions, phenomena } = interpretation;
+    if (alerts?.length || internalBatteryWH65 !== 'OFF') summary.push('', '<span style="font-weight:bold;">' + capitalise(joinand([...(alerts || []), ...(internalBatteryWH65 === 'OFF' ? [] : ['faulty battery for WH66'])])) + '.</span>');
+    if (conditions?.length) summary.push('', capitalise(joinand([...new Set(conditions)])) + '.');
+    if (phenomena?.length) summary.push('', coalescePhenomena([...new Set(phenomena)]).join('; ') + '.');
 
     ////
     if (aviation_alerts?.alerts?.length || aviation_weather?.weather?.length) {
         const flights = aviation_alerts?.alerts?.reduce((flights, alert) => ({ ...flights, [alert.flight]: [...(flights[alert.flight] || []), encodehtml(alert.text)] }), {});
-        const text_flights = flights ? Object.entries(flights).map(([flight, alerts]) => `${flight} ${alerts.join(', ')}`).join('; ') : '';
-        const text_weather = aviation_weather?.weather?.map (w => {
-			if (!w.taf?.text && !w.metar?.text) return undefined;
-			let text = [];
-			if (w.metar?.text) text.push (w.metar.text.trim ().replace (/issued ([^Z]+Z)/, '($1)').replaceAll ('\n', ' ').toLowerCase());
-			if (w.taf?.text) text.push ('forecast ' + w.taf.text.trim ().replace (/issued ([^\n]+)/, ' ($1)').replaceAll ('\n', ' ').toLowerCase());
-			return `<u>${w.airport.name}</u> ` + text.join('; ');
-		}).filter (Boolean).join (' * ').replaceAll ('\n', ': ');
-		if (text_flights || text_weather) {
-			let text = [];
-			if (text_flights) text.push(`<span style="font-weight:bold;">flights:</span> ${text_flights}`);
-			if (text_weather) text.push(`<span style="font-weight:bold;">weather:</span> ${text_weather}`);
+        const text_flights = flights
+            ? Object.entries(flights)
+                  .map(([flight, alerts]) => `${flight} ${alerts.join(', ')}`)
+                  .join('; ')
+            : '';
+        const text_weather = aviation_weather?.weather
+            ?.map((w) => {
+                if (!w.taf?.text && !w.metar?.text) return undefined;
+                let text = [];
+                if (w.metar?.text)
+                    text.push(
+                        w.metar.text
+                            .trim()
+                            .replace(/issued ([^Z]+Z)/, '($1)')
+                            .replaceAll('\n', ' ')
+                            .toLowerCase()
+                    );
+                if (w.taf?.text)
+                    text.push(
+                        'forecast ' +
+                            w.taf.text
+                                .trim()
+                                .replace(/issued ([^\n]+)/, ' ($1)')
+                                .replaceAll('\n', ' ')
+                                .toLowerCase()
+                    );
+                return `<u>${w.airport.name}</u> ` + text.join('; ');
+            })
+            .filter(Boolean)
+            .join(' * ')
+            .replaceAll('\n', ': ');
+        if (text_flights || text_weather) {
+            let text = [];
+            if (text_flights) text.push(`<span style="font-weight:bold;">flights:</span> ${text_flights}`);
+            if (text_weather) text.push(`<span style="font-weight:bold;">weather:</span> ${text_weather}`);
             summary.push('', `<div class="type-aviation" style="display: ${displayIsEnabled('aviation') ? 'block' : 'none'}"><span style="font-size:90%;line-height:1.3em;display: inline-block;">${text.join('<br>')}</span></div>`);
-	    }
+        }
     }
 
     ////

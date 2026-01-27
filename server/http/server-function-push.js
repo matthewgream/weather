@@ -49,9 +49,9 @@ class PushNotificationManager {
                 const data = JSON.parse(fs.readFileSync(subscriptionsPath, 'utf8'));
                 if (Array.isArray(data) && data.length > 0 && data[0].endpoint) {
                     console.log('push: migrating old subscription format to new format with filters');
-                    return data.map(subscription => ({
+                    return data.map((subscription) => ({
                         subscription,
-                        filters: { weather: true, aviation: true, astronomy: true }
+                        filters: { weather: true, aviation: true, astronomy: true },
                     }));
                 }
                 return data;
@@ -84,7 +84,7 @@ class PushNotificationManager {
             if (existingIndex === -1) {
                 this.subscriptions.push({
                     subscription: sub,
-                    filters: filters || { weather: true, aviation: true, astronomy: true }
+                    filters: filters || { weather: true, aviation: true, astronomy: true },
                 });
                 this.saveSubscriptions();
                 console.log(`push: subscription inserted, size=${this.subscriptions.length}`);
@@ -101,8 +101,7 @@ class PushNotificationManager {
             const { endpoint, filters } = req.body;
             if (!endpoint || !filters) return res.status(400).json({ error: 'Invalid request: need endpoint and filters' });
             const existingIndex = this.subscriptions.findIndex((s) => s.subscription?.endpoint === endpoint);
-            if (existingIndex === -1)
-                return res.status(404).json({ error: 'Subscription not found' });
+            if (existingIndex === -1) return res.status(404).json({ error: 'Subscription not found' });
             this.subscriptions[existingIndex].filters = filters;
             this.saveSubscriptions();
             console.log(`push: subscription preferences updated for endpoint: ${JSON.stringify(filters)}`);
@@ -129,13 +128,13 @@ class PushNotificationManager {
         );
 
         const startTime = Date.now();
-        
+
         const eligibleSubscriptions = this.subscriptions.filter((s) => {
             if (!category) return true; // No category = send to all
             const filters = s.filters || { weather: true, aviation: true, astronomy: true };
             return filters[category] !== false; // Send unless explicitly disabled
         });
-        
+
         console.log(`push: eligible subscriptions for category '${category || 'all'}': ${eligibleSubscriptions.length}/${this.subscriptions.length}`);
 
         const promises = eligibleSubscriptions.map(async (s, index) => {
@@ -147,18 +146,18 @@ class PushNotificationManager {
                 return { success: false, index, invalid: e.statusCode === 404 || e.statusCode === 410, endpoint: subscription.endpoint };
             }
         });
-        
+
         const results = await Promise.all(promises);
-        
+
         // Remove invalid subscriptions
         const invalidEndpoints = results.filter((r) => r.invalid).map((r) => r.endpoint);
         if (invalidEndpoints.length > 0) {
             this.subscriptions = this.subscriptions.filter((s) => !invalidEndpoints.includes(s.subscription?.endpoint));
             this.saveSubscriptions();
         }
-        
+
         console.log(`push: subscriptions notified, eligible=${eligibleSubscriptions.length}, invalid=${invalidEndpoints.length}, size=${this.subscriptions.length}`);
-        
+
         const endTime = Date.now();
         const stats = {
             timestamp: new Date().toISOString(),

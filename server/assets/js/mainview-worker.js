@@ -52,14 +52,11 @@ self.addEventListener('notificationclick', (event) => {
     console.log('push: notification acknowledged');
     event.notification.close();
     event.waitUntil(
-        self.clients
-            .matchAll({ type: 'window', includeUncontrolled: true })
-            .then((windowClients) => {
-                for (let i = 0; i < windowClients.length; i++)
-                    if ('focus' in windowClients[i]) return windowClients[i].focus();
-                if (self.clients.openWindow) return self.clients.openWindow('/');
-                return undefined;
-            })
+        self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+            for (let i = 0; i < windowClients.length; i++) if ('focus' in windowClients[i]) return windowClients[i].focus();
+            if (self.clients.openWindow) return self.clients.openWindow('/');
+            return undefined;
+        })
     );
 });
 

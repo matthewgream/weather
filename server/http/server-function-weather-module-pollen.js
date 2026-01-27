@@ -298,7 +298,7 @@ function interpretPollen({ results, situation, dataCurrent, store }) {
         results.alerts.push(`pollen: HIGH levels of ${high.map((h) => h.englishName).join(', ')}`);
         for (const h of high) {
             if (h.meta?.severity === 'very high') {
-                results.alerts.push(`pollen: ${h.englishName} is major allergen - stay indoors during peak hours`);
+                results.alerts.push(`pollen: ${h.englishName} is major allergen (stay indoors during peak hours)`);
             }
             if (h.meta?.foodCrossReaction) {
                 results.phenomena.push(`pollen: ${h.englishName} may cross-react with ${h.meta.foodCrossReaction.slice(0, 3).join(', ')}`);
