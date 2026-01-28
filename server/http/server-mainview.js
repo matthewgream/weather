@@ -190,6 +190,7 @@ const notifications = require('./server-function-push.js')(app, '/push', {
     subscriptionsFile: 'push-subscriptions.json',
     maxHistoryLength: 30,
     expiration: 5 * 60,
+    filtersDefault: { weather: true, aviation: true, astronomy: true }
 });
 diagnostics.registerDiagnosticsSource('Notifications', () => notifications.getDiagnostics());
 console.log(`Loaded 'push-notifications' on '/push'`);

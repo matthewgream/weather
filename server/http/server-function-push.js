@@ -21,6 +21,7 @@ class PushNotificationManager {
         this.subscriptions = this.loadSubscriptions();
         this.notificationHistory = [];
         this.maxHistoryLength = options.maxHistoryLength || 20;
+        this.filtersDefault = options.filtersDefault || { weather: true };
         webpush.setVapidDetails(`mailto:${this.options.contactEmail || 'example@example.com'}`, this.vapidKeys.publicKey, this.vapidKeys.privateKey);
         this.setupRoutes();
     }
@@ -51,7 +52,7 @@ class PushNotificationManager {
                     console.log('push: migrating old subscription format to new format with filters');
                     return data.map((subscription) => ({
                         subscription,
-                        filters: { weather: true, aviation: true, astronomy: true },
+                        filters: this.filtersDefault,
                     }));
                 }
                 return data;
@@ -84,7 +85,7 @@ class PushNotificationManager {
             if (existingIndex === -1) {
                 this.subscriptions.push({
                     subscription: sub,
-                    filters: filters || { weather: true, aviation: true, astronomy: true },
+                    filters: filters || this.filtersDefault,
                 });
                 this.saveSubscriptions();
                 console.log(`push: subscription inserted, size=${this.subscriptions.length}`);
@@ -131,8 +132,7 @@ class PushNotificationManager {
 
         const eligibleSubscriptions = this.subscriptions.filter((s) => {
             if (!category) return true; // No category = send to all
-            const filters = s.filters || { weather: true, aviation: true, astronomy: true };
-            return filters[category] !== false; // Send unless explicitly disabled
+            return (s.filters || this.filtersDefault)[category] !== false; // Send unless explicitly disabled
         });
 
         console.log(`push: eligible subscriptions for category '${category || 'all'}': ${eligibleSubscriptions.length}/${this.subscriptions.length}`);
