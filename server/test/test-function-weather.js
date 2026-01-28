@@ -29,7 +29,9 @@ const weatherLocation = {
 };
 
 const n2yoApiKey = process.env.N2YO_API_KEY;
-const weatherOptions = { debug: true, solarEclipse: { daysAhead: 512 }, lunarEclipse: { daysAhead: 512 }, suppress: { stable: true }, n2yoApiKey };
+const weatherPathStore = '/opt/weather/server/store';
+const weatherPathCache = '/dev/shm/weather';
+const weatherOptions = { debug: true, solarEclipse: { daysAhead: 512 }, lunarEclipse: { daysAhead: 512 }, suppress: { stable: true }, n2yoApiKey, paths: { store: weatherPathStore, cache: weatherPathCache } };
 
 const weatherModule = require('server-function-weather.js')(weatherLocation, weatherOptions);
 

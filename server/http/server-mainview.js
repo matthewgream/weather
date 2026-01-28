@@ -147,7 +147,7 @@ console.log(`Loaded '/' using 'server-mainview' && data/vars`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const weather_options = { debug: false, suppress: { stable: true }, n2yoApiKey: configData.N2YO_API_KEY };
+const weather_options = { debug: false, suppress: { stable: true }, n2yoApiKey: configData.N2YO_API_KEY, paths: { store: configData.DATA_STORE, cache: configData.DATA_CACHE } };
 const weather_module = require('./server-function-weather.js')(configData.LOCATION, weather_options);
 function getWeatherInterpretation(vars) {
     const dataConditions = vars['weather/branna'];
@@ -190,7 +190,7 @@ const notifications = require('./server-function-push.js')(app, '/push', {
     subscriptionsFile: 'push-subscriptions.json',
     maxHistoryLength: 30,
     expiration: 5 * 60,
-    filtersDefault: { weather: true, aviation: true, astronomy: true }
+    filtersDefault: { weather: true, aviation: true, astronomy: true },
 });
 diagnostics.registerDiagnosticsSource('Notifications', () => notifications.getDiagnostics());
 console.log(`Loaded 'push-notifications' on '/push'`);

@@ -32,16 +32,16 @@ const DEFAULT_OPTIONS = {
         statsInterval: 15 * helpers.constants.MILLISECONDS_PER_MINUTE, // 15 minutes
         persistence: [
             {
-                type: 'shm',
+                type: 'cache',
                 enabled: true,
-                path: '/dev/shm/persist/weather-storage.json',
+                file: 'weather-storage.json',
                 interval: 5 * helpers.constants.MILLISECONDS_PER_MINUTE, // 5 minutes
                 maxAge: 2 * helpers.constants.MILLISECONDS_PER_HOUR, // 2 hours
             },
             {
-                type: 'file',
+                type: 'store',
                 enabled: true,
-                path: '/opt/weather/server/data/persist/weather-storage.json',
+                file: 'weather-storage.json',
                 interval: 30 * helpers.constants.MILLISECONDS_PER_MINUTE, // 30 minutes
                 maxAge: 7 * helpers.constants.MILLISECONDS_PER_DAY, // 7 days
             },
@@ -79,14 +79,16 @@ function __storagePerisist(options, storable) {
     if (!options?.persistence) return;
     const timestamp = Date.now();
     options.persistence
-        .filter((level) => level.enabled && level.path)
+        .filter((level) => level.enabled && level.file)
         .forEach((level) => {
             const lastKey = `last${level.type}Save`;
-            if (options?.forced || !level[lastKey] || timestamp - level[lastKey] > level.interval)
-                if (__storageFileSave(level.path, { timestamp, storable })) {
+            if (options?.forced || !level[lastKey] || timestamp - level[lastKey] > level.interval) {
+                const name = path.join(options.paths[level.type], level.file);
+                if (__storageFileSave(name, { timestamp, storable })) {
                     level[lastKey] = timestamp;
-                    if (options.debug) console.error(`weather: storage persisted - to ${level.type}; path=${level.path}, size=${FormatHelper.bytesToString(fs.statSync(level.path).size)}${options?.forced ? ', forced=true' : ''}`);
+                    if (options.debug) console.error(`weather: storage persisted - to ${level.type}; path=${name}, size=${FormatHelper.bytesToString(fs.statSync(name).size)}${options?.forced ? ', forced=true' : ''}`);
                 }
+            }
         });
 }
 
@@ -94,11 +96,11 @@ function __storageRestore(options) {
     if (!options?.persistence) return {};
     const timestamp = Date.now();
     for (const level of options.persistence) {
-        if (!level.enabled || !level.path) continue;
-        const data = __storageFileLoad(level.path);
+        if (!level.enabled || !level.file) continue;
+        const name = path.join(options.paths[level.type], level.file);
+        const data = __storageFileLoad(name);
         if (data?.storable && timestamp - data.timestamp < (level.maxAge || 86400000)) {
-            if (options.debug)
-                console.error(`weather: storage restored - from ${level.type}; path=${level.path}, age=${FormatHelper.millisToString(timestamp - data.timestamp, '')}, size=${FormatHelper.bytesToString(fs.statSync(level.path).size)}`);
+            if (options.debug) console.error(`weather: storage restored - from ${level.type}; path=${name}, age=${FormatHelper.millisToString(timestamp - data.timestamp, '')}, size=${FormatHelper.bytesToString(fs.statSync(name).size)}`);
             return data.storable;
         }
     }
@@ -107,11 +109,11 @@ function __storageRestore(options) {
 
 let storageCallback;
 function storageSave(options) {
-    if (storageCallback) __storagePerisist(options.storage, storageCallback());
+    if (storageCallback) __storagePerisist({ ...options.storage, paths: options.paths }, storageCallback());
 }
 function storageLoad(options) {
     if (options.debug) options.storage.debug = options.debug;
-    return __storageRestore(options.storage);
+    return __storageRestore({ ...options.storage, paths: options.paths });
 }
 function storageBind(_options, callback) {
     storageCallback = callback;
@@ -120,7 +122,7 @@ let storageExited = false;
 function storageExit(options) {
     if (!storageExited) {
         storageExited = true;
-        if (storageCallback) __storagePerisist({ ...options.storage, forced: true }, storageCallback());
+        if (storageCallback) __storagePerisist({ ...options.storage, paths: options.paths, forced: true }, storageCallback());
     }
 }
 
