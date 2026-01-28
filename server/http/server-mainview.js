@@ -312,9 +312,9 @@ if (configData.SOURCE_AVIATION_MQTT_SERVER) {
                 alerts_update();
             }
         },
-        onWeatherReceived: (weather) => {
-            if (weather?.airport?.icao) {
-                weather_active[weather?.airport?.icao] = weather;
+        onWeatherReceived: (topic, weather) => {
+            if (topic && weather?.airport?.icao) {
+                weather_active[topic] = weather;
                 weather_update();
             }
         },

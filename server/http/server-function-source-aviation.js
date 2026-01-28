@@ -38,7 +38,7 @@ function initialise(config) {
                 const id = message.toString();
                 if (config.onAlertRemoved && id) config.onAlertRemoved(id);
             } else if (topic.startsWith('weather/')) {
-                if (config.onWeatherReceived) config.onWeatherReceived(JSON.parse(message.toString()));
+                if (config.onWeatherReceived) config.onWeatherReceived(topic, JSON.parse(message.toString()));
             }
         } catch (e) {
             console.error(`aviation: mqtt error on receive (topic: ${topic}):`, e);

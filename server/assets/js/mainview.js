@@ -364,44 +364,28 @@ function createSectionDataSummary(data_location, vars) {
 
     ////
     if (aviation_alerts?.alerts?.length || aviation_weather?.weather?.length) {
-        const flights = aviation_alerts?.alerts?.reduce((flights, alert) => ({ ...flights, [alert.flight]: [...(flights[alert.flight] || []), encodehtml(alert.text)] }), {});
-        const text_flights = flights
-            ? Object.entries(flights)
-                  .map(([flight, alerts]) => `${flight} ${alerts.join(', ')}`)
-                  .join('; ')
-            : '';
+        const text_flights = Object.entries(aviation_alerts?.alerts?.reduce((flights, alert) => ({ ...flights, [alert.flight]: [...(flights[alert.flight] || []), encodehtml(alert.text)] }), {}) || {})
+            .map(([flight, alerts]) => `${flight} ${alerts.join(', ')}`)
+            .join('; ');
         const text_weather = aviation_weather?.weather
-            ?.map((w) => {
-                if (!w.taf?.text && !w.metar?.text) return undefined;
-                let text = [];
-                if (w.metar?.text)
-                    text.push(
-                        w.metar.text
-                            .trim()
-                            .replace(/issued ([^Z]+Z)/, '($1)')
-                            .replaceAll('\n', ' ')
-                            .toLowerCase()
-                    );
-                if (w.taf?.text)
-                    text.push(
-                        'forecast ' +
-                            w.taf.text
-                                .trim()
-                                .replace(/issued ([^\n]+)/, ' ($1)')
-                                .replaceAll('\n', ' ')
-                                .toLowerCase()
-                    );
-                return `<u>${w.airport.name}</u> ` + text.join('; ');
-            })
-            .filter(Boolean)
-            .join(' * ')
-            .replaceAll('\n', ': ');
-        if (text_flights || text_weather) {
-            let text = [];
-            if (text_flights) text.push(`<span style="font-weight:bold;">flights:</span> ${text_flights}`);
-            if (text_weather) text.push(`<span style="font-weight:bold;">weather:</span> ${text_weather}`);
-            summary.push('', `<div class="type-aviation" style="display: ${displayIsEnabled('aviation') ? 'block' : 'none'}"><span style="font-size:90%;line-height:1.3em;display: inline-block;">${text.join('<br>')}</span></div>`);
-        }
+            ?.filter((w) => w.metar?.text)
+            .map(
+                (w) =>
+                    `<u>${w.airport.name}</u> ` +
+                    (
+                        w.metar.text.trim().replace(/issued ([^Z]+Z)/, '($1)') +
+                        (aviation_weather.weather
+                            .filter((w_) => w_.taf?.text && w_.airport.icao === w.airport.icao)
+                            .map((w_) => '; forecast ' + w_.taf.text.trim().replace(/issued ([^Z]+Z)/, ' ($1)'))
+                            .join('') || '')
+                    ).toLowerCase()
+            )
+            .join('. ');
+        const text = Object.entries({ flights: text_flights, weather: text_weather })
+            .filter(([, text]) => Boolean(text))
+            .map(([name, text]) => `<span style="font-weight:bold;">${name}:</span> ${text}.`)
+            .join('<br>');
+        if (text) summary.push('', `<div class="type-aviation" style="display: ${displayIsEnabled('aviation') ? 'block' : 'none'}"><span style="font-size:90%;line-height:1.3em;display: inline-block;">${text}</span></div>`);
     }
 
     ////

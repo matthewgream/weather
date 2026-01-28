@@ -35,7 +35,6 @@ const INTERVALS_SEEING = {
     evening: 1 * 60 * 60 * 1000, // 1 hour when approaching evening
 };
 
-// 7Timer scale descriptions (1 = best, 8 = worst)
 const SEEING_SCALE = {
     1: { arcsec: '< 0.5"', desc: 'excellent' },
     2: { arcsec: '0.5-0.75"', desc: 'excellent' },
@@ -70,26 +69,19 @@ const CLOUD_COVER_SCALE = {
     9: { pct: '94-100%', desc: 'overcast' },
 };
 
-// // Lifted index (atmospheric stability) - negative = unstable (bad seeing)
-// const LIFTED_INDEX_SCALE = {
-//     '-10': 'very unstable',
-//     '-6': 'unstable',
-//     '-4': 'slightly unstable',
-//     '-1': 'neutral',
-//     '2': 'slightly stable',
-//     '6': 'stable',
-//     '10': 'very stable',
-//     '15': 'very stable',
-// };
+const LIFTED_INDEX_SCALE = {
+    '-10': 'very unstable',
+    '-6': 'unstable',
+    '-4': 'slightly unstable',
+    '-1': 'neutral',
+    '2': 'slightly stable',
+    '6': 'stable',
+    '10': 'very stable',
+    '15': 'very stable',
+};
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
-
-// const TWILIGHT = {
-//     CIVIL_END: -6,              // Civil twilight sun altitude
-//     NAUTICAL_END: -12,          // Nautical twilight sun altitude
-//     ASTRONOMICAL_END: -18,      // Astronomical twilight sun altitude
-// };
 
 const BELT_OF_VENUS = {
     MIN_DEPRESSION: 2, // Sun must be at least this far below horizon
@@ -139,34 +131,37 @@ async function fetchSeeingForecast(state, location) {
         const data = await response.json();
         if (!data.dataseries || !Array.isArray(data.dataseries)) throw new Error('Invalid response format');
         const initTime = data.init ? parseSevenTimerInit(data.init) : Date.now();
-        const forecasts = data.dataseries.map((point) => {
-            const forecastTime = initTime + point.timepoint * 3600000;
-            return {
-                timepoint: point.timepoint,
-                forecastTime,
-                hoursFromNow: Math.round((forecastTime - Date.now()) / 3600000),
-                seeing: point.seeing,
-                seeingDesc: SEEING_SCALE[point.seeing]?.desc || 'unknown',
-                seeingArcsec: SEEING_SCALE[point.seeing]?.arcsec || 'unknown',
-                transparency: point.transparency,
-                transparencyDesc: TRANSPARENCY_SCALE[point.transparency]?.desc || 'unknown',
-                cloudCover: point.cloudcover,
-                cloudCoverDesc: CLOUD_COVER_SCALE[point.cloudcover]?.desc || 'unknown',
-                liftedIndex: point.lifted_index,
-                humidity: point.rh2m, // Relative humidity at 2m
-                wind: point.wind10m?.speed, // Wind at 10m
-                // Derived observing score (lower = better)
-                observingScore: calculateObservingScore(point),
-            };
-        });
+        const forecasts = data.dataseries
+            .map((point) => {
+                const forecastTime = initTime + point.timepoint * 3600000;
+                if (point.seeing === -9999 || point.transparency === -9999 || point.cloudcover === -9999 || point.lifted_index === -9999) return undefined; // ignore if errors
+                return {
+                    timepoint: point.timepoint,
+                    forecastTime,
+                    hoursFromNow: Math.round((forecastTime - Date.now()) / 3600000),
+                    seeing: point.seeing,
+                    seeingDesc: SEEING_SCALE[point.seeing]?.desc || 'unknown',
+                    seeingArcsec: SEEING_SCALE[point.seeing]?.arcsec || 'unknown',
+                    transparency: point.transparency,
+                    transparencyDesc: TRANSPARENCY_SCALE[point.transparency]?.desc || 'unknown',
+                    cloudCover: point.cloudcover,
+                    cloudCoverDesc: CLOUD_COVER_SCALE[point.cloudcover]?.desc || 'unknown',
+                    liftedIndex: point.lifted_index,
+                    liftedIndexDesc: LIFTED_INDEX_SCALE[point.lifted_index] || 'unknown',
+                    humidity: point.rh2m, // Relative humidity at 2m
+                    wind: point.wind10m?.speed, // Wind at 10m
+                    // Derived observing score (lower = better)
+                    observingScore: calculateObservingScore(point),
+                };
+            })
+            .filter(Boolean);
         const next24h = forecasts.filter((f) => f.hoursFromNow >= 0 && f.hoursFromNow <= 24);
         const tonight = forecasts.filter((f) => {
             const hour = new Date(f.forecastTime).getHours();
             return f.hoursFromNow >= 0 && f.hoursFromNow <= 18 && (hour >= 20 || hour <= 5);
         });
-        const bestTonight = tonight.length > 0 ? tonight.reduce((best, f) => (!best || f.observingScore < best.observingScore ? f : best), undefined) : undefined;
-        const best24h = next24h.length > 0 ? next24h.reduce((best, f) => (!best || f.observingScore < best.observingScore ? f : best), undefined) : undefined;
-        // Calculate average conditions tonight
+        const bestTonight = tonight?.reduce((best, f) => (!best || f.observingScore < best.observingScore ? f : best), undefined);
+        const best24h = next24h?.reduce((best, f) => (!best || f.observingScore < best.observingScore ? f : best), undefined);
         const avgTonight =
             tonight.length > 0
                 ? {
@@ -782,7 +777,7 @@ function interpretSeeingAlert({ results, situation, store }) {
     // Alert for exceptional conditions in late afternoon
     if (hour >= 15 && hour <= 18) {
         if (forecast.summary?.rating === 'excellent') {
-            results.alerts.push(`observing: EXCEPTIONAL night predicted - seeing ${forecast.bestTonight.seeingArcsec}, ${forecast.bestTonight.transparencyDesc} transparency, ${forecast.bestTonight.cloudCoverDesc}`);
+            results.alerts.push(`observing: EXCEPTIONAL night predicted - seeing ${forecast.bestTonight.seeingArcsec}, ${forecast.bestTonight.transparencyDesc} transparency, ${forecast.bestTonight.cloudCoverDesc} cloud-cover`);
         }
     }
 }
