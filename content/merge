@@ -207,12 +207,6 @@ function formatWeatherTable(data) {
 
 //
 
-function formatWeatherData(data) {
-    return JSON.stringify(data, null, 2);
-}
-
-//
-
 function saveWeatherData(filePath, fileData) {
     try {
         fs.writeFileSync(filePath, fileData);
@@ -224,9 +218,34 @@ function saveWeatherData(filePath, fileData) {
     }
 }
 
+function saveWeatherDataStreaming(filePath, data) {
+    try {
+        const stream = fs.createWriteStream(filePath);
+        stream.write('{\n  "daily": {\n');
+        const days = Object.keys(data.daily).sort();
+        days.forEach((day, dayIndex) => {
+            stream.write(`    "${day}": `);
+            stream.write(JSON.stringify(data.daily[day]));
+            stream.write(dayIndex < days.length - 1 ? ',\n' : '\n');
+        });
+        stream.write('  }\n}\n');
+        stream.end();
+        return new Promise((resolve, reject) => {
+            stream.on('finish', () => {
+                console.log(`saveWeatherData: save ${filePath}, size: ${(fs.statSync(filePath).size / (1024 * 1024)).toFixed(2)} MB`);
+                resolve(true);
+            });
+            stream.on('error', reject);
+        });
+    } catch (error) {
+        console.error(`Error saving data:`, error.message);
+        return Promise.resolve(false);
+    }
+}
+
 //
 
-function main() {
+async function main() {
     const data = loadWeatherData(config.directory);
     if (!data) {
         console.error('Weather data load failed.');
@@ -236,7 +255,7 @@ function main() {
         console.error('Weather data validation failed.');
         process.exit(1);
     }
-    if (!saveWeatherData('wu-master.json', formatWeatherData(data))) {
+    if (!await saveWeatherDataStreaming('wu-master.json', data)) {
         console.error('Weather data save failed.');
         process.exit(1);
     }
@@ -247,3 +266,4 @@ function main() {
 }
 
 main();
+

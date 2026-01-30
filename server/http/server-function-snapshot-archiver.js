@@ -4,7 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const THUMBNAIL_CACHE_SIZE = 128;
+const THUMBNAIL_CACHE_SIZE = 8192;
 const THUMBNAIL_CACHE_TIME = 60 * 60 * 1000;
 const THUMBNAIL_WIDTH_SNAPSHOT = 200;
 
