@@ -141,6 +141,7 @@ async function fetchKpIndex(state) {
         const response = await fetch(ENDPOINTS.kpIndex1m);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const kpData = await response.json();
+		const _fetched = Date.now();
         const recentData = kpData.slice(-180);
         const latestFinalized = [...recentData].reverse().find((d) => d.kp && d.kp.endsWith('o'));
         const latestEstimate = kpData[kpData.length - 1];
@@ -152,6 +153,7 @@ async function fetchKpIndex(state) {
         const ago3h = kpData[kpData.length - 180] ?? kpData[0];
         const current = latestFinalized ? latestFinalized.kp_index : latestEstimate?.kp_index;
         state.kpIndex.data = {
+			_fetched,
             current,
             estimated: latestEstimate?.estimated_kp,
             kpString: latestFinalized ? latestFinalized.kp : latestEstimate?.kp,
@@ -168,7 +170,7 @@ async function fetchKpIndex(state) {
                 stormLevel: max3h !== undefined && max3h >= KP_THRESHOLDS.minorStorm ? `G${Math.min(max3h - 4, 5)}` : undefined,
             },
         };
-        state.kpIndex.lastUpdate = Date.now();
+        state.kpIndex.lastUpdate = _fetched;
         state.kpIndex.lastError = undefined;
         console.error(`heliophysics: update Kp success (Kp=${current})`);
         return state.kpIndex.data;
@@ -185,14 +187,15 @@ async function fetchKpForecast(state) {
         const response = await fetch(ENDPOINTS.kpForecast);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
+		const _fetched = Date.now();
         const forecasts = data
             .slice(1)
             .map((row) => ({ time: row[0], kp: Number.parseFloat(row[1]) }))
             .filter((f) => !Number.isNaN(f.kp));
         const next24h = forecasts.slice(0, 8);
         const max24h = next24h.length > 0 ? Math.max(...next24h.map((f) => f.kp)) : undefined;
-        state.kpForecast.data = { forecasts, next24h, max24h, stormExpected: max24h !== undefined && max24h >= KP_THRESHOLDS.minorStorm };
-        state.kpForecast.lastUpdate = Date.now();
+        state.kpForecast.data = { _fetched, forecasts, next24h, max24h, stormExpected: max24h !== undefined && max24h >= KP_THRESHOLDS.minorStorm };
+        state.kpForecast.lastUpdate = _fetched;
         state.kpForecast.lastError = undefined;
         console.error(`heliophysics: update Kp forecast success (max24h=${max24h})`);
         return state.kpForecast.data;
@@ -209,12 +212,14 @@ async function fetchSolarWind(state) {
         const response = await fetch(ENDPOINTS.solarWind);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
+		const _fetched = Date.now();
         const recent = data.slice(-60);
         const latest = recent[recent.length - 1];
         if (!latest) throw new Error('No data');
         const speeds = recent.map((d) => Number.parseFloat(d[2])).filter((v) => !Number.isNaN(v));
         const densities = recent.map((d) => Number.parseFloat(d[1])).filter((v) => !Number.isNaN(v));
         state.solarWind.data = {
+		    _fetched,
             timestamp: latest[0],
             density: Number.parseFloat(latest[1]),
             speed: Number.parseFloat(latest[2]),
@@ -230,7 +235,7 @@ async function fetchSolarWind(state) {
                 isDense: Number.parseFloat(latest[1]) > 10,
             },
         };
-        state.solarWind.lastUpdate = Date.now();
+        state.solarWind.lastUpdate = _fetched;
         state.solarWind.lastError = undefined;
         console.error(`heliophysics: update solarWind success (${state.solarWind.data.speed} km/s)`);
         return state.solarWind.data;
@@ -247,6 +252,7 @@ async function fetchSolarWindMag(state) {
         const response = await fetch(ENDPOINTS.solarWindMag);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
+		const _fetched = Date.now();
         // Data format: [time_tag, bx_gsm, by_gsm, bz_gsm, lon_gsm, lat_gsm, bt]
         const recent = data.slice(-60); // Last hour
         const latest = recent[recent.length - 1];
@@ -259,6 +265,7 @@ async function fetchSolarWindMag(state) {
         const bzRecent = bzValues.slice(-15); // Last 15 minutes
         const sustainedSouth = bzRecent.length > 10 && bzRecent.every((bz) => bz < BZ_THRESHOLDS.slightlySouth);
         state.solarWindMag.data = {
+			_fetched,
             timestamp: latest[0],
             bx: Number.parseFloat(latest[1]),
             by: Number.parseFloat(latest[2]),
@@ -275,7 +282,7 @@ async function fetchSolarWindMag(state) {
                 auroraFavorable: bzCurrent < BZ_THRESHOLDS.moderatelySouth || sustainedSouth,
             },
         };
-        state.solarWindMag.lastUpdate = Date.now();
+        state.solarWindMag.lastUpdate = _fetched;
         state.solarWindMag.lastError = undefined;
         console.error(`heliophysics: update Bz success (Bz=${bzCurrent.toFixed(1)} nT)`);
         return state.solarWindMag.data;
@@ -293,6 +300,7 @@ async function fetchOvation(state, location) {
         const response = await fetch(ENDPOINTS.auroraOvation);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
+		const _fetched = Date.now();
         // Ovation data is a grid of aurora probabilities
         // Format: { "Observation Time": "...", "Forecast Time": "...", "coordinates": [[lon, lat, prob], ...] }
         const { coordinates } = data;
@@ -319,6 +327,7 @@ async function fetchOvation(state, location) {
         const ovalPoints = coordinates.filter(([_a, _b, prob]) => prob > 10);
         const southernmostOval = ovalPoints.length > 0 ? Math.min(...ovalPoints.map(([, lat]) => lat)) : undefined;
         state.ovation.data = {
+			_fetched,
             observationTime: data['Observation Time'],
             forecastTime: data['Forecast Time'],
             location: {
@@ -337,7 +346,7 @@ async function fetchOvation(state, location) {
                 isHighProbability: nearest?.probability > 50,
             },
         };
-        state.ovation.lastUpdate = Date.now();
+        state.ovation.lastUpdate = _fetched;
         state.ovation.lastError = undefined;
         console.error(`heliophysics: update Ovation success (prob=${nearest?.probability}% at ${targetLat.toFixed(1)}°N)`);
         return state.ovation.data;
@@ -354,15 +363,17 @@ async function fetchAlerts(state) {
         const response = await fetch(ENDPOINTS.alerts);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
+		const _fetched = Date.now();
         const recentAlerts = data.filter((alert) => new Date(alert.issue_datetime).getTime() > Date.now() - 24 * 60 * 60 * 1000);
         state.alerts.data = {
+			_fetched,
             all: recentAlerts,
             geomagnetic: recentAlerts.filter((a) => a.message?.includes('Geomagnetic') || a.message?.includes('K-index')),
             solar: recentAlerts.filter((a) => a.message?.includes('Solar') || a.message?.includes('Flare') || a.message?.includes('CME')),
             hasActiveWarning: recentAlerts.some((a) => a.message?.includes('Warning') || a.message?.includes('Watch')),
             hasActiveAlert: recentAlerts.some((a) => a.message?.includes('Alert')),
         };
-        state.alerts.lastUpdate = Date.now();
+        state.alerts.lastUpdate = _fetched;
         state.alerts.lastError = undefined;
         console.error(`heliophysics: update alerts success (${recentAlerts.length} active)`);
         return state.alerts.data;
@@ -577,19 +588,14 @@ function interpretAurora({ results, situation, dataCurrent, store }) {
             else if (cloudCover < 40) results.phenomena.push('aurora: good sky conditions');
             else results.phenomena.push('aurora: partial cloud - gaps may allow viewing');
         }
-        if (lunar?.brightness !== undefined) {
-            if (lunar.brightness < 20) results.phenomena.push('aurora: dark skies excellent for photography');
-            else if (lunar.brightness > 70 && lunar.position?.altitude > 20) results.phenomena.push('aurora: moonlight will wash out faint displays');
-        }
-        if (snowDepth !== undefined && snowDepth > 20) {
+        if (lunar?.brightness !== undefined && lunar.brightness < 20) results.phenomena.push('aurora: dark skies excellent for photography');
+        else if (lunar?.brightness > 70 && lunar.position?.altitude > 20) results.phenomena.push('aurora: moonlight will wash out faint displays');
+        if (snowDepth !== undefined && snowDepth > 20)
             results.phenomena.push('aurora: snow reflection may enhance perceived brightness');
-        }
-        if (temp !== undefined && temp < -20 && humidity !== undefined && humidity < 50) {
+        if (temp !== undefined && temp < -20 && humidity !== undefined && humidity < 50)
             results.phenomena.push('aurora: excellent definition expected (cold dry air)');
-        }
-        if (temp !== undefined && temp < -30 && humidity !== undefined && humidity < 30 && location.elevation > 200) {
+        if (temp !== undefined && temp < -30 && humidity !== undefined && humidity < 30 && location.elevation > 200)
             results.phenomena.push('aurora: audible sounds possible in these conditions (rare!)');
-        }
     }
 }
 

@@ -48,13 +48,8 @@ class PushNotificationManager {
         try {
             if (fs.existsSync(subscriptionsPath)) {
                 const data = JSON.parse(fs.readFileSync(subscriptionsPath, 'utf8'));
-                if (Array.isArray(data) && data.length > 0 && data[0].endpoint) {
-                    console.log('push: migrating old subscription format to new format with filters');
-                    return data.map((subscription) => ({
-                        subscription,
-                        filters: this.filtersDefault,
-                    }));
-                }
+                if (Array.isArray(data) && data.length > 0 && data[0].endpoint)
+                    return data.map((subscription) => ({ subscription, filters: this.filtersDefault }));
                 return data;
             }
         } catch (e) {
@@ -83,17 +78,13 @@ class PushNotificationManager {
             if (!sub || !sub.endpoint) return res.status(400).json({ error: 'Invalid subscription object' });
             const existingIndex = this.subscriptions.findIndex((s) => s.subscription?.endpoint === sub.endpoint || s.endpoint === sub.endpoint);
             if (existingIndex === -1) {
-                this.subscriptions.push({
-                    subscription: sub,
-                    filters: filters || this.filtersDefault,
-                });
+                this.subscriptions.push({ subscription: sub, filters: filters || this.filtersDefault });
                 this.saveSubscriptions();
                 console.log(`push: subscription inserted, size=${this.subscriptions.length}`);
             } else if (filters) {
-                // Update filters for existing subscription
                 this.subscriptions[existingIndex].filters = filters;
                 this.saveSubscriptions();
-                console.log(`push: subscription filters updated`);
+                console.log(`push: subscription filters updated: ${JSON.stringify(filters)}`);
             }
             return res.status(201).json({ success: true });
         });
@@ -105,7 +96,7 @@ class PushNotificationManager {
             if (existingIndex === -1) return res.status(404).json({ error: 'Subscription not found' });
             this.subscriptions[existingIndex].filters = filters;
             this.saveSubscriptions();
-            console.log(`push: subscription preferences updated for endpoint: ${JSON.stringify(filters)}`);
+            console.log(`push: subscription filters updated: ${JSON.stringify(filters)}`);
             return res.json({ success: true });
         });
 
@@ -127,16 +118,8 @@ class PushNotificationManager {
         console.log(
             `push: subscriptions notify request, title='${typeof payload === 'object' && payload.title ? payload.title : '-'}', body='${typeof payload === 'object' && payload.body ? payload.body : '-'}', category='${category || '-'}'`
         );
-
         const startTime = Date.now();
-
-        const eligibleSubscriptions = this.subscriptions.filter((s) => {
-            if (!category) return true; // No category = send to all
-            return (s.filters || this.filtersDefault)[category] !== false; // Send unless explicitly disabled
-        });
-
-        console.log(`push: eligible subscriptions for category '${category || 'all'}': ${eligibleSubscriptions.length}/${this.subscriptions.length}`);
-
+        const eligibleSubscriptions = this.subscriptions.filter((s) => !category || (s.filters || this.filtersDefault)[category] !== false);
         const promises = eligibleSubscriptions.map(async (s, index) => {
             const subscription = s.subscription || s;
             try {
@@ -146,18 +129,13 @@ class PushNotificationManager {
                 return { success: false, index, invalid: e.statusCode === 404 || e.statusCode === 410, endpoint: subscription.endpoint };
             }
         });
-
         const results = await Promise.all(promises);
-
-        // Remove invalid subscriptions
         const invalidEndpoints = results.filter((r) => r.invalid).map((r) => r.endpoint);
         if (invalidEndpoints.length > 0) {
             this.subscriptions = this.subscriptions.filter((s) => !invalidEndpoints.includes(s.subscription?.endpoint));
             this.saveSubscriptions();
         }
-
-        console.log(`push: subscriptions notified, eligible=${eligibleSubscriptions.length}, invalid=${invalidEndpoints.length}, size=${this.subscriptions.length}`);
-
+        console.log(`push: subscriptions notify complete, eligible=${eligibleSubscriptions.length}, invalid=${invalidEndpoints.length}, size=${this.subscriptions.length}`);
         const endTime = Date.now();
         const stats = {
             timestamp: new Date().toISOString(),
