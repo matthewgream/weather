@@ -274,6 +274,7 @@ function __weatherSituation(location, data, options) {
         ...weatherCacheSituation,
         ...weatherCacheAstronomy,
         //
+        now,
         date,
         minute: date.getMinutes(),
         hour: date.getHours(),

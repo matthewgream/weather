@@ -131,6 +131,33 @@ class FormatHelper {
             return Number.parseFloat((bytes / 1024 ** i).toFixed(1)) + (options.noUnits ? '' : ['b', 'Kb', 'Mb', 'Gb'][i]);
         });
     }
+    static kpToString(kp, options = {}) {
+        return FormatHelper._valueToString(kp, (v) => v.toFixed(1) + (options.noUnits ? '' : ' Kp'));
+    }
+    static speedKmsToString(speed, options = {}) {
+        return FormatHelper._valueToString(speed, (v) => Math.round(v) + (options.noUnits ? '' : ' km/s'));
+    }
+    static densityToString(density, options = {}) {
+        return FormatHelper._valueToString(density, (v) => v.toFixed(1) + (options.noUnits ? '' : ' p/cm³'));
+    }
+    static magneticFieldToString(nT, options = {}) {
+        return FormatHelper._valueToString(nT, (v) => v.toFixed(1) + (options.noUnits ? '' : ' nT'));
+    }
+    static probabilityToString(prob, options = {}) {
+        return FormatHelper._valueToString(prob, (v) => Math.round(v) + (options.noUnits ? '' : '%'));
+    }
+    static relativeAbsoluteTime(timestamp, now, timeZone = 'UTC') {
+        if (timestamp === undefined || timestamp === null) return '-';
+        const date = new Date(timestamp);
+        const timeStr = date.toLocaleTimeString('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false });
+        if (date.toLocaleDateString('en-GB', { timeZone }) === (new Date (now)).toLocaleDateString('en-GB', { timeZone })) return timeStr;
+        else if (((now - timestamp) / (24 * 60 * 60 * 1000)) < 7) return `${timeStr} (${date.toLocaleDateString('en-GB', { timeZone, weekday: 'short' })})`;
+        else return date.toLocaleDateString('en-GB', { timeZone, day: '2-digit', month: '2-digit' });
+    }
+    static timestampBracket(timestamp, now, timezone = 'UTC') {
+        const formatted = FormatHelper.relativeAbsoluteTime(timestamp, now, timezone);
+        return formatted === '-' ? '' : `[${formatted}]`;
+    }
     static objectToString(object, options = {}) {
         if (object === undefined) return '-';
         if (Array.isArray(object)) return object.join(', ');
