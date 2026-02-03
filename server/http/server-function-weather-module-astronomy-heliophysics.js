@@ -97,11 +97,11 @@ const AURORA_VISIBILITY_THRESHOLDS = [
 ];
 
 const STORM_LEVELS = {
-    5: 'G1 minor',
-    6: 'G2 moderate',
-    7: 'G3 strong',
-    8: 'G4 severe',
-    9: 'G5 extreme',
+    5: 'G1 (minor)',
+    6: 'G2 (moderate)',
+    7: 'G3 (strong)',
+    8: 'G4 (severe)',
+    9: 'G5 (extreme)',
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -123,15 +123,13 @@ function calculateGeomagneticLatitude(geoLat, geoLon) {
 }
 
 function getAuroraVisibilityAtKp(kp) {
-    const threshold = AURORA_VISIBILITY_THRESHOLDS.find((t) => t.kp >= kp);
-    return threshold ? threshold.geomagLat : 66;
+    return AURORA_VISIBILITY_THRESHOLDS.find((t) => t.kp >= kp)?.geomagLat || 66;
 }
 
 function predictAuroraVisibility(location, kp) {
     if (!location?.latitude || !location?.longitude) return undefined;
     const geomagLat = calculateGeomagneticLatitude(location.latitude, location.longitude);
     const visibilityThreshold = getAuroraVisibilityAtKp(Math.floor(kp));
-    const isVisible = geomagLat >= visibilityThreshold;
     const margin = geomagLat - visibilityThreshold;
     let position;
     if (margin > 10) position = 'overhead';
@@ -142,7 +140,7 @@ function predictAuroraVisibility(location, kp) {
     return {
         geomagneticLatitude: Math.round(geomagLat * 10) / 10,
         visibilityThreshold,
-        isVisible,
+        isVisible: geomagLat >= visibilityThreshold,
         margin: Math.round(margin * 10) / 10,
         position,
     };
@@ -161,24 +159,25 @@ async function fetchKpIndex(state) {
     try {
         const response = await fetch(ENDPOINTS.kpIndex1m);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const kpData = await response.json();
+        const data = await response.json();
         const _fetched = Date.now();
-        const recentData = kpData.slice(-180);
-        const latestFinalized = [...recentData].reverse().find((d) => d.kp && d.kp.endsWith('o'));
-        const latestEstimate = kpData[kpData.length - 1];
-        const kpValues = recentData.map((d) => d.kp_index).filter((k) => k !== null && k !== undefined);
-        const max3h = kpValues.length > 0 ? Math.max(...kpValues) : undefined;
+        //
+        const recent = data.slice(-180);
+        const latest = data[data.length - 1];
+        const latestFinalized = [...recent].reverse().find((d) => d.kp && d.kp.endsWith('o'));
+        const kpValues = recent.map((d) => d.kp_index).filter((k) => k !== null && k !== undefined);
+        const max3h = kpValues.length > 0 ? kpValues.reduce((a, b) => Math.max(a, b)) : undefined;
         const avg3h = kpValues.length > 0 ? kpValues.reduce((a, b) => a + b, 0) / kpValues.length : undefined;
-        const ago15m = kpData[kpData.length - 15];
-        const ago1h = kpData[kpData.length - 60];
-        const ago3h = kpData[kpData.length - 180] ?? kpData[0];
-        const current = latestFinalized ? latestFinalized.kp_index : latestEstimate?.kp_index;
+        const ago15m = data[data.length - 15];
+        const ago1h = data[data.length - 60];
+        const ago3h = data[data.length - 180] ?? data[0];
+        const current = latestFinalized?.kp_index ?? latest?.kp_index;
         state.kpIndex.data = {
             _fetched,
             current,
-            estimated: latestEstimate?.estimated_kp,
-            kpString: latestFinalized ? latestFinalized.kp : latestEstimate?.kp,
-            timestamp: latestEstimate?.time_tag,
+            estimated: latest?.estimated_kp,
+            kpString: latestFinalized?.kp ?? latest?.kp,
+            timestamp: latest?.time_tag,
             stats: { max3h, avg3h: avg3h === undefined ? undefined : Math.round(avg3h * 100) / 100 },
             trend: {
                 delta15m: ago15m ? current - ago15m.kp_index : undefined,
@@ -209,17 +208,15 @@ async function fetchKpForecast(state) {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         const _fetched = Date.now();
+        //
         const forecasts = data
             .slice(1)
             .map((row) => ({ time: row[0], kp: Number.parseFloat(row[1]) }))
             .filter((f) => !Number.isNaN(f.kp));
         const next24h = forecasts.slice(0, 8);
-        const max24h = next24h.length > 0 ? Math.max(...next24h.map((f) => f.kp)) : undefined;
+        const max24h = next24h.length > 0 ? next24h.map((f) => f.kp).reduce((a, b) => Math.max(a, b)) : undefined;
         // Find when peak occurs for timing info
-        let peakBinIndex;
-        if (max24h !== undefined) {
-            peakBinIndex = next24h.findIndex((f) => f.kp === max24h);
-        }
+        const peakBinIndex = next24h?.findIndex((f) => f.kp === max24h);
         // Each bin is 3 hours, so bin 0-1 = within 6h, 2-3 = within 12h, 4-7 = within 24h
         let peakTiming;
         if (peakBinIndex !== undefined && peakBinIndex >= 0) {
@@ -253,6 +250,7 @@ async function fetchSolarWind(state) {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         const _fetched = Date.now();
+        //
         const recent = data.slice(-60);
         const latest = recent[recent.length - 1];
         if (!latest) throw new Error('No data');
@@ -266,7 +264,7 @@ async function fetchSolarWind(state) {
             temperature: Number.parseFloat(latest[3]),
             stats: {
                 avgSpeed: speeds.length > 0 ? Math.round(speeds.reduce((a, b) => a + b, 0) / speeds.length) : undefined,
-                maxSpeed: speeds.length > 0 ? Math.max(...speeds) : undefined,
+                maxSpeed: speeds.length > 0 ? speeds.reduce((a, b) => Math.max(a, b)) : undefined,
                 avgDensity: densities.length > 0 ? Math.round((densities.reduce((a, b) => a + b, 0) / densities.length) * 10) / 10 : undefined,
             },
             derived: {
@@ -293,6 +291,7 @@ async function fetchSolarWindMag(state) {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         const _fetched = Date.now();
+        //
         // Data format: [time_tag, bx_gsm, by_gsm, bz_gsm, lon_gsm, lat_gsm, bt]
         const recent = data.slice(-60); // Last hour
         const latest = recent[recent.length - 1];
@@ -302,8 +301,8 @@ async function fetchSolarWindMag(state) {
         const bzCurrent = Number.parseFloat(latest[3]);
         const btCurrent = Number.parseFloat(latest[6]);
         const bzAvg = bzValues.length > 0 ? bzValues.reduce((a, b) => a + b, 0) / bzValues.length : undefined;
-        const bzMin = bzValues.length > 0 ? Math.min(...bzValues) : undefined;
-        const btMax = btValues.length > 0 ? Math.max(...btValues) : undefined;
+        const bzMin = bzValues.length > 0 ? bzValues.reduce((a, b) => Math.min(a, b)) : undefined;
+        const btMax = btValues.length > 0 ? bzValues.reduce((a, b) => Math.max(a, b)) : undefined;
         // Check for sustained southward Bz (important for aurora)
         const bzRecent = bzValues.slice(-15); // Last 15 minutes
         const sustainedSouth = bzRecent.length > 10 && bzRecent.every((bz) => bz < BZ_THRESHOLDS.slightlySouth);
@@ -347,6 +346,7 @@ async function fetchOvation(state, location) {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         const _fetched = Date.now();
+        //
         // Ovation data is a grid of aurora probabilities
         // Format: { "Observation Time": "...", "Forecast Time": "...", "coordinates": [[lon, lat, prob], ...] }
         const { coordinates } = data;
@@ -368,10 +368,10 @@ async function fetchOvation(state, location) {
         }
         // Also find max probability in northern region for context
         const northernPoints = coordinates.filter(([, lat]) => lat > 50);
-        const maxNorthern = northernPoints.length > 0 ? Math.max(...northernPoints.map(([_a, _b, prob]) => prob)) : undefined;
+        const maxNorthern = northernPoints.length > 0 ? northernPoints.map(([_a, _b, prob]) => prob).reduce((a, b) => Math.max(a, b)) : undefined;
         // Find the aurora oval boundary (where probability > 10%)
         const ovalPoints = coordinates.filter(([_a, _b, prob]) => prob > 10);
-        const southernmostOval = ovalPoints.length > 0 ? Math.min(...ovalPoints.map(([, lat]) => lat)) : undefined;
+        const southernmostOval = ovalPoints.length > 0 ? ovalPoints.map(([, lat]) => lat).reduce((a, b) => Math.min(a, b)) : undefined;
         state.ovation.data = {
             _fetched,
             observationTime: data['Observation Time'],
@@ -410,18 +410,19 @@ async function fetchAlerts(state) {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         const _fetched = Date.now();
-        const recentAlerts = data.filter((alert) => new Date(alert.issue_datetime).getTime() > Date.now() - 24 * 60 * 60 * 1000);
+        //
+        const recent = data.filter((alert) => new Date(alert.issue_datetime).getTime() > Date.now() - 24 * 60 * 60 * 1000);
         state.alerts.data = {
             _fetched,
-            all: recentAlerts,
-            geomagnetic: recentAlerts.filter((a) => a.message?.includes('Geomagnetic') || a.message?.includes('K-index')),
-            solar: recentAlerts.filter((a) => a.message?.includes('Solar') || a.message?.includes('Flare') || a.message?.includes('CME')),
-            hasActiveWarning: recentAlerts.some((a) => a.message?.includes('Warning') || a.message?.includes('Watch')),
-            hasActiveAlert: recentAlerts.some((a) => a.message?.includes('Alert')),
+            all: recent,
+            geomagnetic: recent.filter((a) => a.message?.includes('Geomagnetic') || a.message?.includes('K-index')),
+            solar: recent.filter((a) => a.message?.includes('Solar') || a.message?.includes('Flare') || a.message?.includes('CME')),
+            hasActiveWarning: recent.some((a) => a.message?.includes('Warning') || a.message?.includes('Watch')),
+            hasActiveAlert: recent.some((a) => a.message?.includes('Alert')),
         };
         state.alerts.lastUpdate = _fetched;
         state.alerts.lastError = undefined;
-        console.error(`heliophysics: update alerts success (${recentAlerts.length} active)`);
+        console.error(`heliophysics: update alerts success (${recent.length} active)`);
         return state.alerts.data;
     } catch (e) {
         state.alerts.lastError = e.message;
@@ -528,49 +529,41 @@ function createTimestampTracker(now, timezone) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function interpretSpaceWeather({ results, situation, store }) {
-    const now = situation?.now ?? Date.now();
-    const timezone = situation?.timezone ?? 'UTC';
-    const ts = createTimestampTracker(now, timezone);
+    const ts = createTimestampTracker(situation.now, situation.location.timezone);
 
     const kpData = getKpIndex(store.astronomy_heliophysics);
     if (kpData) {
         const kp = kpData.current;
-        const kpStr = FormatHelper.kpToString(kp);
         const kpTs = ts.get('kp', kpData._fetched);
-        if (kp >= KP_THRESHOLDS.extremeStorm) results.alerts.push(`space: ${kpTs}G5 extreme geomagnetic storm (${kpStr})`);
-        else if (kp >= KP_THRESHOLDS.severeStorm) results.alerts.push(`space: ${kpTs}G4 severe geomagnetic storm (${kpStr})`);
-        else if (kp >= KP_THRESHOLDS.strongStorm) results.alerts.push(`space: ${kpTs}G3 strong geomagnetic storm (${kpStr})`);
-        else if (kp >= KP_THRESHOLDS.moderateStorm) results.alerts.push(`space: ${kpTs}G2 moderate geomagnetic storm (${kpStr})`);
-        else if (kp >= KP_THRESHOLDS.minorStorm) results.alerts.push(`space: ${kpTs}G1 minor geomagnetic storm (${kpStr})`);
-        else if (kp >= KP_THRESHOLDS.active) results.phenomena.push(`space: ${kpTs}active geomagnetic conditions (${kpStr})`);
-        else if (kp >= KP_THRESHOLDS.unsettled) results.phenomena.push(`space: ${kpTs}unsettled geomagnetic conditions (${kpStr})`);
-        const trendTs = ts.get('kp', kpData._fetched);
-        if (kpData.trend.delta1h > 2) results.alerts.push(`space: ${trendTs}activity rapidly increasing - monitor conditions`);
-        else if (kpData.trend.delta1h > 1) results.phenomena.push(`space: ${trendTs}activity increasing`);
-        else if (kpData.trend.delta1h < -2) results.phenomena.push(`space: ${trendTs}activity decreasing`);
+        if (kp >= KP_THRESHOLDS.extremeStorm) results.alerts.push(`space: ${kpTs}G5 extreme geomagnetic storm (${FormatHelper.kpToString(kp)})`);
+        else if (kp >= KP_THRESHOLDS.severeStorm) results.alerts.push(`space: ${kpTs}G4 severe geomagnetic storm (${FormatHelper.kpToString(kp)})`);
+        else if (kp >= KP_THRESHOLDS.strongStorm) results.alerts.push(`space: ${kpTs}G3 strong geomagnetic storm (${FormatHelper.kpToString(kp)})`);
+        else if (kp >= KP_THRESHOLDS.moderateStorm) results.alerts.push(`space: ${kpTs}G2 moderate geomagnetic storm (${FormatHelper.kpToString(kp)})`);
+        else if (kp >= KP_THRESHOLDS.minorStorm) results.alerts.push(`space: ${kpTs}G1 minor geomagnetic storm (${FormatHelper.kpToString(kp)})`);
+        else if (kp >= KP_THRESHOLDS.active) results.phenomena.push(`space: ${kpTs}active geomagnetic conditions (${FormatHelper.kpToString(kp)})`);
+        else if (kp >= KP_THRESHOLDS.unsettled) results.phenomena.push(`space: ${kpTs}unsettled geomagnetic conditions (${FormatHelper.kpToString(kp)})`);
+        if (kpData.trend.delta1h > 2) results.alerts.push(`space: ${kpTs}activity rapidly increasing - monitor conditions`);
+        else if (kpData.trend.delta1h > 1) results.phenomena.push(`space: ${kpTs}activity increasing`);
+        else if (kpData.trend.delta1h < -2) results.phenomena.push(`space: ${kpTs}activity decreasing`);
     }
 
     const solarWind = getSolarWind(store.astronomy_heliophysics);
     if (solarWind) {
-        const windTs = ts.get('wind', solarWind._fetched);
-        const speedStr = FormatHelper.speedKmsToString(solarWind.speed);
-        if (solarWind.derived.isVeryHighSpeed) results.phenomena.push(`space: ${windTs}very high speed solar wind stream (${speedStr})`);
-        else if (solarWind.derived.isHighSpeed) results.phenomena.push(`space: ${windTs}high speed solar wind stream (${speedStr})`);
-        if (solarWind.derived.isDense) results.phenomena.push(`space: ${ts.get('wind', solarWind._fetched)}solar wind density enhancement (${FormatHelper.densityToString(solarWind.density)}) - possible CME arrival`);
+        const solarWindTs = ts.get('wind', solarWind._fetched);
+        if (solarWind.derived.isVeryHighSpeed) results.phenomena.push(`space: ${solarWindTs}very high speed solar wind stream (${FormatHelper.speedKmsToString(solarWind.speed)})`);
+        else if (solarWind.derived.isHighSpeed) results.phenomena.push(`space: ${solarWindTs}high speed solar wind stream (${FormatHelper.speedKmsToString(solarWind.speed)})`);
+        if (solarWind.derived.isDense) results.phenomena.push(`space: ${solarWindTs}solar wind density enhancement (${FormatHelper.densityToString(solarWind.density)}) - possible CME arrival`);
     }
 
     const bzData = getSolarWindMag(store.astronomy_heliophysics);
     if (bzData) {
         const bzTs = ts.get('bz', bzData._fetched);
-        const bzStr = FormatHelper.magneticFieldToString(bzData.bz);
-        const btStr = FormatHelper.magneticFieldToString(bzData.bt);
-        if (bzData.bz < BZ_THRESHOLDS.extremelySouth) results.alerts.push(`space: ${bzTs}IMF extremely southward (${bzStr}) - major storm driver`);
-        else if (bzData.bz < BZ_THRESHOLDS.stronglySouth) results.alerts.push(`space: ${bzTs}IMF strongly southward (${bzStr})`);
+        if (bzData.bz < BZ_THRESHOLDS.extremelySouth) results.alerts.push(`space: ${bzTs}IMF extremely southward (${FormatHelper.magneticFieldToString(bzData.bz)}) - major storm driver`);
+        else if (bzData.bz < BZ_THRESHOLDS.stronglySouth) results.alerts.push(`space: ${bzTs}IMF strongly southward (${FormatHelper.magneticFieldToString(bzData.bz)})`);
         else if (bzData.derived.sustainedSouth) results.phenomena.push(`space: ${bzTs}IMF sustained southward (${FormatHelper.magneticFieldToString(bzData.stats.avgBz)} avg)`);
         if (bzData.derived.isBtStrong && bzData.bz > BZ_THRESHOLDS.slightlySouth)
-            results.phenomena.push(`space: ${ts.get('bz', bzData._fetched)}strong total field (${btStr}) with neutral Bz - activity may increase if Bz turns south`);
-        else if (bzData.derived.isBtElevated && !bzData.derived.isSouth)
-            results.phenomena.push(`space: ${ts.get('bz', bzData._fetched)}elevated total field (${btStr}) - watch for Bz changes`);
+            results.phenomena.push(`space: ${bzTs}strong total field (${FormatHelper.magneticFieldToString(bzData.bt)}) with neutral Bz - activity may increase if Bz turns south`);
+        else if (bzData.derived.isBtElevated && !bzData.derived.isSouth) results.phenomena.push(`space: ${bzTs}elevated total field (${FormatHelper.magneticFieldToString(bzData.bt)}) - watch for Bz changes`);
     }
 
     const alerts = getAlerts(store.astronomy_heliophysics);
@@ -590,11 +583,9 @@ function interpretSpaceWeather({ results, situation, store }) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function interpretAurora({ results, situation, dataCurrent, store }) {
-    const { location, month, hour, daylight, year, lunar, timezone } = situation;
+    const { location, month, hour, daylight, year, lunar, now } = situation;
     const { cloudCover, snowDepth, temp, humidity } = dataCurrent;
-    const now = situation?.now ?? Date.now();
-    const tz = timezone ?? 'UTC';
-    const ts = createTimestampTracker(now, tz);
+    const ts = createTimestampTracker(now, location.timezone);
 
     if (!location?.latitude || location.latitude <= 45) return;
     if (cloudCover !== undefined && cloudCover >= 70) return;
@@ -615,27 +606,17 @@ function interpretAurora({ results, situation, dataCurrent, store }) {
     if (ovationData?.location) {
         const ovTs = ts.get('ovation', ovationData._fetched);
         const prob = ovationData.location.probability;
-        const probStr = FormatHelper.probabilityToString(prob);
-        if (prob > 50)
-            results.alerts.push(`aurora: ${ovTs}high probability at your location (${probStr})`);
-        else if (prob > 30)
-            results.phenomena.push(`aurora: ${ovTs}likely visible (${probStr})`);
-        else if (prob > 10)
-            results.phenomena.push(`aurora: ${ovTs}possible (${probStr}) - ${visibility.position}`);
+        if (prob > 50) results.alerts.push(`aurora: ${ovTs}high probability at your location (${FormatHelper.probabilityToString(prob)})`);
+        else if (prob > 30) results.phenomena.push(`aurora: ${ovTs}likely visible (${FormatHelper.probabilityToString(prob)})`);
+        else if (prob > 10) results.phenomena.push(`aurora: ${ovTs}possible (${FormatHelper.probabilityToString(prob)}) - ${visibility.position}`);
         else if (ovationData.oval.southernBoundary && location.latitude > ovationData.oval.southernBoundary - 5)
             results.phenomena.push(`aurora: ${ovTs}oval ${Math.round(location.latitude - ovationData.oval.southernBoundary)}° north - watch for expansion`);
     }
     // *** Fallback to Kp-based prediction ***
     else if (isRealtime) {
-        const kpTs = ts.get('kp', kpData._fetched);
-        const kpStr = FormatHelper.kpToString(currentKp);
-        if (visibility.isVisible) {
-            const activity = currentKp >= KP_THRESHOLDS.minorStorm ? 'active' : 'possible';
-            results.phenomena.push(`aurora: ${kpTs}${activity} (${kpStr}) - ${visibility.position}`);
-        } else if (visibility.margin > -3) {
-            const needed = Math.ceil(currentKp - visibility.margin);
-            results.phenomena.push(`aurora: ${kpTs}watch northern horizon if Kp rises (currently ${kpStr}, need ${needed}+)`);
-        }
+        const kpTs = ts.get('kp_aurora', kpData._fetched);
+        if (visibility.isVisible) results.phenomena.push(`aurora: ${kpTs}${currentKp >= KP_THRESHOLDS.minorStorm ? 'active' : 'possible'} (${FormatHelper.kpToString(currentKp)}) - ${visibility.position}`);
+        else if (visibility.margin > -3) results.phenomena.push(`aurora: ${kpTs}watch northern horizon if Kp rises (currently ${FormatHelper.kpToString(currentKp)}, need ${Math.ceil(currentKp - visibility.margin)}+)`);
     }
     // *** Statistical fallback ***
     else {
@@ -645,27 +626,23 @@ function interpretAurora({ results, situation, dataCurrent, store }) {
 
     // *** Bz component - crucial aurora driver ***
     if (bzData) {
-        const bzTs = ts.get('bz', bzData._fetched);
-        const bzStr = FormatHelper.magneticFieldToString(bzData.bz);
-        if (bzData.derived.isStronglySouth)
-            results.alerts.push(`aurora: ${bzTs}Bz strongly southward (${bzStr}) - activity imminent`);
-        else if (bzData.derived.sustainedSouth)
-            results.phenomena.push(`aurora: ${bzTs}Bz sustained southward (${FormatHelper.magneticFieldToString(bzData.stats.avgBz)} avg) - favorable conditions`);
-        else if (bzData.derived.isSouth)
-            results.phenomena.push(`aurora: ${bzTs}Bz southward (${bzStr}) - enhanced activity possible`);
-        else if (bzData.bz > 5)
-            results.phenomena.push(`aurora: ${bzTs}Bz northward - quiet conditions expected`);
+        const bzTs = ts.get('bz_aurora', bzData._fetched);
+        if (bzData.derived.isStronglySouth) results.alerts.push(`aurora: ${bzTs}Bz strongly southward (${FormatHelper.magneticFieldToString(bzData.bz)}) - activity imminent`);
+        else if (bzData.derived.sustainedSouth) results.phenomena.push(`aurora: ${bzTs}Bz sustained southward (${FormatHelper.magneticFieldToString(bzData.stats.avgBz)} avg) - favorable conditions`);
+        else if (bzData.derived.isSouth) results.phenomena.push(`aurora: ${bzTs}Bz southward (${FormatHelper.magneticFieldToString(bzData.bz)}) - enhanced activity possible`);
+        else if (bzData.bz > 5) results.phenomena.push(`aurora: ${bzTs}Bz northward - quiet conditions expected`);
     }
 
     // *** Storm alerts from Kp ***
     if (kpData?.derived?.isStorm) {
-        const kpTs = ts.get('kp', kpData._fetched);
+        const kpTs = ts.get('kp_aurora', kpData._fetched);
         results.alerts.push(`aurora: ${kpTs}${kpData.derived.stormLevel} geomagnetic storm in progress`);
     }
 
     // *** Activity trend ***
     if (kpData?.trend?.delta1h > 1) {
-        results.phenomena.push('aurora: activity increasing - keep watching');
+        const kpTs = ts.get('kp_aurora', kpData._fetched);
+        results.phenomena.push(`aurora: ${kpTs}activity increasing - keep watching`);
     }
 
     // *** Seasonal enhancement ***
@@ -681,16 +658,11 @@ function interpretAurora({ results, situation, dataCurrent, store }) {
             else if (cloudCover < 40) results.phenomena.push('aurora: good sky conditions');
             else results.phenomena.push('aurora: partial cloud - gaps may allow viewing');
         }
-        if (lunar?.brightness !== undefined && lunar.brightness < 20)
-            results.phenomena.push('aurora: dark skies - excellent for photography');
-        else if (lunar?.brightness > 70 && lunar.position?.altitude > 20)
-            results.phenomena.push('aurora: moonlight may wash out faint displays');
-        if (snowDepth !== undefined && snowDepth > 20)
-            results.phenomena.push('aurora: snow reflection may enhance perceived brightness');
-        if (temp !== undefined && temp < -20 && humidity !== undefined && humidity < 50)
-            results.phenomena.push('aurora: excellent definition expected (cold dry air)');
-        if (temp !== undefined && temp < -30 && humidity !== undefined && humidity < 30 && location.elevation > 200)
-            results.phenomena.push('aurora: audible sounds possible in these conditions (rare)');
+        if (lunar?.brightness !== undefined && lunar.brightness < 20) results.phenomena.push('aurora: dark skies - excellent for photography');
+        else if (lunar?.brightness > 70 && lunar.position?.altitude > 20) results.phenomena.push('aurora: moonlight may wash out faint displays');
+        if (snowDepth !== undefined && snowDepth > 20) results.phenomena.push('aurora: snow reflection may enhance perceived brightness');
+        if (temp !== undefined && temp < -20 && humidity !== undefined && humidity < 50) results.phenomena.push('aurora: excellent definition expected (cold dry air)');
+        if (temp !== undefined && temp < -30 && humidity !== undefined && humidity < 30 && location.elevation > 200) results.phenomena.push('aurora: audible sounds possible in these conditions (rare)');
     }
 }
 
