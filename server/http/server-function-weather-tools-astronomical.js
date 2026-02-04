@@ -801,6 +801,7 @@ function __getLunarTimes(date, latitude, longitude) {
     if (maxAlt < moonHorizon) return { rise: undefined, set: undefined }; // Never visible
 
     // Use adaptive step size based on latitude
+    // eslint-disable-next-line unicorn/no-nested-ternary, sonarjs/no-nested-conditional
     const baseStep = Math.abs(latitude) > 60 ? 2 : Math.abs(latitude) > 45 ? 5 : 10; // minutes
     let previousAltitude = midnightPosition.altitude,
         riseFound = false,

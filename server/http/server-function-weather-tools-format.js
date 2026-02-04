@@ -46,7 +46,7 @@ class FormatHelper {
         return FormatHelper._valueToString(millis, (v) => FormatHelper._secondsToString(v / 1000, options));
     }
     static timeToString(time, options = {}) {
-        return FormatHelper._valueToString(time, (v) => (options.hoursOnly ? `${new Date(v).getHours().padStart(2, '0')}:${new Date(v).getMinutes().padStart(2, '0')}` : new Date(v).toISOString()));
+        return FormatHelper._valueToString(time, (v) => (options.hoursOnly ? `${String (new Date(v).getHours()).padStart(2, '0')}:${String (new Date(v).getMinutes()).padStart(2, '0')}` : new Date(v).toISOString()));
     }
     static timeLocalToString(time) {
         return new Date(time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); // XXX fix me
