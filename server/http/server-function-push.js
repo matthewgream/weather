@@ -48,8 +48,7 @@ class PushNotificationManager {
         try {
             if (fs.existsSync(subscriptionsPath)) {
                 const data = JSON.parse(fs.readFileSync(subscriptionsPath, 'utf8'));
-                if (Array.isArray(data) && data.length > 0 && data[0].endpoint)
-                    return data.map((subscription) => ({ subscription, filters: this.filtersDefault }));
+                if (Array.isArray(data) && data.length > 0 && data[0].endpoint) return data.map((subscription) => ({ subscription, filters: this.filtersDefault }));
                 return data;
             }
         } catch (e) {

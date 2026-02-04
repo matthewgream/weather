@@ -7,6 +7,8 @@
 //
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+const { FormatHelper } = require('./server-function-weather-tools-format.js');
+
 const ENDPOINTS = {
     nasaFireball: 'https://ssd-api.jpl.nasa.gov/fireball.api',
 };
@@ -73,9 +75,25 @@ function isNearLocation(fireball, location, radiusDeg = 15) {
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
+// Timestamp helper for interpretation functions
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-async function fetchNASAFireballs(state, location) {
+function createTimestampTracker(now, timezone) {
+    const shown = new Set();
+    return {
+        get(source, fetched) {
+            if (shown.has(source) || !fetched) return '';
+            shown.add(source);
+            return FormatHelper.timestampBracket(fetched, now, timezone) + ' ';
+        },
+    };
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+async function fetchNASAFireballs(state, situation) {
+    const { location } = situation;
     if (!state.fireballs) state.fireballs = {};
     try {
         // NASA Fireball API - documented at https://ssd-api.jpl.nasa.gov/doc/fireball.html
@@ -88,10 +106,13 @@ async function fetchNASAFireballs(state, location) {
         const response = await fetch(`${ENDPOINTS.nasaFireball}?${params}`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
+        //
+        const _fetched = Date.now();
         // NASA returns { count, fields, data } where data is array of arrays
         if (!data.data || !Array.isArray(data.data)) {
             // No fireballs in period - this is normal
             state.fireballs.data = {
+                _fetched,
                 total: 0,
                 nearby: 0,
                 counts: { last24h: 0, last48h: 0, last7d: 0, last30d: 0 },
@@ -99,7 +120,7 @@ async function fetchNASAFireballs(state, location) {
                 brightestRecent: undefined,
                 averagePerDay: 0,
             };
-            state.fireballs.lastUpdate = Date.now();
+            state.fireballs.lastUpdate = _fetched;
             state.fireballs.lastError = undefined;
             console.error('meteors: update NASA success (0 fireballs in period)');
             return state.fireballs.data;
@@ -127,7 +148,7 @@ async function fetchNASAFireballs(state, location) {
                 magnitude: energy ? Math.round(-2.5 * Math.log10((energy * 1e10) / 1e9) - 5) : undefined,
                 altitude: row[altIdx] ? Number.parseFloat(row[altIdx]) : undefined,
                 velocity: row[velIdx] ? Number.parseFloat(row[velIdx]) : undefined,
-                ageHours: (Date.now() - date.getTime()) / 3600000,
+                ageHours: (_fetched - date.getTime()) / 3600000,
             };
         });
         // Filter to nearby fireballs if location provided
@@ -137,6 +158,7 @@ async function fetchNASAFireballs(state, location) {
         const last7d = nearby.filter((fb) => fb.ageHours <= 168);
         const last30d = nearby;
         state.fireballs.data = {
+            _fetched,
             total: fireballs.length,
             nearby: nearby.length,
             counts: {
@@ -149,7 +171,7 @@ async function fetchNASAFireballs(state, location) {
             brightestRecent: last7d.reduce((best, fb) => (!best || (fb.energy && fb.energy > (best.energy || 0)) ? fb : best), undefined),
             averagePerDay: Math.round((last30d.length / 30) * 10) / 10,
         };
-        state.fireballs.lastUpdate = Date.now();
+        state.fireballs.lastUpdate = _fetched;
         state.fireballs.lastError = undefined;
         console.error(`meteors: update NASA success (${last7d.length} fireballs in 7d, ${nearby.length} nearby in 30d)`);
         return state.fireballs.data;
@@ -172,9 +194,10 @@ function getFireballs(state) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function calculateUpdateInterval(situation) {
-    if (!situation) return [INTERVALS.normal, 'no-situation'];
-    const { month, day, hour } = situation;
+function calculateUpdateInterval(_situation) {
+    const month = new Date().getMonth(),
+        day = new Date().getDate(),
+        hour = new Date().getHours();
     const shower = getCurrentShower(month, day);
     if (shower) {
         if (shower.isAtPeak && (hour >= 22 || hour <= 5)) return [INTERVALS.showerPeak, 'shower-peak-night'];
@@ -187,14 +210,14 @@ function calculateUpdateInterval(situation) {
 }
 
 const _updateSchedule = { intervalId: undefined, currentInterval: undefined };
-function updateSchedule(state, situation, location) {
-    fetchNASAFireballs(state, location).then(() => {
+function updateSchedule(state, situation) {
+    fetchNASAFireballs(state, situation).then(() => {
         const [interval, reason] = calculateUpdateInterval(situation);
         if (_updateSchedule.currentInterval !== interval) {
             if (_updateSchedule.intervalId) clearInterval(_updateSchedule.intervalId);
             _updateSchedule.currentInterval = interval;
-            _updateSchedule.intervalId = setInterval(() => updateSchedule(state, situation, location), interval);
-            console.error(`meteors: update interval set to ${interval / 1000 / 60}m ('${reason}')`);
+            _updateSchedule.intervalId = setInterval(() => updateSchedule(state, situation), interval);
+            console.error(`meteors: update interval set to ${FormatHelper.millisToString(interval)} ('${reason}')`);
         }
     });
 }
@@ -203,7 +226,7 @@ function updateSchedule(state, situation, location) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function interpretMeteorActivity({ results, situation, store }) {
-    const { month, day, hour, daylight } = situation;
+    const { month, day, hour, daylight, location, now } = situation;
 
     // Only report at night or during twilight
     if (daylight?.isDaytime && hour > 6 && hour < 18) return;
@@ -211,47 +234,46 @@ function interpretMeteorActivity({ results, situation, store }) {
     const fireballs = getFireballs(store.astronomy_meteors_realtime);
     const shower = getCurrentShower(month, day);
 
+    const ts = createTimestampTracker(now, location.timezone);
+
     // *** Active shower with real-time data ***
     if (shower && fireballs) {
         const activityLevel = assessActivityLevel(fireballs.counts.last24h, shower.typicalZHR, 24);
-        if (activityLevel === 'outburst') {
-            results.alerts.push(`meteors: ${shower.name} OUTBURST detected! ${fireballs.counts.last24h} fireballs reported in 24h (typical: ${Math.round(shower.typicalZHR * 0.015)})`);
-        } else if (activityLevel === 'enhanced') {
-            results.phenomena.push(`meteors: ${shower.name} showing enhanced activity (${fireballs.counts.last24h} fireballs in 24h)`);
-        } else if (shower.isAtPeak || shower.isNearPeak) {
-            results.phenomena.push(`meteors: ${shower.name} ${shower.isAtPeak ? 'at peak' : 'near peak'} - activity ${activityLevel} (${fireballs.counts.last24h} fireballs reported)`);
-        }
+
+        if (activityLevel === 'outburst')
+            results.alerts.push(
+                `meteors: ${ts.get('fireballs', fireballs._fetched)}${shower.name} OUTBURST detected (${FormatHelper.countToString(fireballs.counts.last24h)} fireballs in 24h, typical ${FormatHelper.countToString(Math.round(shower.typicalZHR * 0.015))})`
+            );
+        else if (activityLevel === 'enhanced') results.phenomena.push(`meteors: ${ts.get('fireballs', fireballs._fetched)}${shower.name} showing enhanced activity (${FormatHelper.countToString(fireballs.counts.last24h)} fireballs in 24h)`);
+        else if (shower.isAtPeak || shower.isNearPeak)
+            results.phenomena.push(
+                `meteors: ${ts.get('fireballs', fireballs._fetched)}${shower.name} ${shower.isAtPeak ? 'at peak' : 'near peak'} (${activityLevel} activity, ${FormatHelper.countToString(fireballs.counts.last24h)} fireballs reported)`
+            );
 
         // Variable shower note
-        if (shower.variable && shower.isNearPeak) {
-            results.phenomena.push(`meteors: ${shower.name} is historically variable - outbursts possible`);
-        }
+        if (shower.variable && shower.isNearPeak) results.phenomena.push(`meteors: ${shower.name} is historically variable - outbursts possible`);
 
         // Taurid fireball note
-        if (shower.fireballs) {
-            results.phenomena.push(`meteors: ${shower.name} known for bright fireballs - watch for spectacular events`);
-        }
+        if (shower.fireballs) results.phenomena.push(`meteors: ${shower.name} known for bright fireballs - watch for spectacular events`);
     }
+
     // *** No shower but fireball data available ***
     else if (fireballs) {
         // Report if unusual activity
-        if (fireballs.counts.last24h > 5) {
-            results.phenomena.push(`meteors: elevated fireball activity (${fireballs.counts.last24h} reported in 24h)`);
-        }
+        if (fireballs.counts.last24h > 5) results.phenomena.push(`meteors: ${ts.get('fireballs', fireballs._fetched)}elevated fireball activity (${FormatHelper.countToString(fireballs.counts.last24h)} reported in 24h)`);
     }
 
     // *** Most energetic recent fireball ***
-    if (fireballs?.brightestRecent && fireballs.brightestRecent.ageHours < 48) {
-        const fb = fireballs.brightestRecent;
-        if (fb?.energy > 0.5) {
+    const fb = fireballs?.brightestRecent;
+    if (fb && fb.ageHours < 48) {
+        if (fb?.energy > 0.5)
             // Significant energy
-            results.phenomena.push(`meteors: energetic fireball (${fb.energy.toFixed(1)}×10¹⁰ J) detected ${Math.round(fb.ageHours)}h ago`);
-        }
+            results.phenomena.push(`meteors: ${ts.get('fireballs', fireballs._fetched)}energetic fireball detected (${FormatHelper.energyJoulesE10ToString(fb.energy)}, ${FormatHelper.hoursAgoToString(fb.ageHours)})`);
     }
 }
 
 function interpretFireballAlert({ results, situation, store }) {
-    const { daylight } = situation;
+    const { daylight, location, now } = situation;
 
     // Only at night
     if (daylight?.isDaytime) return;
@@ -259,11 +281,13 @@ function interpretFireballAlert({ results, situation, store }) {
     const fireballs = getFireballs(store.astronomy_meteors_realtime);
     if (!fireballs) return;
 
+    const ts = createTimestampTracker(now, location.timezone);
+
     // Alert for very recent energetic fireballs (within 6 hours), > 10^10 J
     const veryRecent = fireballs.recent?.filter((fb) => fb.ageHours < 6 && fb.energy && fb.energy > 1);
-    if (veryRecent && veryRecent.length > 0) {
+    if (veryRecent?.length) {
         const [fb] = veryRecent;
-        results.alerts.push(`meteors: significant fireball (${fb.energy.toFixed(1)}×10¹⁰ J) detected ${Math.round(fb.ageHours)}h ago nearby!`);
+        results.alerts.push(`meteors: ${ts.get('fireballs', fireballs._fetched)}significant fireball nearby (${FormatHelper.energyJoulesE10ToString(fb.energy)}, ${FormatHelper.hoursAgoToString(fb.ageHours)})`);
     }
 }
 
@@ -277,10 +301,12 @@ function interpretShowerForecast({ results, situation }) {
         if (daysToPeak > 0 && daysToPeak <= 7) {
             if (shower.typicalZHR >= 50) {
                 // Major shower
+                const zhrStr = FormatHelper.zhrToString(shower.typicalZHR);
+                const dayWord = daysToPeak === 1 ? 'day' : 'days';
                 if (daysToPeak <= 3) {
-                    results.phenomena.push(`meteors: ${shower.name} peak in ${daysToPeak} day${daysToPeak > 1 ? 's' : ''} (ZHR ~${shower.typicalZHR})`);
+                    results.phenomena.push(`meteors: ${shower.name} peak in ${daysToPeak} ${dayWord} (${zhrStr})`);
                 } else if (daysToPeak <= 7) {
-                    results.phenomena.push(`meteors: ${shower.name} approaching (peak in ${daysToPeak} days)`);
+                    results.phenomena.push(`meteors: ${shower.name} approaching (peak in ${daysToPeak} ${dayWord})`);
                 }
                 break; // Only report one upcoming shower
             }
@@ -289,14 +315,19 @@ function interpretShowerForecast({ results, situation }) {
 }
 
 function interpretTauridSeason({ results, situation, store }) {
-    const { month, day } = situation;
+    const { month, day, now, location } = situation;
+
+    const ts = createTimestampTracker(now, location.timezone);
 
     if ((month === 9 || month === 10) && day >= 20 && day <= 15) {
         let text = 'meteors: Taurid fireball season active';
         // Taurid "swarm" years - enhanced fireball activity: this is roughly every 7 years, last was 2022, next ~2029
         if ((new Date().getFullYear() - 2022) % 7 === 0) text += ' (SWARM YEAR - enhanced fireball rates expected)';
         const fireballs = getFireballs(store.astronomy_meteors_realtime);
-        if (fireballs?.counts.last24h > 3) text += ` - ${fireballs.counts.last24h} fireballs reported in 24h`;
+        if (fireballs?.counts.last24h > 3) {
+            text = `meteors: ${ts.get('fireballs', fireballs._fetched)}Taurid fireball season active (${FormatHelper.countToString(fireballs.counts.last24h)} fireballs in 24h)`;
+            if ((new Date().getFullYear() - 2022) % 7 === 0) text += ' - SWARM YEAR';
+        }
         results.phenomena.push(text);
     }
 }
@@ -308,8 +339,7 @@ function interpretTauridSeason({ results, situation, store }) {
 module.exports = function ({ location, store }) {
     if (!store.astronomy_meteors_realtime) store.astronomy_meteors_realtime = {};
 
-    const now = new Date();
-    updateSchedule(store.astronomy_meteors_realtime, { month: now.getMonth(), day: now.getDate(), hour: now.getHours() }, location);
+    updateSchedule(store.astronomy_meteors_realtime, { location });
 
     return {
         interpretMeteorActivity,

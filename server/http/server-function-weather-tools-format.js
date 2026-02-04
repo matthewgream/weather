@@ -62,6 +62,7 @@ class FormatHelper {
         const __l = (x, a, u, f, p) => {
             const q = Math.floor(x[1] / a);
             x[1] -= q * a;
+            // eslint-disable-next-line sonarjs/no-nested-conditional
             x[0] += q > 0 || f ? (p ? String(q).padStart(2, '0') : q) + u + (options.separator ?? ' ') : '';
             return x;
         };
@@ -77,6 +78,7 @@ class FormatHelper {
                 }
             }
         }
+        // eslint-disable-next-line sonarjs/no-nested-conditional
         return left[0] === '' ? '0' : (secs < 0 ? '-' : '') + left[0].trim();
     }
     static secondsToString(secs, options = {}) {
@@ -87,6 +89,9 @@ class FormatHelper {
     }
     static timeToString(time) {
         return FormatHelper._valueToString(time, (v) => new Date(v).toISOString());
+    }
+    static timeLocalToString(time) {
+        return new Date(time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); // XXX fix me
     }
     static millimetresToString(millis, options = {}) {
         return FormatHelper._valueToString(millis, (v) => v.toFixed(1) + (options.noUnits ? '' : 'mm'));
@@ -134,8 +139,8 @@ class FormatHelper {
     static kpToString(kp, options = {}) {
         return FormatHelper._valueToString(kp, (v) => v.toFixed(1) + (options.noUnits ? '' : ' Kp'));
     }
-    static speedKmsToString(speed, options = {}) {
-        return FormatHelper._valueToString(speed, (v) => Math.round(v) + (options.noUnits ? '' : ' km/s'));
+    static distanceKmToString(distance, options = {}) {
+        return FormatHelper._valueToString(di, (v) => Math.round(v) + (options.noUnits ? '' : ' km/s'));
     }
     static densityToString(density, options = {}) {
         return FormatHelper._valueToString(density, (v) => v.toFixed(1) + (options.noUnits ? '' : ' p/cm³'));
@@ -146,12 +151,34 @@ class FormatHelper {
     static probabilityToString(prob, options = {}) {
         return FormatHelper._valueToString(prob, (v) => Math.round(v) + (options.noUnits ? '' : '%'));
     }
+    static degreesToString(deg, options = {}) {
+        return FormatHelper._valueToString(deg, (v) => Math.round(v) + (options.noUnits ? '' : '°'));
+    }
+    static magnitudeToString(mag, options = {}) {
+        return FormatHelper._valueToString(mag, (v) => (options.noUnits ? '' : 'mag ') + v.toFixed(1));
+    }
+    static energyJoulesE10ToString(energy, options = {}) {
+        // Energy is in units of 10^10 J
+        return FormatHelper._valueToString(energy, (v) => v.toFixed(1) + (options.noUnits ? '' : '×10¹⁰ J'));
+    }
+    static zhrToString(zhr, options = {}) {
+        return FormatHelper._valueToString(zhr, (v) => '~' + Math.round(v) + (options.noUnits ? '' : ' ZHR'));
+    }
+    static hoursAgoToString(hours) {
+        return FormatHelper._valueToString(hours, (v) => Math.round(v) + 'h ago');
+    }
+    static countToString(n) {
+        return FormatHelper._valueToString(n, (v) => Math.round(v).toString());
+    }
+    static azimuthToString(azimuth) {
+        return ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][Math.round(azimuth / 22.5) % 16];
+    }
     static relativeAbsoluteTime(timestamp, now, timeZone = 'UTC') {
         if (timestamp === undefined || timestamp === null) return '-';
         const date = new Date(timestamp);
         const timeStr = date.toLocaleTimeString('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false });
-        if (date.toLocaleDateString('en-GB', { timeZone }) === (new Date (now)).toLocaleDateString('en-GB', { timeZone })) return timeStr;
-        else if (((now - timestamp) / (24 * 60 * 60 * 1000)) < 7) return `${timeStr} (${date.toLocaleDateString('en-GB', { timeZone, weekday: 'short' })})`;
+        if (date.toLocaleDateString('en-GB', { timeZone }) === new Date(now).toLocaleDateString('en-GB', { timeZone })) return timeStr;
+        else if ((now - timestamp) / (24 * 60 * 60 * 1000) < 7) return `${timeStr} (${date.toLocaleDateString('en-GB', { timeZone, weekday: 'short' })})`;
         else return date.toLocaleDateString('en-GB', { timeZone, day: '2-digit', month: '2-digit' });
     }
     static timestampBracket(timestamp, now, timezone = 'UTC') {
@@ -165,6 +192,7 @@ class FormatHelper {
         return Object.entries(object)
             .map(
                 ([name, string], index) =>
+                    // eslint-disable-next-line sonarjs/no-nested-conditional
                     (typeof string !== 'string' || string) && (index == 0 && options.skipFirstKey ? (options.formatter ? options.formatter(string) : string) : `${name}=${options.formatter ? options.formatter(string) : string}`)
             )
             .filter(Boolean)

@@ -279,6 +279,7 @@ function __weatherSituation(location, data, options) {
         minute: date.getMinutes(),
         hour: date.getHours(),
         hourDecimal: date.getHours() + date.getMinutes() / 60,
+        month: date.getMonth(),
         jd: helpers.dateToJulianDateUTC(date),
         //
         dewPoint: toolsCalculators.calculateDewPoint(temp, humidity),
@@ -363,7 +364,7 @@ function initialise(location, options) {
     weatherOptions = mergeObjects(DEFAULT_OPTIONS, options || {});
     if (weatherOptions.debug) console.error(`weather: DEBUG ENABLED`);
     weatherStorageStartup(weatherOptions);
-    const parameters = { location: weatherLocation, store: weatherStore, options: weatherOptions };
+    const parameters = { date: new Date(), location: weatherLocation, store: weatherStore, options: weatherOptions };
     weatherInterpreters = {
         ...require('./server-function-weather-module-conditions.js')(parameters),
         ...require('./server-function-weather-module-astronomy-calendar.js')(parameters),
