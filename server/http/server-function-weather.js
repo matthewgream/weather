@@ -5,7 +5,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const helpers = require('./server-function-weather-helpers.js');
+const { constants, getSeason, daysIntoYear, dateToJulianDateUTC } = require('./server-function-weather-helpers.js');
 const formatter = require('./server-function-weather-tools-format.js');
 const toolsCalculators = require('./server-function-weather-tools-calculators.js');
 const toolsEvents = require('./server-function-weather-tools-events.js');
@@ -22,34 +22,34 @@ function mergeObjects(defaults, provided) {
 
 const DEFAULT_OPTIONS = {
     data: {
-        gateInterval: 5 * helpers.constants.MILLISECONDS_PER_SECOND, // 5 seconds - minimum time between cache updates
+        gateInterval: 5 * constants.MILLISECONDS_PER_SECOND, // 5 seconds - minimum time between cache updates
     },
     storage: {
-        pruneInterval: 5 * helpers.constants.MILLISECONDS_PER_MINUTE, // 5 minutes
-        evictionTimeDuration: 31 * helpers.constants.MILLISECONDS_PER_DAY, // 31 days
+        pruneInterval: 5 * constants.MILLISECONDS_PER_MINUTE, // 5 minutes
+        evictionTimeDuration: 31 * constants.MILLISECONDS_PER_DAY, // 31 days
         evictionSizeThreshold: 0.8, // evict when cache is 80% of max size
         evictionSizePercent: 0.2, // evict 20% of cache
         maxCacheSize: 10 * 1024 * 1024, // 10MB default
-        statsInterval: 15 * helpers.constants.MILLISECONDS_PER_MINUTE, // 15 minutes
+        statsInterval: 15 * constants.MILLISECONDS_PER_MINUTE, // 15 minutes
         persistence: [
             {
                 type: 'cache',
                 enabled: true,
                 file: 'weather-storage.json',
-                interval: 5 * helpers.constants.MILLISECONDS_PER_MINUTE, // 5 minutes
-                maxAge: 2 * helpers.constants.MILLISECONDS_PER_HOUR, // 2 hours
+                interval: 5 * constants.MILLISECONDS_PER_MINUTE, // 5 minutes
+                maxAge: 2 * constants.MILLISECONDS_PER_HOUR, // 2 hours
             },
             {
                 type: 'store',
                 enabled: true,
                 file: 'weather-storage.json',
-                interval: 30 * helpers.constants.MILLISECONDS_PER_MINUTE, // 30 minutes
-                maxAge: 7 * helpers.constants.MILLISECONDS_PER_DAY, // 7 days
+                interval: 30 * constants.MILLISECONDS_PER_MINUTE, // 30 minutes
+                maxAge: 7 * constants.MILLISECONDS_PER_DAY, // 7 days
             },
         ],
     },
     compute: {
-        astronomicalCalculationInterval: 5 * helpers.constants.MILLISECONDS_PER_MINUTE, // 5 minutes
+        astronomicalCalculationInterval: 5 * constants.MILLISECONDS_PER_MINUTE, // 5 minutes
     },
 };
 
@@ -253,8 +253,8 @@ function __weatherSituation(location, data, options) {
             year: date.getFullYear(),
             month: date.getMonth(),
             day: date.getDate(),
-            daysIntoYear: helpers.daysIntoYear(date),
-            season: helpers.getSeason(date, location.hemisphere),
+            daysIntoYear: daysIntoYear(date),
+            season: getSeason(date, location.hemisphere),
             timestampSituation: date,
         };
         if (options?.debug) console.error(`weather: cached situation (daily, ${formatter.timeLocalToString(date)})`);
@@ -281,7 +281,7 @@ function __weatherSituation(location, data, options) {
         hour: date.getHours(),
         hourDecimal: date.getHours() + date.getMinutes() / 60,
         month: date.getMonth(),
-        jd: helpers.dateToJulianDateUTC(date),
+        jd: dateToJulianDateUTC(date),
         //
         dewPoint: toolsCalculators.calculateDewPoint(temp, humidity),
         windChill: toolsCalculators.calculateWindChill(temp, windSpeed),

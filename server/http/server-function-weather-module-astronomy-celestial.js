@@ -11,9 +11,9 @@
 //
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const helpers = require('./server-function-weather-helpers.js');
-const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
+const { constants, dateToJulianDateUTC } = require('./server-function-weather-helpers.js');
 const formatter = require('./server-function-weather-tools-format.js');
+const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -172,7 +172,7 @@ function getDaysFromPeak(shower, date, year, month, day) {
     if (shower.peakMonth !== undefined) {
         const peakDate = new Date(year, shower.peakMonth, shower.peak);
         if (shower.peakMonth < shower.month && month >= shower.month) peakDate.setFullYear(year + 1);
-        return Math.round((peakDate - date) / helpers.constants.MILLISECONDS_PER_DAY);
+        return Math.round((peakDate - date) / constants.MILLISECONDS_PER_DAY);
     }
     if (month === shower.month) return shower.peak - day;
     return undefined;
@@ -297,11 +297,11 @@ function interpretComets({ results, situation }) {
     const { date } = situation;
 
     COMETS.forEach((comet) => {
-        const periodMs = comet.period * helpers.constants.DAYS_PER_YEAR * helpers.constants.MILLISECONDS_PER_DAY;
+        const periodMs = comet.period * constants.DAYS_PER_YEAR * constants.MILLISECONDS_PER_DAY;
         // Find next perihelion
         let nextPerihelion = new Date(comet.lastPerihelion);
         while (nextPerihelion < date) nextPerihelion = new Date(nextPerihelion.getTime() + periodMs);
-        const daysUntil = Math.round((nextPerihelion - date) / helpers.constants.MILLISECONDS_PER_DAY);
+        const daysUntil = Math.round((nextPerihelion - date) / constants.MILLISECONDS_PER_DAY);
         // Report if within visibility window and bright enough
         if (daysUntil > 0 && daysUntil < COMET.VISIBILITY_DAYS && comet.magnitude < COMET.BINOCULAR_MAG)
             results.phenomena.push(formatter.proximityToString(`comets: ${comet.name} perihelion`, daysUntil) + (comet.magnitude < COMET.NAKED_EYE_MAG ? ' (naked eye)' : ' (binoculars)'));
@@ -349,7 +349,7 @@ function interpretDeepSkyObjects({ results, situation, dataCurrent }) {
     const limitingMagnitude = toolsAstronomy.calculateLimitingMagnitude(lunar?.brightness || 0, location.lightPollution, humidity, 45);
 
     // Calculate local sidereal time
-    const lst = toolsAstronomy.localSiderealTime(helpers.dateToJulianDateUTC(date), location.longitude) / 15;
+    const lst = toolsAstronomy.localSiderealTime(dateToJulianDateUTC(date), location.longitude) / 15;
 
     // Find visible DSOs
     const visibleDSOs = DEEP_SKY_OBJECTS.filter((dso) => {

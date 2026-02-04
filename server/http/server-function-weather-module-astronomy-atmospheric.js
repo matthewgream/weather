@@ -16,7 +16,7 @@
 //
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const { isNearSunriseOrSet, isTwilight, getTwilightDuration, getBlueHourDuration, daysIntoYear, constants } = require('./server-function-weather-helpers.js');
+const { constants, isNearSunriseOrSet, isTwilight, getTwilightDuration, getBlueHourDuration, daysIntoYear } = require('./server-function-weather-helpers.js');
 const formatter = require('./server-function-weather-tools-format.js');
 const { DataSlot, DataScheduler, fetchJson, createTimestampTracker } = require('./server-function-weather-tools-live.js');
 

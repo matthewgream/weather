@@ -2,7 +2,7 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const helpers = require('./server-function-weather-helpers.js');
+const { constants } = require('./server-function-weather-helpers.js');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -55,14 +55,14 @@ function canTrigger(store, category, eventId, cooldownDays = 365) {
     if (!store.events || !store.events[category] || !store.events[category][eventId]) return true;
     const now = Date.now(),
         event = store.events[category][eventId];
-    return now > event.detected + cooldownDays * helpers.constants.MILLISECONDS_PER_DAY;
+    return now > event.detected + cooldownDays * constants.MILLISECONDS_PER_DAY;
 }
 
 function pruneEvents(store, daysAgo = 30) {
     const now = Date.now();
     const CLEANUP_INTERVAL = 60 * 60 * 1000;
     if (!store.events || store.eventsCleanedUp > now - CLEANUP_INTERVAL) return;
-    const expiry = now - daysAgo * helpers.constants.MILLISECONDS_PER_DAY;
+    const expiry = now - daysAgo * constants.MILLISECONDS_PER_DAY;
     Object.entries(store.events).forEach(([category, events]) =>
         Object.entries(events)
             .filter(([_, event]) => event.expires < expiry)

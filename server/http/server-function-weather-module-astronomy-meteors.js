@@ -7,8 +7,9 @@
 //
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const { isNearLocation } = require('./server-function-weather-tools-calculators.js');
+// const { constants } = require('./server-function-weather-helpers.js');
 const formatter = require('./server-function-weather-tools-format.js');
+const { isNearLocation } = require('./server-function-weather-tools-calculators.js');
 const { DataSlot, DataScheduler, fetchJson, createTimestampTracker } = require('./server-function-weather-tools-live.js');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

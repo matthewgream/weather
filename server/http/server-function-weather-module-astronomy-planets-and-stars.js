@@ -8,7 +8,7 @@
 //
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const helpers = require('./server-function-weather-helpers.js');
+const { constants, daysIntoYear } = require('./server-function-weather-helpers.js');
 const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
 const formatter = require('./server-function-weather-tools-format.js');
 
@@ -87,7 +87,7 @@ function interpretMars({ results, situation }) {
     const nextOpposition = MARS_OPPOSITIONS.find((d) => d > date);
     if (!nextOpposition) return;
 
-    const daysToOpposition = Math.floor((nextOpposition - date) / helpers.constants.MILLISECONDS_PER_DAY);
+    const daysToOpposition = Math.floor((nextOpposition - date) / constants.MILLISECONDS_PER_DAY);
     if (Math.abs(daysToOpposition) < PLANET_EVENT.OPPOSITION_WINDOW_DAYS) results.phenomena.push(formatter.proximityToString('planets: mars opposition', daysToOpposition) + ' (visible all night, closest approach)');
 }
 
@@ -105,7 +105,7 @@ function interpretJupiter({ results, situation, dataCurrent }) {
 
         // Galilean moon events (simplified periodic check)
         if ((hour >= 22 || hour <= 2) && cloudCover !== undefined && cloudCover < SATELLITE.BEST_CLOUD_COVER)
-            if (helpers.daysIntoYear(new Date()) % 7 < 2)
+            if (daysIntoYear(new Date()) % 7 < 2)
                 // Moon events happen roughly every few days
                 results.phenomena.push('planets: jupiter moon event likely tonight (transit or shadow)');
     }

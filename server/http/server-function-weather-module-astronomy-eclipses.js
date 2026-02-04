@@ -12,9 +12,9 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const { isSameDay, getDaysDifference, isWithinDays } = require('./server-function-weather-helpers.js');
+const formatter = require('./server-function-weather-tools-format.js');
 const { calculateDistanceToPath } = require('./server-function-weather-tools-calculators.js');
 const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
-const formatter = require('./server-function-weather-tools-format.js');
 
 /* eslint-disable sonarjs/cognitive-complexity */
 

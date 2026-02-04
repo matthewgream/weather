@@ -13,12 +13,11 @@
 
 /* eslint-disable sonarjs/cognitive-complexity */
 
-const helpers = require('./server-function-weather-helpers.js');
+const { constants } = require('./server-function-weather-helpers.js');
 const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
 const formatter = require('./server-function-weather-tools-format.js');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
-// Constants
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const PHASE = {
@@ -238,7 +237,7 @@ function interpretLunarPosition({ results, situation }) {
     if (!lunar?.position) return;
 
     const { altitude, azimuth, direction, dec } = lunar.position;
-    const { phase, distance, constants } = lunar;
+    const { phase, distance, constants: constantsLunar } = lunar;
 
     // Current position
     if (altitude > 0) {
@@ -253,11 +252,12 @@ function interpretLunarPosition({ results, situation }) {
 
     // Distance-based phenomena
     if (distance?.isSupermoon) {
-        if (isFullMoon(phase)) results.phenomena.push(`moon: supermoon - appears ${formatter.percentageToString(distance.percentCloser || Math.round((1 - distance.distance / constants.LUNAR_MEAN_DISTANCE_KM) * 100))} larger than average`);
+        if (isFullMoon(phase))
+            results.phenomena.push(`moon: supermoon - appears ${formatter.percentageToString(distance.percentCloser || Math.round((1 - distance.distance / constantsLunar.LUNAR_MEAN_DISTANCE_KM) * 100))} larger than average`);
         else if (isNewMoon(phase)) results.phenomena.push('moon: super new moon - extra high tides expected');
         else results.phenomena.push('moon: at perigee (closest approach)');
     } else if (distance?.isMicromoon && isFullMoon(phase)) {
-        results.phenomena.push(`moon: micromoon - appears ${formatter.percentageToString(distance.percentFarther || Math.round((distance.distance / constants.LUNAR_MEAN_DISTANCE_KM - 1) * 100))} smaller and dimmer`);
+        results.phenomena.push(`moon: micromoon - appears ${formatter.percentageToString(distance.percentFarther || Math.round((distance.distance / constantsLunar.LUNAR_MEAN_DISTANCE_KM - 1) * 100))} smaller and dimmer`);
     }
 }
 
@@ -269,7 +269,7 @@ function interpretLunarVisibility({ results, situation, dataCurrent }) {
 
     if (!lunar) return;
 
-    const { phase, position, times, brightness, constants } = lunar;
+    const { phase, position, times, brightness, constants: constantsLunar } = lunar;
 
     // Illumination
     results.phenomena.push(`moon: ${formatter.percentageToString(brightness)} illuminated`);
@@ -298,7 +298,7 @@ function interpretLunarVisibility({ results, situation, dataCurrent }) {
     if (phase >= 0.45 && phase <= 0.55 && position?.latitude !== undefined && Math.abs(position.latitude) < 5) results.phenomena.push('moon: watch for subtle penumbral shading (possible eclipse season)');
 
     // Lunar X and V features
-    const hoursToFirstQuarter = (0.25 - phase) * constants.LUNAR_CYCLE_DAYS * 24;
+    const hoursToFirstQuarter = (0.25 - phase) * constantsLunar.LUNAR_CYCLE_DAYS * 24;
     if (hoursToFirstQuarter > LUNAR_X_HOURS_BEFORE_FIRST_QUARTER.min && hoursToFirstQuarter < LUNAR_X_HOURS_BEFORE_FIRST_QUARTER.max) results.phenomena.push('moon: Lunar X and V features visible along terminator (use binoculars)');
 
     // Moonbow
@@ -356,7 +356,7 @@ function interpretLunarEvents({ results, situation }) {
 
     if (!lunar) return;
 
-    const { phase, position, distance, constants } = lunar;
+    const { phase, position, distance, constants: constantsLunar } = lunar;
 
     // Extreme declination (monthly standstill)
     if (position?.dec && Math.abs(position.dec) > DECLINATION.EXTREME) results.phenomena.push('moon: extreme declination (monthly standstill)');
@@ -365,14 +365,14 @@ function interpretLunarEvents({ results, situation }) {
     if (isFullMoon(phase) && position?.latitude !== undefined && Math.abs(position.latitude) < 1.5) results.phenomena.push('moon: near ecliptic plane (eclipse season possible)');
 
     // Nodal cycle standstills
-    const yearsSinceStandstill = (date - LAST_MAJOR_STANDSTILL) / (helpers.constants.DAYS_PER_YEAR * helpers.constants.MILLISECONDS_PER_DAY);
+    const yearsSinceStandstill = (date - LAST_MAJOR_STANDSTILL) / (constants.DAYS_PER_YEAR * constants.MILLISECONDS_PER_DAY);
     const nodalPhase = (yearsSinceStandstill % NODAL_CYCLE_YEARS) / NODAL_CYCLE_YEARS;
     if (nodalPhase < 0.1 || nodalPhase > 0.9) results.phenomena.push(`moon: near major standstill (declination range ±${formatter.degreesToString(DECLINATION.MAJOR_STANDSTILL)})`);
     else if (Math.abs(nodalPhase - 0.5) < 0.1) results.phenomena.push(`moon: near minor standstill (declination range ±${formatter.degreesToString(DECLINATION.MINOR_STANDSTILL)})`);
 
     // Horizontal parallax for close approaches
     if (distance?.isSupermoon || distance?.isPerigee)
-        results.phenomena.push(`moon: horizontal parallax ${formatter.degreesToString(Math.round(((((3600 * 180) / Math.PI) * (constants.LUNAR_MEAN_DISTANCE_KM / distance.distance)) / 3600) * 10) / 10)} (position shifts at horizon)`);
+        results.phenomena.push(`moon: horizontal parallax ${formatter.degreesToString(Math.round(((((3600 * 180) / Math.PI) * (constantsLunar.LUNAR_MEAN_DISTANCE_KM / distance.distance)) / 3600) * 10) / 10)} (position shifts at horizon)`);
 
     // Next phase prediction
     const daysToNext = getDaysToNextPhase(phase);

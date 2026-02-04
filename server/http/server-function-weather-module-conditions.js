@@ -4,13 +4,10 @@
 
 const { cardinalDirection } = require('./server-function-weather-helpers.js');
 const formatter = require('./server-function-weather-tools-format.js');
-// const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
-// const toolsData = require('./server-function-weather-tools-data.js');
 
 /* eslint-disable sonarjs/cognitive-complexity */
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
-// Constants - Weather Thresholds
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const THRESHOLDS = {
