@@ -6,48 +6,6 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function proximity(type_, days_) {
-    if (Math.abs(days_) < 1) return `${type_} today`;
-    const rounded = Math.round(Math.abs(days_));
-    if (days_ > 0) return `${type_} in ${rounded} day${rounded === 1 ? '' : 's'}`;
-    return `${type_} ${rounded} day${rounded === 1 ? '' : 's'} ago`;
-}
-function altitude(altitude_) {
-    return `${Math.round(altitude_)}°`;
-}
-function direction(bearing_) {
-    return `${Math.round(bearing_)}°`;
-}
-function position(altitude_, bearing_, direction_) {
-    return `${altitude(altitude_)} above horizon (bearing ${direction(bearing_)}, ${direction_})`;
-}
-// Passthrough for visibility descriptions - placeholder for future localization or enhancement
-function visibility(condition_) {
-    return condition_;
-}
-function magnitude(magnitude_) {
-    return magnitude_ !== undefined && magnitude_ !== null ? magnitude_.toFixed(1) : '';
-}
-function percentage(value_) {
-    return `${Math.round(value_)}%`;
-}
-function timeFromHM(hours_, minutes_ = 0) {
-    const h = Math.floor(hours_) % 24;
-    const m = Math.floor(minutes_) % 60;
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-}
-function timeFromDate(date_, timezone_) {
-    return date_.toLocaleTimeString('en-GB', {
-        timeZone: timezone_ || 'UTC',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-    });
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
 // eslint-disable-next-line unicorn/no-static-only-class
 class FormatHelper {
     static _valueToString(value, func) {
@@ -87,8 +45,8 @@ class FormatHelper {
     static millisToString(millis, options = {}) {
         return FormatHelper._valueToString(millis, (v) => FormatHelper._secondsToString(v / 1000, options));
     }
-    static timeToString(time) {
-        return FormatHelper._valueToString(time, (v) => new Date(v).toISOString());
+    static timeToString(time, options = {}) {
+        return FormatHelper._valueToString(time, (v) => (options.hoursOnly ? `${new Date(v).getHours().padStart(2, '0')}:${new Date(v).getMinutes().padStart(2, '0')}` : new Date(v).toISOString()));
     }
     static timeLocalToString(time) {
         return new Date(time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); // XXX fix me
@@ -140,7 +98,7 @@ class FormatHelper {
         return FormatHelper._valueToString(kp, (v) => v.toFixed(1) + (options.noUnits ? '' : ' Kp'));
     }
     static distanceKmToString(distance, options = {}) {
-        return FormatHelper._valueToString(di, (v) => Math.round(v) + (options.noUnits ? '' : ' km/s'));
+        return FormatHelper._valueToString(distance, (v) => Math.round(v) + (options.noUnits ? '' : ' km/s'));
     }
     static densityToString(density, options = {}) {
         return FormatHelper._valueToString(density, (v) => v.toFixed(1) + (options.noUnits ? '' : ' p/cm³'));
@@ -152,13 +110,13 @@ class FormatHelper {
         return FormatHelper._valueToString(prob, (v) => Math.round(v) + (options.noUnits ? '' : '%'));
     }
     static degreesToString(deg, options = {}) {
-        return FormatHelper._valueToString(deg, (v) => Math.round(v) + (options.noUnits ? '' : '°'));
+        /// options.signed !
+        return FormatHelper._valueToString(deg, (v) => (options.digits ? v.toFixed(options.digits) : Math.round(v)) + (options.noUnits ? '' : '°'));
     }
     static magnitudeToString(mag, options = {}) {
         return FormatHelper._valueToString(mag, (v) => (options.noUnits ? '' : 'mag ') + v.toFixed(1));
     }
     static energyJoulesE10ToString(energy, options = {}) {
-        // Energy is in units of 10^10 J
         return FormatHelper._valueToString(energy, (v) => v.toFixed(1) + (options.noUnits ? '' : '×10¹⁰ J'));
     }
     static zhrToString(zhr, options = {}) {
@@ -173,6 +131,18 @@ class FormatHelper {
     static azimuthToString(azimuth) {
         return ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][Math.round(azimuth / 22.5) % 16];
     }
+    static altitudeToString(altitude_) {
+        return `${Math.round(altitude_)}°`;
+    }
+    static positionToString(altitude_, bearing_, direction_) {
+        return `${FormatHelper.altitudeToString(altitude_)} above horizon (bearing ${Math.round(bearing_)}°, ${direction_})`;
+    }
+    static proximityToString(type_, days_) {
+        if (Math.abs(days_) < 1) return `${type_} today`;
+        const rounded = Math.round(Math.abs(days_));
+        if (days_ > 0) return `${type_} in ${rounded} day${rounded === 1 ? '' : 's'}`;
+        return `${type_} ${rounded} day${rounded === 1 ? '' : 's'} ago`;
+    }
     static relativeAbsoluteTime(timestamp, now, timeZone = 'UTC') {
         if (timestamp === undefined || timestamp === null) return '-';
         const date = new Date(timestamp);
@@ -184,6 +154,9 @@ class FormatHelper {
     static timestampBracket(timestamp, now, timezone = 'UTC') {
         const formatted = FormatHelper.relativeAbsoluteTime(timestamp, now, timezone);
         return formatted === '-' ? '' : `[${formatted}]`;
+    }
+    static percentageToString(percent, options = {}) {
+        return FormatHelper._valueToString(percent, (v) => Math.round(v) + (options.noUnits ? '' : '%'));
     }
     static objectToString(object, options = {}) {
         if (object === undefined) return '-';
@@ -220,15 +193,6 @@ class FormatHelper {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 module.exports = {
-    proximity,
-    altitude,
-    direction,
-    position,
-    visibility,
-    magnitude,
-    percentage,
-    timeFromHM,
-    timeFromDate,
     FormatHelper,
 };
 

@@ -13,7 +13,7 @@
 
 const helpers = require('./server-function-weather-helpers.js');
 const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
-const toolsFormat = require('./server-function-weather-tools-format.js');
+const { FormatHelper } = require('./server-function-weather-tools-format.js');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -156,9 +156,7 @@ const DEEP_SKY_OBJECTS = [
 function isShowerActive(shower, month, day) {
     const monthStart = shower.month;
     const monthEnd = shower.endMonth === undefined ? shower.month : shower.endMonth;
-    if (monthStart === monthEnd) {
-        return month === monthStart && day >= shower.start && day <= shower.end;
-    }
+    if (monthStart === monthEnd) return month === monthStart && day >= shower.start && day <= shower.end;
     if (monthStart <= monthEnd) {
         if (month === monthStart) return day >= shower.start;
         if (month === monthEnd) return day <= shower.end;
@@ -204,9 +202,8 @@ function getSeasonalRecommendation(month) {
 }
 
 function calculateDSOAltitude(dso, lst, latitude) {
-    let ha = (lst - dso.ra + 24) % 24;
-    if (ha > 12) ha -= 24;
-    const haRad = (ha * 15 * Math.PI) / 180;
+    const ha = (lst - dso.ra + 24) % 24;
+    const haRad = ((ha > 12 ? ha - 24 : ha) * 15 * Math.PI) / 180;
     const latRad = (latitude * Math.PI) / 180;
     const decRad = (dso.dec * Math.PI) / 180;
     return (Math.asin(Math.sin(latRad) * Math.sin(decRad) + Math.cos(latRad) * Math.cos(decRad) * Math.cos(haRad)) * 180) / Math.PI;
@@ -223,7 +220,6 @@ function interpretMeteorShowers({ results, situation, dataCurrent }) {
 
     // Find active showers
     const activeShowers = METEOR_SHOWERS.filter((shower) => isShowerActive(shower, month, day));
-
     activeShowers.forEach((shower) => {
         // Check if radiant is visible
         const radiant = toolsAstronomy.isRadiantVisible(RADIANT_COORDINATES, shower.radiant, date, location.latitude, location.longitude);
@@ -239,11 +235,9 @@ function interpretMeteorShowers({ results, situation, dataCurrent }) {
 
         if (isPeakDay) {
             text += ' peak tonight';
-
             // Adjusted rate for radiant altitude
             const adjustedRate = calculateAdjustedRate(shower.rate, radiant.altitude);
-            text += typeof adjustedRate === 'number' ? ` (ZHR ~${adjustedRate}/hr from this latitude)` : ' (variable rate)';
-
+            text += typeof adjustedRate === 'number' ? ` (${FormatHelper.zhrToString(adjustedRate)} from this latitude)` : ' (variable rate)';
             // Moon conditions
             if (cloudCover !== undefined && cloudCover < 30 && lunar?.phase !== undefined)
                 switch (getMoonInterference(lunar.phase, shower.moon)) {
@@ -260,7 +254,7 @@ function interpretMeteorShowers({ results, situation, dataCurrent }) {
             if (shower.name === 'Geminids' || shower.name === 'Perseids') text += ' (increased fireball activity)';
             if (shower.name === 'Leonids' && daysFromPeak !== undefined && Math.abs(daysFromPeak) < 1) text += ' (outbursts possible)';
         } else {
-            text += ' ' + toolsFormat.proximity('peak', daysFromPeak);
+            text += ' ' + FormatHelper.proximityToString('peak', daysFromPeak);
         }
 
         // Radiant position
@@ -275,17 +269,15 @@ function interpretMeteorShowers({ results, situation, dataCurrent }) {
     });
 
     // Sporadic meteors when no showers active
-    if (activeShowers.length === 0 && hour >= 2 && hour <= 5) {
-        results.phenomena.push(`meteors: sporadic rate ~${METEOR.SPORADIC_RATE}/hour (highest before dawn)`);
-    }
+    if (activeShowers.length === 0 && hour >= 2 && hour <= 5) results.phenomena.push(`meteors: sporadic rate ~${FormatHelper.countToString(METEOR.SPORADIC_RATE)}/hour (highest before dawn)`);
 
     // High latitude viewing conditions
     if (location.latitude > 59 && activeShowers.length > 0 && (hour >= 22 || hour <= 4)) {
-        if (month >= 8 || month <= 2) {
-            results.phenomena.push('meteors: viewing ideal with long dark nights');
-        } else if (month >= 5 && month <= 7 && daylight?.astronomicalDuskDecimal && daylight?.astronomicalDawnDecimal) {
-            results.phenomena.push(`meteors: viewing window ${toolsFormat.timeFromHM(Math.floor(daylight.astronomicalDuskDecimal))} to ${toolsFormat.timeFromHM(Math.floor(daylight.astronomicalDawnDecimal))}`);
-        }
+        if (month >= 8 || month <= 2) results.phenomena.push('meteors: viewing ideal with long dark nights');
+        else if (month >= 5 && month <= 7 && daylight?.astronomicalDuskDecimal && daylight?.astronomicalDawnDecimal)
+            results.phenomena.push(
+                `meteors: viewing window ${FormatHelper.timeToString(Math.floor(daylight.astronomicalDuskDecimal), { hoursOnly: true })} to ${FormatHelper.timeToString(Math.floor(daylight.astronomicalDawnDecimal), { hoursOnly: true })}`
+            );
     }
 }
 
@@ -298,9 +290,7 @@ function interpretFireballSeason({ results, situation }) {
     if (!METEOR.FIREBALL_MONTHS.includes(month)) return;
     if (!(hour >= 21 || hour <= 3)) return;
 
-    let text = 'meteors: autumn fireball season (increased bright meteor rate)';
-    if (location?.latitude > 55) text += ' - favorable geometry at high latitude';
-    results.phenomena.push(text);
+    results.phenomena.push('meteors: autumn fireball season (increased bright meteor rate)' + (location?.latitude > 55 ? ' - favorable geometry at high latitude' : ''));
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -315,9 +305,8 @@ function interpretComets({ results, situation }) {
         while (nextPerihelion < date) nextPerihelion = new Date(nextPerihelion.getTime() + periodMs);
         const daysUntil = Math.round((nextPerihelion - date) / helpers.constants.MILLISECONDS_PER_DAY);
         // Report if within visibility window and bright enough
-        if (daysUntil > 0 && daysUntil < COMET.VISIBILITY_DAYS && comet.magnitude < COMET.BINOCULAR_MAG) {
-            results.phenomena.push(toolsFormat.proximity(`comets: ${comet.name} perihelion`, daysUntil) + (comet.magnitude < COMET.NAKED_EYE_MAG ? ' (naked eye)' : ' (binoculars)'));
-        }
+        if (daysUntil > 0 && daysUntil < COMET.VISIBILITY_DAYS && comet.magnitude < COMET.BINOCULAR_MAG)
+            results.phenomena.push(FormatHelper.proximityToString(`comets: ${comet.name} perihelion`, daysUntil) + (comet.magnitude < COMET.NAKED_EYE_MAG ? ' (naked eye)' : ' (binoculars)'));
     });
 }
 
@@ -338,22 +327,16 @@ function interpretDeepSkyConditions({ results, situation, dataCurrent }) {
 
     // Report circumpolar objects for high latitudes
     if (location.latitude > 55) {
-        const circumpolarLimit = 90 - location.latitude;
-        const circumpolarCount = DEEP_SKY_OBJECTS.filter((obj) => obj.dec > circumpolarLimit).length;
-        if (circumpolarCount > 0 && limitingMagnitude > 4) {
-            results.phenomena.push(`space: deep sky ${circumpolarCount} circumpolar objects never set`);
-        }
+        const circumpolarCount = DEEP_SKY_OBJECTS.filter((obj) => obj.dec > 90 - location.latitude).length;
+        if (circumpolarCount > 0 && limitingMagnitude > 4) results.phenomena.push(`space: deep sky ${FormatHelper.countToString(circumpolarCount)} circumpolar objects never set`);
     }
 
     // Report visibility conditions
     if (limitingMagnitude > MAGNITUDE.EXCELLENT_SKY) {
         const recommendation = getSeasonalRecommendation(month);
-        results.phenomena.push(`space: deep sky viewing excellent (limiting magnitude ~${limitingMagnitude.toFixed(1)})` + (recommendation ? ` - ${recommendation}` : ''));
-    } else if (limitingMagnitude > MAGNITUDE.GOOD_SKY) {
-        results.phenomena.push('space: deep sky viewing good for brighter objects');
-    } else {
-        results.phenomena.push('space: deep sky viewing poor (only brightest objects visible)');
-    }
+        results.phenomena.push(`space: deep sky viewing excellent (limiting ~${FormatHelper.magnitudeToString(limitingMagnitude)})` + (recommendation ? ` - ${recommendation}` : ''));
+    } else if (limitingMagnitude > MAGNITUDE.GOOD_SKY) results.phenomena.push('space: deep sky viewing good for brighter objects');
+    else results.phenomena.push('space: deep sky viewing poor (only brightest objects visible)');
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -376,14 +359,11 @@ function interpretDeepSkyObjects({ results, situation, dataCurrent }) {
 
     // Find visible DSOs
     const visibleDSOs = DEEP_SKY_OBJECTS.filter((dso) => {
-        // Check magnitude
-        if (dso.mag > limitingMagnitude) return false;
-        // Check season
-        if (!dso.bestMonths.includes(month)) return false;
+        // Check magnitude and season
+        if (dso.mag > limitingMagnitude || !dso.bestMonths.includes(month)) return false;
         // Check hour angle (well-placed if HA between -4 and +4 hours)
-        let ha = (lst - dso.ra + 24) % 24;
-        if (ha > 12) ha -= 24;
-        return Math.abs(ha) < 4;
+        const ha = (lst - dso.ra + 24) % 24;
+        return Math.abs(ha > 12 ? ha - 24 : ha) < 4;
     })
         .map((dso) => ({
             ...dso,
@@ -399,17 +379,15 @@ function interpretDeepSkyObjects({ results, situation, dataCurrent }) {
         const best = visibleDSOs.find((d) => d.type === type);
         if (!best) return;
         let text = `space: object ${best.name}`;
-        if (best.altitude > ALTITUDE.NEAR_ZENITH) text += ` near zenith (${Math.round(best.altitude)}°)`;
-        else if (best.altitude > ALTITUDE.WELL_PLACED) text += ` well-placed (${Math.round(best.altitude)}°)`;
-        else text += ` visible (${Math.round(best.altitude)}°)`;
+        if (best.altitude > ALTITUDE.NEAR_ZENITH) text += ` near zenith (${FormatHelper.degreesToString(best.altitude)})`;
+        else if (best.altitude > ALTITUDE.WELL_PLACED) text += ` well-placed (${FormatHelper.degreesToString(best.altitude)})`;
+        else text += ` visible (${FormatHelper.degreesToString(best.altitude)})`;
         results.phenomena.push(text);
     });
 
     // Showpiece callout
     const showpiece = visibleDSOs.find((d) => d.showpiece && d.altitude > 50);
-    if (showpiece) {
-        results.phenomena.push(`space: object ${showpiece.name.split(' ')[0]} - showpiece object perfectly positioned!`);
-    }
+    if (showpiece) results.phenomena.push(`space: object ${showpiece.name.split(' ')[0]} - showpiece object perfectly positioned`);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

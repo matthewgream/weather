@@ -584,6 +584,7 @@ function getRecentData(data_previous, timestamp, hoursBack) {
 class WeatherData {
     // Standard periods: key -> { hours, recomputeMs }
     // recomputeMs: 0 = always fresh, >0 = cache for this duration
+    // eslint-disable-next-line sonarjs/public-static-readonly
     static PERIODS = {
         '1h': { hours: 1, recomputeMs: 0 },
         '3h': { hours: 3, recomputeMs: 0 },

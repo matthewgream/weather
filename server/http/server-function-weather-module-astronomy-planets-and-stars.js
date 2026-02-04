@@ -10,7 +10,7 @@
 
 const helpers = require('./server-function-weather-helpers.js');
 const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
-const toolsFormat = require('./server-function-weather-tools-format.js');
+const { FormatHelper } = require('./server-function-weather-tools-format.js');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -68,26 +68,16 @@ function interpretVenus({ results, situation, dataCurrent }) {
 
     // Basic visibility
     const timeDesc = venusData.visibility === 'evening' ? `after sunset (${venusData.direction} sky)` : `before sunrise (${venusData.direction} sky)`;
-    results.phenomena.push(`planets: venus ${Math.round(venusData.elongation)}° from Sun, visible ${timeDesc}`);
+    results.phenomena.push(`planets: venus ${FormatHelper.degreesToString(venusData.elongation)} from Sun, visible ${timeDesc}`);
 
     // Crescent phase
-    if (venusData.elongation < VENUS.CRESCENT_PHASE_MAX) {
-        let text = 'planets: venus showing crescent phase (use binoculars)';
-        if (venusData.visibility === 'evening') text += ' (ashen light possible on dark side with telescope)';
-        results.phenomena.push(text);
-    }
+    if (venusData.elongation < VENUS.CRESCENT_PHASE_MAX) results.phenomena.push('planets: venus showing crescent phase (use binoculars)' + (venusData.visibility === 'evening' ? ' - ashen light possible on dark side with telescope' : ''));
     // Greatest elongation
-    else if (venusData.elongation > VENUS.GREATEST_ELONGATION_MIN && venusData.elongation < VENUS.GREATEST_ELONGATION_MAX) {
-        results.phenomena.push('planets: venus near greatest elongation (best visibility)');
-    }
+    else if (venusData.elongation > VENUS.GREATEST_ELONGATION_MIN && venusData.elongation < VENUS.GREATEST_ELONGATION_MAX) results.phenomena.push('planets: venus near greatest elongation (best visibility)');
 
     // Venus casting shadows
-    if (venusData.elongation > VENUS.SHADOW_CASTING_MIN && venusData.elongation < VENUS.SHADOW_CASTING_MAX) {
-        const venusPos = toolsAstronomy.getVenusPosition(date, location.latitude, location.longitude);
-        if (venusPos.altitude > VENUS.SHADOW_MIN_ALTITUDE && lunar?.phase < 0.2) {
-            results.phenomena.push('planets: venus bright enough to cast shadows');
-        }
-    }
+    if (venusData.elongation > VENUS.SHADOW_CASTING_MIN && venusData.elongation < VENUS.SHADOW_CASTING_MAX)
+        if (toolsAstronomy.getVenusPosition(date, location.latitude, location.longitude).altitude > VENUS.SHADOW_MIN_ALTITUDE && lunar?.phase < 0.2) results.phenomena.push('planets: venus bright enough to cast shadows');
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -99,9 +89,7 @@ function interpretMars({ results, situation }) {
     if (!nextOpposition) return;
 
     const daysToOpposition = Math.floor((nextOpposition - date) / helpers.constants.MILLISECONDS_PER_DAY);
-    if (Math.abs(daysToOpposition) < PLANET_EVENT.OPPOSITION_WINDOW_DAYS) {
-        results.phenomena.push(toolsFormat.proximity('planets: mars opposition', daysToOpposition) + ' (visible all night, closest approach)');
-    }
+    if (Math.abs(daysToOpposition) < PLANET_EVENT.OPPOSITION_WINDOW_DAYS) results.phenomena.push(FormatHelper.proximityToString('planets: mars opposition', daysToOpposition) + ' (visible all night, closest approach)');
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -117,12 +105,10 @@ function interpretJupiter({ results, situation, dataCurrent }) {
         results.phenomena.push('planets: jupiter well-placed for viewing');
 
         // Galilean moon events (simplified periodic check)
-        if ((hour >= 22 || hour <= 2) && cloudCover !== undefined && cloudCover < SATELLITE.BEST_CLOUD_COVER) {
-            // Moon events happen roughly every few days
-            if (helpers.daysIntoYear(new Date()) % 7 < 2) {
+        if ((hour >= 22 || hour <= 2) && cloudCover !== undefined && cloudCover < SATELLITE.BEST_CLOUD_COVER)
+            if (helpers.daysIntoYear(new Date()) % 7 < 2)
+                // Moon events happen roughly every few days
                 results.phenomena.push('planets: jupiter moon event likely tonight (transit or shadow)');
-            }
-        }
     }
 }
 
@@ -135,9 +121,7 @@ function interpretSaturn({ results, situation, dataCurrent }) {
     if (cloudCover !== undefined && cloudCover >= SATELLITE.MAX_CLOUD_COVER) return;
 
     // Saturn well-placed in late summer/autumn
-    if (month >= 7 && month <= 10 && (hour >= 22 || hour <= 2)) {
-        results.phenomena.push('planets: saturn well-placed for viewing (rings visible in small telescope)');
-    }
+    if (month >= 7 && month <= 10 && (hour >= 22 || hour <= 2)) results.phenomena.push('planets: saturn well-placed for viewing (rings visible in small telescope)');
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -149,19 +133,14 @@ function interpretMercury({ results, situation, dataCurrent }) {
     if (!location?.latitude) return;
     if (cloudCover !== undefined && cloudCover >= SATELLITE.MAX_CLOUD_COVER) return;
 
-    if (location.latitude > 55) {
+    if (location.latitude > 55)
         // High latitude: specific favorable apparitions
-        MERCURY_WINDOWS.filter((period) => period.months.includes(month)).forEach((period) => {
-            if ((period.type === 'evening' && hour >= 18 && hour <= 20) || (period.type === 'morning' && hour >= 5 && hour <= 7)) {
-                results.phenomena.push('planets: ' + period.desc);
-            }
-        });
-    } else {
+        MERCURY_WINDOWS.filter((period) => (period.months.includes(month) && period.type === 'evening' && hour >= 18 && hour <= 20) || (period.type === 'morning' && hour >= 5 && hour <= 7)).forEach((period) =>
+            results.phenomena.push('planets: ' + period.desc)
+        );
+    else if (month >= 9 && month <= 11 && hour >= 5 && hour <= 7)
         // Lower latitudes: autumn morning best
-        if (month >= 9 && month <= 11 && hour >= 5 && hour <= 7) {
-            results.phenomena.push('planets: mercury may be visible low in east before sunrise');
-        }
-    }
+        results.phenomena.push('planets: mercury may be visible low in east before sunrise');
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -173,13 +152,8 @@ function interpretLunarOccultations({ results, situation }) {
 
     ECLIPTIC_STARS.forEach((star) => {
         const separation = toolsAstronomy.calculateAngularSeparation(lunar.position.ra, lunar.position.dec, star.ra, star.dec);
-        if (separation < 0.25) {
-            if (separation > 0.2) {
-                results.phenomena.push(`stars: grazing occultation of ${star.name} - extremely rare! (multiple disappearances)`);
-            } else {
-                results.phenomena.push(`stars: moon occults ${star.name} tonight - rare event`);
-            }
-        }
+        if (separation > 0.2 && separation < 0.25) results.phenomena.push(`stars: grazing occultation of ${star.name} - extremely rare (multiple disappearances)`);
+        else if (separation <= 0.2) results.phenomena.push(`stars: moon occults ${star.name} tonight - rare event`);
     });
 }
 
@@ -196,26 +170,21 @@ function interpretSeasonalStars({ results, situation, dataCurrent }) {
 
     // Winter sky
     if (month >= 11 || month <= 1) {
-        const foo = month === 0 ? 0 : -2;
-        const orionMeridian = 22 + (month === 11 ? 2 : foo);
-        recommendations.push(`orion at its best (highest around ${orionMeridian}:00)`);
+        // eslint-disable-next-line sonarjs/no-nested-conditional
+        recommendations.push(`orion at its best (highest around ${22 + (month === 11 ? 2 : month === 0 ? 0 : -2)}:00)`);
         recommendations.push('winter hexagon asterism visible');
         recommendations.push('compare orange betelgeuse with blue rigel');
     }
     // Summer sky
     else if (month >= 5 && month <= 7) {
-        recommendations.push('wilky way core visible to south');
+        recommendations.push('milky way core visible to south');
         recommendations.push('scorpius and sagittarius rich star fields');
     }
 
     // Transparency note
-    if (humidity !== undefined && humidity < 50) {
-        recommendations.push('excellent transparency for faint objects');
-    }
+    if (humidity !== undefined && humidity < 50) recommendations.push('excellent transparency for faint objects');
 
-    if (recommendations.length > 0) {
-        results.phenomena.push(`stars: tonight - ${recommendations.join('; ')}`);
-    }
+    if (recommendations.length > 0) results.phenomena.push(`stars: tonight - ${recommendations.join('; ')}`);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

@@ -13,7 +13,7 @@
 
 // const helpers = require('./server-function-weather-helpers.js');
 const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
-const toolsFormat = require('./server-function-weather-tools-format.js');
+const { FormatHelper } = require('./server-function-weather-tools-format.js');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -53,14 +53,14 @@ const CROSS_QUARTER_CONTEXT = {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function calculateDaylightChangeRate(latitude) {
-    // Minutes per day change, peaks at equinox
+    // Seconds per day change, peaks at equinox
     // sin(latitude) gives rough approximation of change rate factor
-    return Math.round(Math.abs(Math.sin((latitude * Math.PI) / 180)) * 4);
+    return Math.round(Math.abs(Math.sin((latitude * Math.PI) / 180)) * 4) * 60;
 }
 
 function calculateTwilightDuration(latitude) {
-    // Twilight duration increases with latitude
-    return Math.round(90 / Math.cos((latitude * Math.PI) / 180));
+    // Twilight duration increases with latitude in Seconds
+    return Math.round(90 / Math.cos((latitude * Math.PI) / 180)) * 60;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -76,23 +76,20 @@ function interpretEquinox({ results, situation, dataCurrent }) {
     if (!equinoxInfo.near) return;
 
     // Primary announcement
-    results.phenomena.push(toolsFormat.proximity(equinoxInfo.type, equinoxInfo.days));
+    results.phenomena.push(FormatHelper.proximityToString(equinoxInfo.type, equinoxInfo.days));
 
     // Daylight change information
-    let daylightNote = `daylight: rapidly ${equinoxInfo.type.includes('spring') ? 'increasing' : 'decreasing'}`;
-    if (location.latitude > LATITUDE.HIGH) daylightNote += ` (${calculateDaylightChangeRate(location.latitude)} min/day)`;
-    daylightNote += `, twilight ~${calculateTwilightDuration(location.latitude)} min`;
-    results.phenomena.push(daylightNote);
+    results.phenomena.push(
+        `daylight: rapidly ${equinoxInfo.type.includes('spring') ? 'increasing' : 'decreasing'}` +
+            (location.latitude > LATITUDE.HIGH ? ` (${FormatHelper.secondsToString(calculateDaylightChangeRate(location.latitude))}/day)` : '') +
+            `, twilight ~${FormatHelper.secondsToString(calculateTwilightDuration(location.latitude))}`
+    );
 
     // Equinoctial gales
-    if (Math.abs(equinoxInfo.days) <= 14 && windSpeed !== undefined && windSpeed > EQUINOCTIAL_GALE_WIND) {
-        results.phenomena.push('weather: equinoctial gales');
-    }
+    if (Math.abs(equinoxInfo.days) <= 14 && windSpeed !== undefined && windSpeed > EQUINOCTIAL_GALE_WIND) results.phenomena.push('weather: equinoctial gales');
 
     // Equal day/night note
-    if (Math.abs(equinoxInfo.days) <= 1) {
-        results.phenomena.push('daylight: day and night approximately equal length');
-    }
+    if (Math.abs(equinoxInfo.days) <= 1) results.phenomena.push('daylight: day and night approximately equal length');
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -107,116 +104,71 @@ function interpretSolstice({ results, situation, dataCurrent, store }) {
     if (!solsticeInfo.near) return;
 
     // Primary announcement
-    results.phenomena.push(toolsFormat.proximity(solsticeInfo.type, solsticeInfo.days));
+    results.phenomena.push(FormatHelper.proximityToString(solsticeInfo.type, solsticeInfo.days));
 
     if (!store.astronomy_calendar) store.astronomy_calendar = {};
     if (!store.astronomy_calendar.daylightTracking) store.astronomy_calendar.daylightTracking = { consecutiveBrightNights: 0, consecutiveDarkDays: 0 };
 
-    if (solsticeInfo.type === 'longest day') interpretSummerSolstice(results, store, daylight, location, lunar, cloudCover);
-    else interpretWinterSolstice(results, store, daylight, location, lunar, cloudCover, temp, hour);
+    if (solsticeInfo.type === 'longest day') interpretSummerSolstice(results, store, daylight, location, lunar, cloudCover, solsticeInfo);
+    else interpretWinterSolstice(results, store, daylight, location, lunar, cloudCover, temp, hour, solsticeInfo);
 
     // Track consecutive extreme days
     trackExtremeDaylight(store, daylight, location);
 }
 
-function interpretSummerSolstice(results, store, daylight, location, lunar, cloudCover) {
+function interpretSummerSolstice(results, store, daylight, location, lunar, cloudCover, solsticeInfo) {
     // Extended daylight
-    if (daylight?.daylightHours > DAYLIGHT.EXTENDED) {
-        results.phenomena.push(`daylight: extended hours (${daylight.daylightHours.toFixed(1)} hours)`);
-    }
+    if (daylight?.daylightHours > DAYLIGHT.EXTENDED) results.phenomena.push(`daylight: extended (${FormatHelper.secondsToString(daylight.daylightHours * 60 * 60)})`);
 
     // Latitude-specific phenomena
-    if (location.latitude > LATITUDE.ARCTIC_CIRCLE && daylight?.daylightHours >= 24) {
-        const visibility = cloudCover !== undefined && cloudCover < 50 ? ' (visible sun)' : '';
-        results.phenomena.push(`polar: true midnight sun (sun never sets)${visibility}`);
-    } else if (location.latitude > LATITUDE.ARCTIC_APPROACH) {
-        if (daylight?.civilDuskDecimal > 23 || daylight?.civilDawnDecimal < 1) {
-            results.phenomena.push('polar: near-midnight sun (civil twilight all night)');
-        } else {
-            results.phenomena.push('polar: extended twilight throughout night');
-        }
-    } else if (location.latitude > LATITUDE.NEAR_ARCTIC) {
-        results.phenomena.push('polar: white nights period (twilight throughout night)');
-    }
+    if (location.latitude > LATITUDE.ARCTIC_CIRCLE && daylight?.daylightHours >= 24) results.phenomena.push(`polar: true midnight sun (sun never sets)${cloudCover !== undefined && cloudCover < 50 ? ' (visible sun)' : ''}`);
+    else if (location.latitude > LATITUDE.ARCTIC_APPROACH) {
+        if (daylight?.civilDuskDecimal > 23 || daylight?.civilDawnDecimal < 1) results.phenomena.push('polar: near-midnight sun (civil twilight all night)');
+        else results.phenomena.push('polar: extended twilight throughout night');
+    } else if (location.latitude > LATITUDE.NEAR_ARCTIC) results.phenomena.push('polar: white nights period (twilight throughout night)');
 
     // Solstice full moon (rare)
-    if (lunar?.phase >= 0.48 && lunar?.phase <= 0.52) {
-        const visibility = cloudCover !== undefined && cloudCover < 40 ? ' (strawberry moon visible)' : '';
-        results.phenomena.push(`lunar: solstice full moon (rare alignment)${visibility}`);
-    }
+    if (lunar?.phase >= 0.48 && lunar?.phase <= 0.52) results.phenomena.push(`lunar: solstice full moon (rare alignment)${cloudCover !== undefined && cloudCover < 40 ? ' (strawberry moon visible)' : ''}`);
 
     // Cultural note
-    if (location.latitude > LATITUDE.VERY_HIGH && Math.abs(arguments[0]?.days || 0) <= 3) {
-        results.phenomena.push('culture: midsummer celebration period');
-    }
+    if (location.latitude > LATITUDE.VERY_HIGH && Math.abs(solsticeInfo?.days || 0) <= 3) results.phenomena.push('culture: midsummer celebration period');
 
     // Consecutive bright nights tracking
     if (location.latitude > LATITUDE.ARCTIC_APPROACH && daylight?.daylightHours > DAYLIGHT.MIDNIGHT_SUN) {
-        store.astronomy_calendar.daylightTracking.consecutiveBrightNights++;
-        if (store.astronomy_calendar.daylightTracking.consecutiveBrightNights > 7) {
-            results.phenomena.push(`polar: ${store.astronomy_calendar.daylightTracking.consecutiveBrightNights} consecutive midnight sun days`);
-        }
-    } else if (location.latitude > LATITUDE.ARCTIC_APPROACH) {
-        store.astronomy_calendar.daylightTracking.consecutiveBrightNights = 0;
-    }
+        if (++store.astronomy_calendar.daylightTracking.consecutiveBrightNights > 7)
+            results.phenomena.push(`polar: ${FormatHelper.countToString(store.astronomy_calendar.daylightTracking.consecutiveBrightNights)} consecutive midnight sun days`);
+    } else if (location.latitude > LATITUDE.ARCTIC_APPROACH) store.astronomy_calendar.daylightTracking.consecutiveBrightNights = 0;
 }
 
-function interpretWinterSolstice(results, store, daylight, location, lunar, cloudCover, temp, hour) {
+function interpretWinterSolstice(results, store, daylight, location, lunar, cloudCover, temp, hour, solsticeInfo) {
     // Minimal daylight
-    if (daylight?.daylightHours < DAYLIGHT.MINIMAL) {
-        results.phenomena.push(`daylight: minimal hours (${daylight.daylightHours.toFixed(1)} hours)`);
-    }
+    if (daylight?.daylightHours < DAYLIGHT.MINIMAL) results.phenomena.push(`daylight: minimal (${FormatHelper.secondsToString(daylight.daylightHours) * 60 * 60})`);
 
     // Latitude-specific phenomena
-    if (location.latitude > LATITUDE.ARCTIC_CIRCLE && daylight?.daylightHours < DAYLIGHT.POLAR_NIGHT) {
-        results.phenomena.push('polar: polar night (sun never rises)');
-    } else if (location.latitude > LATITUDE.ARCTIC_APPROACH) {
-        if (daylight?.daylightHours < 3) {
-            results.phenomena.push('polar: near-polar twilight (sun barely above horizon)');
-        } else {
-            results.phenomena.push('polar: extended polar twilight');
-        }
-    } else if (location.latitude > LATITUDE.NEAR_ARCTIC) {
-        const afternoonDark = hour >= 14 && !daylight?.isDaytime ? ', afternoon darkness' : '';
-        results.phenomena.push(`polar: dark period (very short days${afternoonDark})`);
-    } else if (location.latitude > LATITUDE.SUB_ARCTIC) {
-        results.phenomena.push('polar: extended darkness period');
-    }
+    if (location.latitude > LATITUDE.ARCTIC_CIRCLE && daylight?.daylightHours < DAYLIGHT.POLAR_NIGHT) results.phenomena.push('polar: polar night (sun never rises)');
+    else if (location.latitude > LATITUDE.ARCTIC_APPROACH) {
+        if (daylight?.daylightHours < 3) results.phenomena.push('polar: near-polar twilight (sun barely above horizon)');
+        else results.phenomena.push('polar: extended polar twilight');
+    } else if (location.latitude > LATITUDE.NEAR_ARCTIC) results.phenomena.push(`polar: dark period (very short days${hour >= 14 && !daylight?.isDaytime ? ', afternoon darkness' : ''})`);
+    else if (location.latitude > LATITUDE.SUB_ARCTIC) results.phenomena.push('polar: extended darkness period');
 
     // Winter solstice full moon
-    if (lunar?.phase >= 0.48 && lunar?.phase <= 0.52) {
-        const visibility = cloudCover !== undefined && cloudCover < 40 ? ' (cold moon illuminating snow)' : '';
-        results.phenomena.push(`lunar: winter solstice full moon${visibility}`);
-    }
+    if (lunar?.phase >= 0.48 && lunar?.phase <= 0.52) results.phenomena.push(`lunar: winter solstice full moon${cloudCover !== undefined && cloudCover < 40 ? ' (cold moon illuminating snow)' : ''}`);
 
     // Deep cold
-    if (temp < -10 && Math.abs(arguments[0]?.days || 0) <= 7) {
-        results.phenomena.push('weather: deep winter cold near solstice');
-    }
+    if (temp !== undefined && temp < -10 && Math.abs(solsticeInfo?.days || 0) <= 7) results.phenomena.push('weather: deep winter cold near solstice');
 
     // Consecutive dark days tracking
     if (location.latitude > LATITUDE.NEAR_ARCTIC && daylight?.daylightHours < DAYLIGHT.VERY_MINIMAL) {
-        store.astronomy_calendar.daylightTracking.consecutiveDarkDays++;
-        if (store.astronomy_calendar.daylightTracking.consecutiveDarkDays > 7) {
-            results.phenomena.push(`polar: ${store.astronomy_calendar.daylightTracking.consecutiveDarkDays} consecutive minimal daylight days`);
-        }
-    } else if (location.latitude > LATITUDE.NEAR_ARCTIC) {
-        store.astronomy_calendar.daylightTracking.consecutiveDarkDays = 0;
-    }
+        if (++store.astronomy_calendar.daylightTracking.consecutiveDarkDays > 7)
+            results.phenomena.push(`polar: ${FormatHelper.countToString(store.astronomy_calendar.daylightTracking.consecutiveDarkDays)} consecutive minimal daylight days`);
+    } else if (location.latitude > LATITUDE.NEAR_ARCTIC) store.astronomy_calendar.daylightTracking.consecutiveDarkDays = 0;
 }
 
 function trackExtremeDaylight(store, daylight, location) {
     // Reset counters when conditions change
-    if (location.latitude > LATITUDE.ARCTIC_APPROACH) {
-        if (daylight?.daylightHours <= DAYLIGHT.MIDNIGHT_SUN) {
-            store.astronomy_calendar.daylightTracking.consecutiveBrightNights = 0;
-        }
-    }
-    if (location.latitude > LATITUDE.NEAR_ARCTIC) {
-        if (daylight?.daylightHours >= DAYLIGHT.VERY_MINIMAL) {
-            store.astronomy_calendar.daylightTracking.consecutiveDarkDays = 0;
-        }
-    }
+    if (location.latitude > LATITUDE.ARCTIC_APPROACH && daylight?.daylightHours <= DAYLIGHT.MIDNIGHT_SUN) store.astronomy_calendar.daylightTracking.consecutiveBrightNights = 0;
+    if (location.latitude > LATITUDE.NEAR_ARCTIC && daylight?.daylightHours >= DAYLIGHT.VERY_MINIMAL) store.astronomy_calendar.daylightTracking.consecutiveDarkDays = 0;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -229,15 +181,12 @@ function interpretCrossQuarter({ results, situation }) {
     const crossQuarterInfo = toolsAstronomy.isNearCrossQuarter(date, location.hemisphere, LOOKAHEAD_DAYS.CROSS_QUARTER);
     if (!crossQuarterInfo.near) return;
 
-    let text = toolsFormat.proximity(crossQuarterInfo.type, crossQuarterInfo.days);
+    let text = FormatHelper.proximityToString(crossQuarterInfo.type, crossQuarterInfo.days);
     const crossQuarterName = Object.keys(CROSS_QUARTER_CONTEXT).find((name) => crossQuarterInfo.type.includes(name));
     if (crossQuarterName) {
         let context = CROSS_QUARTER_CONTEXT[crossQuarterName];
-        if (crossQuarterName === 'Beltane' && location.latitude > 58 && hour >= 21 && daylight?.isDaytime) {
-            context += ': white nights beginning';
-        } else if (crossQuarterName === 'Samhain' && hour >= 16 && !daylight?.isDaytime) {
-            context += ': early darkness';
-        }
+        if (crossQuarterName === 'Beltane' && location.latitude > 58 && hour >= 21 && daylight?.isDaytime) context += ': white nights beginning';
+        else if (crossQuarterName === 'Samhain' && hour >= 16 && !daylight?.isDaytime) context += ': early darkness';
         text += ` (${context})`;
     }
     results.phenomena.push(text);
@@ -258,11 +207,8 @@ function interpretDaylightProgress({ results, situation }) {
 
     // High latitude notable daylight hours
     if (location.latitude > LATITUDE.VERY_HIGH) {
-        if (daylight.daylightHours > 18 && daylight.daylightHours < 22) {
-            results.phenomena.push(`daylight: ${daylight.daylightHours.toFixed(1)} hours (approaching white nights)`);
-        } else if (daylight.daylightHours > 5 && daylight.daylightHours < 7) {
-            results.phenomena.push(`daylight: ${daylight.daylightHours.toFixed(1)} hours (deep winter darkness)`);
-        }
+        if (daylight.daylightHours > 18 && daylight.daylightHours < 22) results.phenomena.push(`daylight: ${FormatHelper.secondsToString(daylight.daylightHours) * 60 * 60} (approaching white nights)`);
+        else if (daylight.daylightHours > 5 && daylight.daylightHours < 7) results.phenomena.push(`daylight: ${FormatHelper.secondsToString(daylight.daylightHours) * 60 * 60} (deep winter darkness)`);
     }
 }
 

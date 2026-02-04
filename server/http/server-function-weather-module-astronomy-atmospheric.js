@@ -699,10 +699,10 @@ function interpretSeeingForecast({ results, situation, store }) {
     // *** Evening planning (afternoon) ***
     else if (hour >= 14 && hour <= 19 && forecast.summary) {
         const { summary, bestTonight } = forecast;
-        // eslint-disable-next-line unicorn/consistent-destructuring
         results.phenomena.push(
+            // eslint-disable-next-line unicorn/consistent-destructuring
             `observing: ${ts.get('seeing', forecast._fetched)}${summary.text}` +
-                (bestTonight && summary.rating !== 'bad' ? ` - best window around ${new Date(bestTonight.forecastTime).getHours()}:00 (seeing ${bestTonight.seeingDesc}, ${bestTonight.cloudCoverDesc})` : '')
+                (bestTonight && summary.rating !== 'bad' ? ` - best window around ${FormatHelper.timeToString(bestTonight.forecastTime, { hoursOnly: true })} (seeing ${bestTonight.seeingDesc}, ${bestTonight.cloudCoverDesc})` : '')
         );
     }
 }

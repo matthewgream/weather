@@ -13,7 +13,7 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
-const toolsFormat = require('./server-function-weather-tools-format.js');
+const { FormatHelper } = require('./server-function-weather-tools-format.js');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -54,10 +54,6 @@ const LATITUDE = {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function formatSolarNoonTime(noonDecimal) {
-    return toolsFormat.timeFromHM(Math.floor(noonDecimal), Math.round((noonDecimal % 1) * 60));
-}
-
 function getUvCategory(uvi) {
     if (uvi >= UV_INDEX.EXTREME) return 'extreme';
     if (uvi >= UV_INDEX.VERY_HIGH) return 'very high';
@@ -87,14 +83,11 @@ function interpretSolarPosition({ results, situation }) {
     if (altitude <= 0) return;
 
     // Current position
-    results.phenomena.push(`sun: ${toolsFormat.position(altitude, azimuth, direction)}`);
+    results.phenomena.push(`sun: ${FormatHelper.positionToString(altitude, azimuth, direction)}`);
 
     // Altitude-based conditions
-    if (altitude > SOLAR_ALTITUDE.HIGH_OVERHEAD) {
-        results.phenomena.push('sun: high overhead');
-    } else if (solar.isGoldenHour) {
-        results.phenomena.push(`sun: golden hour${altitude < 2 ? ' (transitioning to blue hour)' : ''}`);
-    }
+    if (altitude > SOLAR_ALTITUDE.HIGH_OVERHEAD) results.phenomena.push('sun: high overhead');
+    else if (solar.isGoldenHour) results.phenomena.push(`sun: golden hour${altitude < 2 ? ' (transitioning to blue hour)' : ''}`);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -110,8 +103,9 @@ function interpretSolarNoon({ results, situation }) {
     if (!nearNoon) return;
 
     const eotMinutes = Math.round(equationOfTime);
-    const eotDirection = eotMinutes >= 0 ? 'ahead' : 'behind';
-    results.phenomena.push(`sun: solar noon at ${formatSolarNoonTime(noon)} (sundial ${Math.abs(eotMinutes)} min ${eotDirection} of clock, altitude ${toolsFormat.altitude(altitude)})`);
+    results.phenomena.push(
+        `sun: solar noon at ${FormatHelper.secondsToString(Math.floor(noon * 60), { hoursOnly: true })} (sundial ${Math.abs(eotMinutes)} min ${eotMinutes >= 0 ? 'ahead' : 'behind'} of clock, altitude ${FormatHelper.altitudeToString(altitude)})`
+    );
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -123,10 +117,11 @@ function interpretShadowLength({ results, situation }) {
 
     const { altitude } = solar.position;
     const { shadowMultiplier } = solar;
+
     // Only report shadows at useful angles
     if (altitude <= 0.1 || altitude >= 45) return;
     if (shadowMultiplier === Infinity || shadowMultiplier > 100) return;
-    results.phenomena.push(`sun: shadows ${Math.round(shadowMultiplier * 10) / 10}× object height (${getShadowDescription(shadowMultiplier)})`);
+    results.phenomena.push(`sun: shadows ${(Math.round(shadowMultiplier * 10) / 10).toFixed(1)}× object height (${getShadowDescription(shadowMultiplier)})`);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -135,15 +130,11 @@ function interpretUvIndex({ results, situation, dataCurrent }) {
     const { solar } = situation;
     const { solarUvi } = dataCurrent;
 
-    if (solarUvi === undefined) return;
-    if (!solar?.position || solar.position.altitude <= 30) return;
+    if (solarUvi === undefined || !solar?.position || solar.position.altitude <= 30) return;
 
     if (solarUvi > UV_INDEX.MODERATE) {
-        const category = getUvCategory(solarUvi);
-        results.phenomena.push(`sun: UV index ${solarUvi} (${category}) - protection advised`);
-        if (solarUvi >= UV_INDEX.VERY_HIGH) {
-            results.alerts.push(`sun: warning, UV index ${solarUvi} (${category}) - limit sun exposure`);
-        }
+        results.phenomena.push(`sun: UV index ${FormatHelper.uviToString(solarUvi)} (${getUvCategory(solarUvi)}) - protection advised`);
+        if (solarUvi >= UV_INDEX.VERY_HIGH) results.alerts.push(`sun: warning, UV index ${FormatHelper.uviToString(solarUvi)} (${getUvCategory(solarUvi)}) - limit sun exposure`);
     }
 }
 
@@ -157,9 +148,7 @@ function interpretAtmosphericDispersion({ results, situation }) {
     const { altitude } = solar.position;
 
     // Atmospheric dispersion visible at very low sun angles
-    if (altitude > 0 && altitude < SOLAR_ALTITUDE.DISPERSION_VISIBLE) {
-        results.phenomena.push('sun: atmospheric dispersion visible (red lower limb, blue-green upper limb)');
-    }
+    if (altitude > 0 && altitude < SOLAR_ALTITUDE.DISPERSION_VISIBLE) results.phenomena.push('sun: atmospheric dispersion visible (red lower limb, blue-green upper limb)');
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -172,9 +161,7 @@ function interpretSkyPolarization({ results, situation }) {
     const { altitude, azimuth } = solar.position;
 
     // Sky polarization is strongest 90° from sun, useful for photography
-    if (altitude > 0 && altitude < 30) {
-        results.phenomena.push(`sun: maximum sky polarization at 90° (azimuth ~${Math.round((azimuth + 90) % 360)}°)`);
-    }
+    if (altitude > 0 && altitude < 30) results.phenomena.push(`sun: maximum sky polarization at 90° (azimuth ~${FormatHelper.degreesToString((azimuth + 90) % 360)})`);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -182,8 +169,7 @@ function interpretSkyPolarization({ results, situation }) {
 function interpretWinterSun({ results, situation }) {
     const { month, location, solar } = situation;
 
-    if (!solar?.position) return;
-    if (!location?.latitude) return;
+    if (!solar?.position || !location?.latitude) return;
 
     const { altitude } = solar.position;
 
@@ -191,9 +177,7 @@ function interpretWinterSun({ results, situation }) {
     if (location.latitude > LATITUDE.HIGH_LATITUDE) {
         // November-January low winter sun
         if (month >= 10 || month <= 1) {
-            if (altitude > 0 && altitude < 10) {
-                results.phenomena.push('sun: low winter angle (long shadows, warm light)');
-            }
+            if (altitude > 0 && altitude < 10) results.phenomena.push('sun: low winter angle (long shadows, warm light)');
         }
     }
 }
@@ -203,8 +187,7 @@ function interpretWinterSun({ results, situation }) {
 function interpretZenithPassage({ results, situation }) {
     const { location, solar } = situation;
 
-    if (!solar?.position) return;
-    if (!location?.latitude) return;
+    if (!solar?.position || !location?.latitude) return;
 
     const { declination } = solar.position;
 
@@ -216,9 +199,7 @@ function interpretZenithPassage({ results, situation }) {
     if (declinationDiff < 0.5) {
         results.phenomena.push('sun: directly overhead at solar noon (zenith passage)');
         results.phenomena.push('sun: no shadow at noon (Lahaina Noon)');
-    } else if (declinationDiff < 2) {
-        results.phenomena.push(`sun: near-zenith passage (${declinationDiff.toFixed(1)}° from directly overhead)`);
-    }
+    } else if (declinationDiff < 2) results.phenomena.push(`sun: near-zenith passage (${FormatHelper.degreesToString(declinationDiff, { digits: 1 })} from directly overhead)`);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -228,9 +209,7 @@ function interpretBlueHour({ results, situation }) {
 
     if (!solar) return;
 
-    if (solar.isBlueHour) {
-        results.phenomena.push('sun: blue hour (indirect sunlight, blue sky tones)');
-    }
+    if (solar.isBlueHour) results.phenomena.push('sun: blue hour (indirect sunlight, blue sky tones)');
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -242,14 +221,9 @@ function interpretSolarObserving({ results, situation, dataCurrent }) {
     if (!solar?.position || solar.position.altitude <= 0) return;
 
     // Solar observation reminder (with filter warning)
-    if (cloudCover !== undefined && cloudCover < 50) {
-        let note = 'sun: observe safely with proper solar filter only';
+    if (cloudCover !== undefined && cloudCover < 50)
         // Limb darkening most visible around solar noon
-        if (hour >= 10 && hour <= 14) {
-            note += ' (limb darkening visible with filter)';
-        }
-        results.phenomena.push(note);
-    }
+        results.phenomena.push('sun: observe safely with proper solar filter only' + (hour >= 10 && hour <= 14 ? ' (limb darkening visible with filter)' : ''));
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

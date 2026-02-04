@@ -14,6 +14,7 @@
 //
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+const { FormatHelper } = require('./server-function-weather-tools-format.js');
 // const helpers = require('./server-function-weather-helpers.js');
 // const toolsData = require('./server-function-weather-tools-data.js');
 
@@ -819,7 +820,7 @@ function interpretConditions({ results, situation, dataCurrent, weatherData, sto
     if (temp < TEMP.BITTER_COLD) {
         results.phenomena.push('conditions: bitter arctic cold - limit outdoor exposure');
         if (windChill !== undefined && windChill < -30) {
-            results.phenomena.push(`conditions: dangerous wind chill ${Math.round(windChill)}°C - frostbite risk`);
+            results.phenomena.push(`conditions: dangerous wind chill ${FormatHelper.temperatureToString(Math.round(windChill))} - frostbite risk`);
         }
     } else if (temp < TEMP.VERY_COLD) {
         results.phenomena.push('conditions: very cold Nordic winter day');
@@ -849,9 +850,9 @@ function interpretConditions({ results, situation, dataCurrent, weatherData, sto
         // Fresh snow detection
         const snowChange = snowDepth - state.snowDepthLast;
         if (snowChange > 10) {
-            results.phenomena.push(`conditions: fresh snow - ${snowChange}cm of new snow!`);
+            results.phenomena.push(`conditions: fresh snow - ${FormatHelper.snowdepthToString(snowChange * 10)} of new snow!`);
         } else if (snowChange < -10 && month >= 2 && month <= 4) {
-            results.phenomena.push(`conditions: rapid snowmelt - ${Math.abs(snowChange)}cm melted`);
+            results.phenomena.push(`conditions: rapid snowmelt - ${FormatHelper.snowdepthToString(Math.abs(snowChange) * 10)} melted`);
         }
         state.snowDepthLast = snowDepth;
         // First snow of season
@@ -860,9 +861,7 @@ function interpretConditions({ results, situation, dataCurrent, weatherData, sto
             state.snowDepthFirstRecorded = true;
         }
         // Deep snow
-        if (snowDepth > 100) {
-            results.phenomena.push(`conditions: deep snow cover - ${snowDepth}cm`);
-        }
+        if (snowDepth > 100) results.phenomena.push(`conditions: deep snow cover - ${FormatHelper.snowdepthToString(snowDepth * 10)}`);
     }
 
     // Reset first snow flag in spring
@@ -993,12 +992,12 @@ function interpretComfort({ results, situation, dataCurrent }) {
 
     // Wind chill
     if (windChill !== undefined && windChill < -15 && temp > windChill + 5) {
-        results.phenomena.push(`comfort: feels like ${Math.round(windChill)}°C with wind chill`);
+        results.phenomena.push(`comfort: feels like ${FormatHelper.temperatureToString(Math.round(windChill))} with wind chill`);
     }
 
     // Heat index
     if (heatIndex !== undefined && heatIndex > 28 && temp < heatIndex - 3) {
-        results.phenomena.push(`comfort: feels like ${Math.round(heatIndex)}°C with humidity`);
+        results.phenomena.push(`comfort: feels like ${FormatHelper.temperatureToString(Math.round(heatIndex))} with humidity`);
     }
 
     // =====================================================================

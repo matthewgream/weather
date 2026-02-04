@@ -12,6 +12,7 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
+const { FormatHelper } = require('./server-function-weather-tools-format.js');
 
 /* eslint-disable sonarjs/cognitive-complexity */
 
@@ -496,6 +497,14 @@ function getDanjonScale(magnitude) {
     return DANJON_SCALE[DANJON_SCALE.length - 1];
 }
 
+function capitalizeFirst(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function formatDays(days) {
+    return `${days} day${days > 1 ? 's' : ''}`;
+}
+
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -506,7 +515,6 @@ function interpretSolarEclipses({ results, situation, dataCurrent }) {
 
     const now = new Date(date);
 
-    // Find today's or upcoming eclipse
     let todayEclipse;
     let upcomingEclipse;
     let daysUntil;
@@ -531,22 +539,16 @@ function interpretSolarEclipses({ results, situation, dataCurrent }) {
     // =====================================================================
 
     if (todayEclipse) {
-        results.phenomena.push(`eclipse: ${todayEclipse.type.charAt(0).toUpperCase() + todayEclipse.type.slice(1)} solar eclipse today`);
+        results.phenomena.push(`eclipse: ${capitalizeFirst(todayEclipse.type)} solar eclipse today`);
 
         // eslint-disable-next-line unicorn/prefer-switch
         if (todayEclipse.type === 'total') {
-            results.alerts.push('eclipse: RARE total solar eclipse!');
-            if (todayEclipse.duration) {
-                results.phenomena.push(`eclipse: totality duration ${todayEclipse.duration}`);
-            }
-            if (todayEclipse.magnitude > 1.05) {
-                results.phenomena.push('eclipse: deep total eclipse - extended corona visible');
-            }
+            results.alerts.push('eclipse: RARE total solar eclipse');
+            if (todayEclipse.duration) results.phenomena.push(`eclipse: totality duration ${todayEclipse.duration}`);
+            if (todayEclipse.magnitude > 1.05) results.phenomena.push('eclipse: deep total eclipse - extended corona visible');
         } else if (todayEclipse.type === 'annular') {
             results.phenomena.push('eclipse: "ring of fire" annular eclipse');
-            if (todayEclipse.duration) {
-                results.phenomena.push(`eclipse: annularity duration ${todayEclipse.duration}`);
-            }
+            if (todayEclipse.duration) results.phenomena.push(`eclipse: annularity duration ${todayEclipse.duration}`);
         } else if (todayEclipse.type === 'hybrid') {
             results.phenomena.push('eclipse: rare hybrid (annular-total) eclipse');
         }
@@ -556,42 +558,28 @@ function interpretSolarEclipses({ results, situation, dataCurrent }) {
             const distance = distanceToPath(latitude, longitude, todayEclipse.pathCoords);
             if (distance !== undefined) {
                 if (distance < 100) {
-                    results.alerts.push(`eclipse: you are near the path of ${todayEclipse.type === 'total' ? 'totality' : 'annularity'}!`);
-                    results.phenomena.push(`eclipse: approximately ${Math.round(distance)} km from central line`);
-                } else if (distance < 500) {
-                    results.phenomena.push('eclipse: deep partial eclipse visible from your location');
-                } else if (distance < 2000) {
-                    results.phenomena.push('eclipse: partial eclipse visible from your location');
-                } else {
-                    results.phenomena.push('eclipse: eclipse not well-placed for your location');
-                }
+                    results.alerts.push(`eclipse: you are near the path of ${todayEclipse.type === 'total' ? 'totality' : 'annularity'}`);
+                    results.phenomena.push(`eclipse: approximately ${FormatHelper.distanceKmToString(distance)} from central line`);
+                } else if (distance < 500) results.phenomena.push('eclipse: deep partial eclipse visible from your location');
+                else if (distance < 2000) results.phenomena.push('eclipse: partial eclipse visible from your location');
+                else results.phenomena.push('eclipse: eclipse not well-placed for your location');
             }
         }
 
-        if (todayEclipse.path) {
-            results.phenomena.push(`eclipse: path crosses: ${todayEclipse.path}`);
-        }
+        if (todayEclipse.path) results.phenomena.push(`eclipse: path crosses: ${todayEclipse.path}`);
 
         // Viewing conditions
         if (cloudCover !== undefined) {
-            if (cloudCover < 20) {
-                results.phenomena.push('eclipse: excellent viewing conditions - clear skies!');
-            } else if (cloudCover < 50) {
-                results.phenomena.push('eclipse: fair viewing conditions - some clouds');
-            } else if (cloudCover < 80) {
-                results.phenomena.push('eclipse: poor viewing conditions - significant clouds');
-            } else {
-                results.phenomena.push('eclipse: eclipse likely obscured by heavy clouds');
-            }
+            if (cloudCover < 20) results.phenomena.push('eclipse: excellent viewing conditions - clear skies');
+            else if (cloudCover < 50) results.phenomena.push('eclipse: fair viewing conditions - some clouds');
+            else if (cloudCover < 80) results.phenomena.push('eclipse: poor viewing conditions - significant clouds');
+            else results.phenomena.push('eclipse: eclipse likely obscured by heavy clouds');
         }
 
         // Safety
         results.alerts.push('eclipse: NEVER look directly at the Sun without certified eclipse glasses');
-        if (todayEclipse.type === 'total') {
-            results.phenomena.push('eclipse: safe to view with naked eye ONLY during totality');
-        } else {
-            results.alerts.push('eclipse: eye protection required at ALL times');
-        }
+        if (todayEclipse.type === 'total') results.phenomena.push('eclipse: safe to view with naked eye ONLY during totality');
+        else results.alerts.push('eclipse: eye protection required at ALL times');
     }
 
     // =====================================================================
@@ -599,23 +587,14 @@ function interpretSolarEclipses({ results, situation, dataCurrent }) {
     // =====================================================================
     else if (upcomingEclipse && daysUntil <= SOLAR_LOOKAHEAD_DAYS) {
         if (daysUntil <= 7) {
-            results.phenomena.push(`eclipse: ${upcomingEclipse.type.charAt(0).toUpperCase() + upcomingEclipse.type.slice(1)} solar eclipse in ${daysUntil} day${daysUntil > 1 ? 's' : ''}`);
-
-            if (upcomingEclipse.type === 'total') {
-                results.alerts.push('eclipse: rare total solar eclipse approaching');
-            }
-
+            results.phenomena.push(`eclipse: ${capitalizeFirst(upcomingEclipse.type)} solar eclipse in ${formatDays(daysUntil)}`);
+            if (upcomingEclipse.type === 'total') results.alerts.push('eclipse: rare total solar eclipse approaching');
             if (latitude !== undefined && longitude !== undefined && upcomingEclipse.pathCoords) {
                 const distance = distanceToPath(latitude, longitude, upcomingEclipse.pathCoords);
-                if (distance !== undefined && distance < 500) {
-                    results.phenomena.push('eclipse: you may be near the eclipse path!');
-                }
+                if (distance !== undefined && distance < 500) results.phenomena.push('eclipse: you may be near the eclipse path');
             }
-
             results.phenomena.push('eclipse: obtain certified eclipse glasses for safe viewing');
-        } else if (daysUntil <= 14 && upcomingEclipse.type === 'total') {
-            results.phenomena.push(`eclipse: total solar eclipse in ${daysUntil} days`);
-        }
+        } else if (daysUntil <= 14 && upcomingEclipse.type === 'total') results.phenomena.push(`eclipse: total solar eclipse in ${formatDays(daysUntil)}`);
     }
 }
 
@@ -654,35 +633,24 @@ function interpretLunarEclipses({ results, situation, dataCurrent }) {
     // =====================================================================
 
     if (todayEclipse) {
-        results.phenomena.push(`eclipse: ${todayEclipse.type.charAt(0).toUpperCase() + todayEclipse.type.slice(1)} lunar eclipse tonight`);
+        results.phenomena.push(`eclipse: ${capitalizeFirst(todayEclipse.type)} lunar eclipse tonight`);
 
         // eslint-disable-next-line unicorn/prefer-switch
         if (todayEclipse.type === 'total') {
             if (todayEclipse.magnitude > 1.7) {
-                results.alerts.push('eclipse: exceptionally deep total lunar eclipse!');
+                results.alerts.push('eclipse: exceptionally deep total lunar eclipse');
                 results.phenomena.push('eclipse: Moon will appear very dark red');
-            } else if (todayEclipse.magnitude > 1.4) {
-                results.phenomena.push('eclipse: deep total eclipse - dark red Moon');
-            } else if (todayEclipse.magnitude > 1.2) {
-                results.phenomena.push('eclipse: Moon will appear copper-red');
-            } else {
-                results.phenomena.push('eclipse: Moon will appear bright red-orange');
-            }
+            } else if (todayEclipse.magnitude > 1.4) results.phenomena.push('eclipse: deep total eclipse - dark red Moon');
+            else if (todayEclipse.magnitude > 1.2) results.phenomena.push('eclipse: Moon will appear copper-red');
+            else results.phenomena.push('eclipse: Moon will appear bright red-orange');
             const danjon = getDanjonScale(todayEclipse.magnitude);
-            if (danjon) {
-                results.phenomena.push(`eclipse: ${danjon.description}`);
-            }
-            if (todayEclipse.totalDuration) {
-                results.phenomena.push(`eclipse: totality duration: ${todayEclipse.totalDuration}`);
-            }
-            if (todayEclipse.note) {
-                results.phenomena.push(`eclipse: ${todayEclipse.note}`);
-            }
+            if (danjon) results.phenomena.push(`eclipse: ${danjon.description}`);
+            if (todayEclipse.totalDuration) results.phenomena.push(`eclipse: totality duration: ${todayEclipse.totalDuration}`);
+            if (todayEclipse.note) results.phenomena.push(`eclipse: ${todayEclipse.note}`);
         } else if (todayEclipse.type === 'partial') {
-            results.phenomena.push(`eclipse: ${Math.round(todayEclipse.magnitude * 100)}% of Moon enters umbral shadow`);
-            if (todayEclipse.magnitude > 0.8) {
-                results.phenomena.push('eclipse: deep partial - significant darkening visible');
-            }
+            const pctStr = FormatHelper.probabilityToString(todayEclipse.magnitude * 100);
+            results.phenomena.push(`eclipse: ${pctStr} of Moon enters umbral shadow`);
+            if (todayEclipse.magnitude > 0.8) results.phenomena.push('eclipse: deep partial - significant darkening visible');
         } else if (todayEclipse.type === 'penumbral') {
             results.phenomena.push('eclipse: subtle penumbral eclipse - slight dimming');
         }
@@ -691,26 +659,18 @@ function interpretLunarEclipses({ results, situation, dataCurrent }) {
         if (latitude !== undefined && longitude !== undefined) {
             const visibility = isLunarEclipseVisible(todayEclipse, latitude, longitude);
             if (visibility.visible) {
-                if (visibility.bestAltitude > 30) {
-                    results.phenomena.push('eclipse: excellent visibility - Moon high in sky');
-                } else if (visibility.bestAltitude > 10) {
-                    results.phenomena.push('eclipse: Moon visible during eclipse');
-                } else {
-                    results.phenomena.push('eclipse: Moon low on horizon - find clear view');
-                }
+                if (visibility.bestAltitude > 30) results.phenomena.push('eclipse: excellent visibility - Moon high in sky');
+                else if (visibility.bestAltitude > 10) results.phenomena.push('eclipse: Moon visible during eclipse');
+                else results.phenomena.push('eclipse: Moon low on horizon - find clear view');
             } else {
                 results.phenomena.push('eclipse: Moon below horizon from your location');
             }
         }
 
         if (cloudCover !== undefined) {
-            if (cloudCover < 20) {
-                results.phenomena.push('eclipse: excellent viewing conditions');
-            } else if (cloudCover < 50) {
-                results.phenomena.push('eclipse: fair conditions - some clouds');
-            } else {
-                results.phenomena.push('eclipse: clouds may interfere with viewing');
-            }
+            if (cloudCover < 20) results.phenomena.push('eclipse: excellent viewing conditions');
+            else if (cloudCover < 50) results.phenomena.push('eclipse: fair conditions - some clouds');
+            else results.phenomena.push('eclipse: clouds may interfere with viewing');
         }
 
         results.phenomena.push('eclipse: safe to view with naked eye');
@@ -722,16 +682,10 @@ function interpretLunarEclipses({ results, situation, dataCurrent }) {
     else if (upcomingEclipse && daysUntil <= LUNAR_LOOKAHEAD_DAYS) {
         if (upcomingEclipse.type === 'total' || (upcomingEclipse.type === 'partial' && upcomingEclipse.magnitude > 0.5)) {
             if (daysUntil <= 3) {
-                results.phenomena.push(`eclipse: ${upcomingEclipse.type.charAt(0).toUpperCase() + upcomingEclipse.type.slice(1)} lunar eclipse in ${daysUntil} day${daysUntil > 1 ? 's' : ''}`);
-                if (latitude !== undefined && longitude !== undefined) {
-                    const visibility = isLunarEclipseVisible(upcomingEclipse, latitude, longitude);
-                    if (visibility.visible) {
-                        results.phenomena.push('eclipse: will be visible from your location');
-                    }
-                }
-            } else if (daysUntil <= 7 && upcomingEclipse.type === 'total') {
-                results.phenomena.push(`eclipse: total lunar eclipse in ${daysUntil} days`);
-            }
+                results.phenomena.push(`eclipse: ${capitalizeFirst(upcomingEclipse.type)} lunar eclipse in ${formatDays(daysUntil)}`);
+                if (latitude !== undefined && longitude !== undefined) if (isLunarEclipseVisible(upcomingEclipse, latitude, longitude).visible) results.phenomena.push('eclipse: will be visible from your location');
+            } else if (daysUntil <= 7 && upcomingEclipse.type === 'total') 
+                results.phenomena.push(`eclipse: total lunar eclipse in ${formatDays(daysUntil)}`);
         }
     }
 }
