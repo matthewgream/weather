@@ -214,14 +214,20 @@ function createBanner(timestamp) {
 function coalescePhenomena(phenomena) {
     const groups = new Map();
     const result = [];
+    const timestampPattern = /^\[(\d{2}:\d{2})\]\s*/;
     for (const item of phenomena) {
         const colonIndex = item.indexOf(':');
         if (colonIndex > 0 && colonIndex < 25) {
-            // Reasonable prefix length
             const prefix = item.slice(0, Math.max(0, colonIndex)).trim();
-            const suffix = item.slice(Math.max(0, colonIndex + 1)).trim();
+            let suffix = item.slice(Math.max(0, colonIndex + 1)).trim();
             if (!groups.has(prefix)) groups.set(prefix, []);
-            groups.get(prefix).push(suffix);
+            const group = groups.get(prefix);
+            if (group.length > 0) {
+                const prevMatch = group[group.length - 1].match(timestampPattern);
+                const currMatch = suffix.match(timestampPattern);
+                if (prevMatch && currMatch && prevMatch[1] === currMatch[1]) suffix = suffix.replace(timestampPattern, '');
+            }
+            group.push(suffix);
         } else {
             if (!groups.has('conditions')) groups.set('conditions', []);
             groups.get('conditions').push(item);
