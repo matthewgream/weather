@@ -55,12 +55,12 @@ const CROSS_QUARTER_CONTEXT = {
 function calculateDaylightChangeRate(latitude) {
     // Seconds per day change, peaks at equinox
     // sin(latitude) gives rough approximation of change rate factor
-    return Math.round(Math.abs(Math.sin((latitude * Math.PI) / 180)) * 4) * 60;
+    return Math.floor(Math.abs(Math.sin((latitude * Math.PI) / 180)) * 4) * 60;
 }
 
 function calculateTwilightDuration(latitude) {
     // Twilight duration increases with latitude in Seconds
-    return Math.round(90 / Math.cos((latitude * Math.PI) / 180)) * 60;
+    return Math.floor(90 / Math.cos((latitude * Math.PI) / 180)) * 60;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -79,8 +79,8 @@ function interpretEquinox({ results, situation, dataCurrent }) {
     // Daylight change information
     results.phenomena.push(
         `daylight: rapidly ${equinoxInfo.type.includes('spring') ? 'increasing' : 'decreasing'}` +
-            (location.latitude > LATITUDE.HIGH ? ` (${FormatHelper.secondsToString(calculateDaylightChangeRate(location.latitude))}/day)` : '') +
-            `, twilight ~${FormatHelper.secondsToString(calculateTwilightDuration(location.latitude))}`
+            (location.latitude > LATITUDE.HIGH ? ` (${FormatHelper.secondsToString(calculateDaylightChangeRate(location.latitude), '')}/day)` : '') +
+            `, twilight ~${FormatHelper.secondsToString(calculateTwilightDuration(location.latitude), '')}`
     );
 
     // Equinoctial gales
@@ -114,7 +114,7 @@ function interpretSolstice({ results, situation, dataCurrent, store }) {
 
 function interpretSummerSolstice(results, store, daylight, location, lunar, cloudCover, solsticeInfo) {
     // Extended daylight
-    if (daylight?.daylightHours > DAYLIGHT.EXTENDED) results.phenomena.push(`daylight: extended (${FormatHelper.secondsToString(daylight.daylightHours * 60 * 60)})`);
+    if (daylight?.daylightHours > DAYLIGHT.EXTENDED) results.phenomena.push(`daylight: extended (${FormatHelper.secondsToString(Math.floor(daylight.daylightHours * 60) * 60, '')})`);
 
     // Latitude-specific phenomena
     if (location.latitude > LATITUDE.ARCTIC_CIRCLE && daylight?.daylightHours >= 24) results.phenomena.push(`polar: true midnight sun (sun never sets)${cloudCover !== undefined && cloudCover < 50 ? ' (visible sun)' : ''}`);
@@ -138,7 +138,7 @@ function interpretSummerSolstice(results, store, daylight, location, lunar, clou
 
 function interpretWinterSolstice(results, store, daylight, location, lunar, cloudCover, temp, hour, solsticeInfo) {
     // Minimal daylight
-    if (daylight?.daylightHours < DAYLIGHT.MINIMAL) results.phenomena.push(`daylight: minimal (${FormatHelper.secondsToString(daylight.daylightHours) * 60 * 60})`);
+    if (daylight?.daylightHours < DAYLIGHT.MINIMAL) results.phenomena.push(`daylight: minimal (${FormatHelper.secondsToString(Math.floor(daylight.daylightHours * 60) * 60, '')})`);
 
     // Latitude-specific phenomena
     if (location.latitude > LATITUDE.ARCTIC_CIRCLE && daylight?.daylightHours < DAYLIGHT.POLAR_NIGHT) results.phenomena.push('polar: polar night (sun never rises)');
@@ -200,8 +200,8 @@ function interpretDaylightProgress({ results, situation }) {
 
     // High latitude notable daylight hours
     if (location.latitude > LATITUDE.VERY_HIGH) {
-        if (daylight.daylightHours > 18 && daylight.daylightHours < 22) results.phenomena.push(`daylight: ${FormatHelper.secondsToString(daylight.daylightHours) * 60 * 60} (approaching white nights)`);
-        else if (daylight.daylightHours > 5 && daylight.daylightHours < 7) results.phenomena.push(`daylight: ${FormatHelper.secondsToString(daylight.daylightHours) * 60 * 60} (deep winter darkness)`);
+        if (daylight.daylightHours > 18 && daylight.daylightHours < 22) results.phenomena.push(`daylight: ${FormatHelper.secondsToString(Math.floor(daylight.daylightHours * 60, '')) * 60} (approaching white nights)`);
+        else if (daylight.daylightHours > 5 && daylight.daylightHours < 7) results.phenomena.push(`daylight: ${FormatHelper.secondsToString(Math.floor(daylight.daylightHours * 60, '')) * 60} (deep winter darkness)`);
     }
 }
 

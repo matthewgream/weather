@@ -489,7 +489,7 @@ function interpretSatellitePasses({ results, situation, store }) {
             const minsUntil = minutesUntilPass(nextPass.start.time);
             if (minsUntil > 0 && minsUntil < 360)
                 results.phenomena.push(
-                    `satellites: ${ts.get('passes', combined?._fetched)}next ${nextPass.satellite} pass at ${FormatHelper.timeLocalToString(nextPass.start.time)} (${FormatHelper.magnitudeToString(nextPass.magnitude)}, ${FormatHelper.secondsToString(minsUntil * 60)} away)`
+                    `satellites: ${ts.get('passes', combined?._fetched)}next ${nextPass.satellite} pass at ${FormatHelper.timeLocalToString(nextPass.start.time)} (${FormatHelper.magnitudeToString(nextPass.magnitude)}, ${FormatHelper.secondsToString(minsUntil * 60, '')} away)`
                 );
         }
     } else
@@ -498,7 +498,7 @@ function interpretSatellitePasses({ results, situation, store }) {
             const minsUntil = minutesUntilPass(pass.start.time);
 
             // eslint-disable-next-line unicorn/no-nested-ternary, sonarjs/no-nested-conditional
-            let text = `satellites: ${ts.get('passes', combined?._fetched)}${pass.satellite} ` + (minsUntil < 0 ? 'NOW' : minsUntil < 2 ? 'STARTING' : `in ${FormatHelper.secondsToString(minsUntil * 60)}`);
+            let text = `satellites: ${ts.get('passes', combined?._fetched)}${pass.satellite} ` + (minsUntil < 0 ? 'NOW' : minsUntil < 2 ? 'STARTING' : `in ${FormatHelper.secondsToString(minsUntil * 60, '')}`);
             if (minsUntil < 30) {
                 text += ` ${FormatHelper.timeLocalToString(pass.start.time)} to ${FormatHelper.timeLocalToString(pass.end.time)} (rises ${FormatHelper.azimuthToString(pass.start.azimuth)}, max ${FormatHelper.degreesToString(pass.max.elevation)} ${FormatHelper.azimuthToString(pass.max.azimuth)}, ${FormatHelper.magnitudeToString(pass.magnitude)})`;
                 if (pass.quality === 'excellent') text += ' - VERY BRIGHT';
@@ -565,7 +565,7 @@ function interpretStarlinkTrain({ results, situation, store }) {
             );
         else if (pass.minutesUntil < 180)
             results.phenomena.push(
-                `satellites: ${ts.get('starlinkPass', passesData._fetched)}Starlink train at ${FormatHelper.timeLocalToString(pass.start.time)} (${FormatHelper.secondsToString(pass.minutesUntil * 60)}, max ${FormatHelper.degreesToString(pass.max.elevation)} ${FormatHelper.azimuthToString(pass.max.azimuth)})`
+                `satellites: ${ts.get('starlinkPass', passesData._fetched)}Starlink train at ${FormatHelper.timeLocalToString(pass.start.time)} (${FormatHelper.secondsToString(pass.minutesUntil * 60, '')}, max ${FormatHelper.degreesToString(pass.max.elevation)} ${FormatHelper.azimuthToString(pass.max.azimuth)})`
             );
     }
 

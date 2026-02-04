@@ -341,13 +341,13 @@ function interpretExtendedTwilight({ results, situation }) {
 
     // Extended blue hour
     const blueHourDuration = getBlueHourDuration(daylight);
-    if (blueHourDuration && blueHourDuration > 45) results.phenomena.push(`twilight: extended blue hour (${FormatHelper.secondsToString(blueHourDuration * 60)})`);
+    if (blueHourDuration && blueHourDuration > 45) results.phenomena.push(`twilight: extended blue hour (${FormatHelper.secondsToString(Math.floor(blueHourDuration) * 60, '')})`);
 
     // Extended twilight duration
     const twilightDuration = getTwilightDuration(daylight);
     if (twilightDuration) {
         const maxDuration = Math.max(twilightDuration.morning, twilightDuration.evening);
-        if (maxDuration > 60) results.phenomena.push(`twilight: extended duration (${FormatHelper.secondsToString(maxDuration * 60)})`);
+        if (maxDuration > 60) results.phenomena.push(`twilight: extended duration (${FormatHelper.secondsToString(Math.floor(maxDuration) * 60, '')})`);
     }
 }
 
