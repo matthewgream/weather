@@ -12,7 +12,12 @@
 //
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+const { calculateHaversineDistance } = require('./server-function-weather-tools-calculators.js');
 const { FormatHelper } = require('./server-function-weather-tools-format.js');
+const { DataSlot, DataScheduler, fetchJson, createTimestampTracker, isCacheValid } = require('./server-function-weather-tools-live.js');
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
 const API_BASE = 'https://api.pollenrapporten.se/v1';
 
@@ -103,20 +108,12 @@ const POLLEN_METADATA = {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function haversineDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371;
-    const dLat = ((lat2 - lat1) * Math.PI) / 180;
-    const dLon = ((lon2 - lon1) * Math.PI) / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
 function findNearestRegion(latitude, longitude, regions) {
     let nearest;
     let minDistance = Infinity;
     for (const region of regions) {
         if (!region.latitude || !region.longitude) continue;
-        const distance = haversineDistance(latitude, longitude, Number.parseFloat(region.latitude), Number.parseFloat(region.longitude));
+        const distance = calculateHaversineDistance(latitude, longitude, Number.parseFloat(region.latitude), Number.parseFloat(region.longitude));
         if (distance < minDistance) {
             minDistance = distance;
             nearest = { ...region, distance };
@@ -125,18 +122,10 @@ function findNearestRegion(latitude, longitude, regions) {
     return nearest;
 }
 
-function getForecastCacheDuration() {
-    const month = new Date().getMonth() + 1;
-    return month >= HIGH_SEASON_START_MONTH && month <= HIGH_SEASON_END_MONTH ? [FORECAST_CACHE_HIGH_SEASON_MS, 'high-session'] : [FORECAST_CACHE_DURATION_MS, 'low-season'];
-}
-
-function isCacheValid(lastUpdate, durationMs) {
-    return lastUpdate ? Date.now() - lastUpdate < durationMs : false;
-}
-
 function getPollenTypeById(pollenId, pollenTypes) {
     return pollenTypes?.find((pt) => pt.id === pollenId);
 }
+
 function getPollenMetadata(pollenName) {
     return POLLEN_METADATA[pollenName];
 }
@@ -159,108 +148,87 @@ function summarizeSwedishText(text) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function createTimestampTracker(now, timezone) {
-    const shown = new Set();
-    return {
-        get(source, fetched) {
-            if (shown.has(source) || !fetched) return '';
-            shown.add(source);
-            return FormatHelper.timestampBracket(fetched, now, timezone) + ' ';
-        },
-    };
+const liveSlotPollenForecast = new DataSlot('forecast', FORECAST_CACHE_DURATION_MS); // Note: staleness varies by season, handled in updateSchedule
+const liveScheduler = new DataScheduler('pollen');
+
+async function livePollenFetchRegions() {
+    return (await fetchJson(`${API_BASE}/regions`)).items || [];
 }
 
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-async function fetchJSON(url) {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    try {
-        return await response.json();
-    } catch (e) {
-        throw new Error(`Failed to parse JSON: ${e.message}`);
-    }
+async function livePollenFetchPollenTypes() {
+    return (await fetchJson(`${API_BASE}/pollen-types`)).items || [];
 }
 
-async function fetchRegions() {
-    return (await fetchJSON(`${API_BASE}/regions`)).items || [];
-}
-
-async function fetchPollenTypes() {
-    return (await fetchJSON(`${API_BASE}/pollen-types`)).items || [];
-}
-
-async function fetchForecast(regionId) {
+async function livePollenFetchForecastData(regionId) {
     const startDate = new Date();
     const endDate = new Date(startDate);
     endDate.setDate(endDate.getDate() + 7);
-    const params = new URLSearchParams({
-        region_id: regionId,
-        start_date: startDate.toISOString().split('T')[0],
-        end_date: endDate.toISOString().split('T')[0],
-        current: true,
-    });
-    return (await fetchJSON(`${API_BASE}/forecasts?${params}`)).items || [];
+    const params = new URLSearchParams({ region_id: regionId, start_date: startDate.toISOString().split('T')[0], end_date: endDate.toISOString().split('T')[0], current: true });
+    return (await fetchJson(`${API_BASE}/forecasts?${params}`)).items || [];
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
 
-function updateForecast(state) {
-    fetchForecast(state.selectedRegion.id)
-        .then((forecasts) => {
-            const _fetched = Date.now();
+function getForecastCacheDuration() {
+    const month = new Date().getMonth() + 1;
+    return month >= HIGH_SEASON_START_MONTH && month <= HIGH_SEASON_END_MONTH ? [FORECAST_CACHE_HIGH_SEASON_MS, 'high-season'] : [FORECAST_CACHE_DURATION_MS, 'low-season'];
+}
+
+async function livePollenForecastFetchAndProcess(state) {
+    if (!state.selectedRegion) return undefined;
+
+    return liveSlotPollenForecast.fetch(
+        state,
+        'pollen',
+        async () => {
+            const forecasts = await livePollenFetchForecastData(state.selectedRegion.id);
             const data = forecasts.find((f) => f.regionId === state.selectedRegion.id) || forecasts[0] || undefined;
-            state.forecast.data = data ? { _fetched, ...data } : undefined;
-            state.forecast.lastUpdate = _fetched;
-            state.forecast.lastError = undefined;
-            console.log(`pollen: update forecast success for ${state.selectedRegion.name}`);
-        })
-        .catch((e) => {
-            state.forecast.lastError = e.message;
-            console.error('pollen: update forecast failure:', e.message);
-        });
+            if (!data) throw new Error('No forecast data');
+            return data;
+        },
+        state.selectedRegion.name
+    );
 }
 
-function updateStaticData(state, situation) {
+async function livePollenStaticDataFetchAndProcess(state, situation) {
     const { location } = situation;
-    Promise.all([fetchRegions(), fetchPollenTypes()])
-        .then(([regions, pollenTypes]) => {
-            state.staticData.regions = regions;
-            state.staticData.pollenTypes = pollenTypes;
-            state.staticData.lastUpdate = Date.now();
-            state.staticData.lastError = undefined;
-            if (location.latitude !== undefined && location.longitude !== undefined) {
-                state.selectedRegion = findNearestRegion(location.latitude, location.longitude, regions);
-                if (state.selectedRegion) {
-                    console.log(`pollen: selected region: ${state.selectedRegion.name} (${FormatHelper.distanceKmToString(state.selectedRegion.distance)})`);
-                    if (!isCacheValid(state.forecast.lastUpdate, getForecastCacheDuration()[0])) updateForecast(state);
-                }
-            }
-            console.log(`pollen: load static data success: ${regions.length} regions, ${pollenTypes.length} pollen types`);
-        })
-        .catch((e) => {
-            state.staticData.lastError = e.message;
-            console.error('pollen: load static data failure:', e.message);
-        });
-}
 
-const _updateSchedule = { intervalId: undefined, currentInterval: undefined };
-function updateSchedule(state, situation) {
-    const [interval, reason] = getForecastCacheDuration();
-    if (_updateSchedule.currentInterval !== interval) {
-        if (_updateSchedule.intervalId) clearInterval(_updateSchedule.intervalId);
-        _updateSchedule.currentInterval = interval;
-        _updateSchedule.intervalId = setInterval(() => updateSchedule(state, situation), interval);
-        console.error(`pollen: update interval set to ${FormatHelper.millisToString(interval)} ('${reason}')`);
+    try {
+        const [regions, pollenTypes] = await Promise.all([livePollenFetchRegions(), livePollenFetchPollenTypes()]);
+        state.staticData.regions = regions;
+        state.staticData.pollenTypes = pollenTypes;
+        state.staticData.lastUpdate = Date.now();
+        state.staticData.lastError = undefined;
+        state.selectedRegion = findNearestRegion(location.latitude, location.longitude, regions);
+        if (state.selectedRegion) {
+            console.error(`pollen: selected region: ${state.selectedRegion.name} (${FormatHelper.distanceKmToString(state.selectedRegion.distance)})`);
+            if (!isCacheValid(state.forecast?.lastUpdate, getForecastCacheDuration()[0])) await livePollenForecastFetchAndProcess(state);
+        }
+        console.error(`pollen: update staticData success (${regions.length} regions, ${pollenTypes.length} pollen types)`);
+    } catch (e) {
+        state.staticData.lastError = e.message;
+        console.error('pollen: update staticData failure:', e.message);
     }
-    if (!isCacheValid(state.staticData.lastUpdate, STATIC_CACHE_DURATION_MS)) updateStaticData(state, situation);
-    else if (state.selectedRegion && !isCacheValid(state.forecast.lastUpdate, getForecastCacheDuration()[0])) updateForecast(state);
+}
+
+function liveSchedulerStart(state, situation) {
+    liveScheduler.run(
+        async () => {
+            if (!isCacheValid(state.staticData.lastUpdate, STATIC_CACHE_DURATION_MS)) await livePollenStaticDataFetchAndProcess(state, situation);
+            else if (state.selectedRegion) if (!isCacheValid(state.forecast?.lastUpdate, getForecastCacheDuration()[0])) await livePollenForecastFetchAndProcess(state);
+        },
+        () => getForecastCacheDuration()
+    );
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
+
+function getForecast(state) {
+    const [forecastCacheDuration] = getForecastCacheDuration();
+    if (!state.forecast?.data) return undefined;
+    if (!isCacheValid(state.forecast.lastUpdate, forecastCacheDuration)) return undefined;
+    return state.forecast.data;
+}
 
 function getLevelsForDate(date, levelsByDate, pollenTypes) {
     const high = [],
@@ -279,13 +247,18 @@ function getLevelsForDate(date, levelsByDate, pollenTypes) {
     return { high, moderate, low };
 }
 
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 function interpretPollen({ results, situation, dataCurrent, store }) {
-    if (!store.pollen || !store.pollen.selectedRegion || !store.pollen.forecast.data) return; // Not ready yet
+    if (!store.pollen || !store.pollen.selectedRegion) return; // Not ready yet
 
     const { date, now, location } = situation;
     const { cloudCover, precipitation, humidity, windSpeed } = dataCurrent;
 
-    const forecast = store.pollen.forecast.data;
+    const forecast = getForecast(store.pollen);
+    if (!forecast) return;
+
     const regionName = store.pollen.selectedRegion.name;
     const { pollenTypes } = store.pollen.staticData;
 
@@ -369,7 +342,7 @@ module.exports = function ({ location, store }) {
             },
         };
 
-    updateSchedule(store.pollen, { location });
+    liveSchedulerStart(store.pollen, { location });
 
     return {
         interpretPollen,

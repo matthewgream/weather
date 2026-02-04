@@ -157,7 +157,7 @@ function interpretLunarPhase({ results, situation, dataCurrent, store }) {
         }
 
         // Harvest moon check
-        if (month >= 8 && month <= 10 && location?.hemisphere) {
+        if (month >= 8 && month <= 10) {
             const equinoxInfo = toolsAstronomy.isNearEquinox(date, location.hemisphere, 15);
             if (equinoxInfo.near && equinoxInfo.type === 'autumn equinox') results.phenomena.push(`moon: harvest moon - closest full moon to autumn equinox${hour >= 17 && hour <= 20 ? ' (moon rising near sunset for several nights)' : ''}`);
             else if (name) results.phenomena.push(`moon: ${name}`);
@@ -245,10 +245,8 @@ function interpretLunarPosition({ results, situation }) {
         results.phenomena.push(`moon: ${FormatHelper.positionToString(altitude, azimuth, direction)}`);
 
         // Near zenith
-        if (location?.latitude) {
-            if (altitude > ALTITUDE.NEAR_ZENITH && altitude > 90 - Math.abs(location.latitude - dec) - 10) results.phenomena.push('moon: near zenith - excellent viewing');
-            else if (altitude < ALTITUDE.LOW_HORIZON) results.phenomena.push('moon: low on horizon');
-        }
+        if (altitude > ALTITUDE.NEAR_ZENITH && altitude > 90 - Math.abs(location.latitude - dec) - 10) results.phenomena.push('moon: near zenith - excellent viewing');
+        else if (altitude < ALTITUDE.LOW_HORIZON) results.phenomena.push('moon: low on horizon');
     } else if (hour >= 6 && hour <= 18) {
         results.phenomena.push('moon: below horizon');
     }

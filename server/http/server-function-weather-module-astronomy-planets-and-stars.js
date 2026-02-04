@@ -60,7 +60,6 @@ function interpretVenus({ results, situation, dataCurrent }) {
     const { location, date, lunar } = situation;
     const { cloudCover } = dataCurrent;
 
-    if (!location?.latitude || !location?.longitude) return;
     if (cloudCover !== undefined && cloudCover >= SATELLITE.MAX_CLOUD_COVER) return;
 
     const venusData = toolsAstronomy.getVenusElongation(date);
@@ -130,7 +129,6 @@ function interpretMercury({ results, situation, dataCurrent }) {
     const { location, month, hour } = situation;
     const { cloudCover } = dataCurrent;
 
-    if (!location?.latitude) return;
     if (cloudCover !== undefined && cloudCover >= SATELLITE.MAX_CLOUD_COVER) return;
 
     if (location.latitude > 55)
@@ -170,8 +168,8 @@ function interpretSeasonalStars({ results, situation, dataCurrent }) {
 
     // Winter sky
     if (month >= 11 || month <= 1) {
-        // eslint-disable-next-line sonarjs/no-nested-conditional
-        recommendations.push(`orion at its best (highest around ${22 + (month === 11 ? 2 : month === 0 ? 0 : -2)}:00)`);
+        // eslint-disable-next-line sonarjs/no-nested-conditional, unicorn/no-nested-ternary
+        recommendations.push(`orion at its best (highest around ${FormatHelper.timeToString(22 + (month === 11 ? 2 : month === 0 ? 0 : -2), { hoursOnly: true })})`);
         recommendations.push('winter hexagon asterism visible');
         recommendations.push('compare orange betelgeuse with blue rigel');
     }

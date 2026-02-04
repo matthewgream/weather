@@ -46,9 +46,10 @@ class FormatHelper {
         return FormatHelper._valueToString(millis, (v) => FormatHelper._secondsToString(v / 1000, options));
     }
     static timeToString(time, options = {}) {
-        return FormatHelper._valueToString(time, (v) => (options.hoursOnly ? `${String (new Date(v).getHours()).padStart(2, '0')}:${String (new Date(v).getMinutes()).padStart(2, '0')}` : new Date(v).toISOString()));
+        return FormatHelper._valueToString(time, (v) => (options.hoursOnly ? `${String(new Date(v).getHours()).padStart(2, '0')}:${String(new Date(v).getMinutes()).padStart(2, '0')}` : new Date(v).toISOString()));
     }
     static timeLocalToString(time) {
+        // XXX fix me
         return new Date(time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); // XXX fix me
     }
     static millimetresToString(millis, options = {}) {
@@ -110,7 +111,6 @@ class FormatHelper {
         return FormatHelper._valueToString(prob, (v) => Math.round(v) + (options.noUnits ? '' : '%'));
     }
     static degreesToString(deg, options = {}) {
-        /// options.signed !
         return FormatHelper._valueToString(deg, (v) => (options.digits ? v.toFixed(options.digits) : Math.round(v)) + (options.noUnits ? '' : '°'));
     }
     static magnitudeToString(mag, options = {}) {
@@ -129,21 +129,26 @@ class FormatHelper {
         return FormatHelper._valueToString(n, (v) => Math.round(v).toString());
     }
     static azimuthToString(azimuth) {
+        // XXX fix me
         return ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][Math.round(azimuth / 22.5) % 16];
     }
     static altitudeToString(altitude_) {
+        // XXX fix me
         return `${Math.round(altitude_)}°`;
     }
     static positionToString(altitude_, bearing_, direction_) {
+        // XXX fix me
         return `${FormatHelper.altitudeToString(altitude_)} above horizon (bearing ${Math.round(bearing_)}°, ${direction_})`;
     }
     static proximityToString(type_, days_) {
+        // XXX fix me
         if (Math.abs(days_) < 1) return `${type_} today`;
         const rounded = Math.round(Math.abs(days_));
         if (days_ > 0) return `${type_} in ${rounded} day${rounded === 1 ? '' : 's'}`;
         return `${type_} ${rounded} day${rounded === 1 ? '' : 's'} ago`;
     }
     static relativeAbsoluteTime(timestamp, now, timeZone = 'UTC') {
+        // XXX fix me
         if (timestamp === undefined || timestamp === null) return '-';
         const date = new Date(timestamp);
         const timeStr = date.toLocaleTimeString('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false });
@@ -179,6 +184,9 @@ class FormatHelper {
     }
     static capitalise(string) {
         return string[0].toUpperCase() + string.slice(1);
+    }
+    static pluralise(name, string) {
+        return `${string} ${name}${string > 1 ? 's' : ''}`;
     }
     static joinand(items, separator = ',') {
         if (!items || items.length === 0) return '';

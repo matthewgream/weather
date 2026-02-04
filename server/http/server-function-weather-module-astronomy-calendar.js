@@ -70,8 +70,6 @@ function interpretEquinox({ results, situation, dataCurrent }) {
     const { location, date } = situation;
     const { windSpeed } = dataCurrent;
 
-    if (!location?.hemisphere || !location?.latitude) return;
-
     const equinoxInfo = toolsAstronomy.isNearEquinox(date, location.hemisphere, LOOKAHEAD_DAYS.EQUINOX);
     if (!equinoxInfo.near) return;
 
@@ -97,8 +95,6 @@ function interpretEquinox({ results, situation, dataCurrent }) {
 function interpretSolstice({ results, situation, dataCurrent, store }) {
     const { location, date, hour, daylight, lunar } = situation;
     const { cloudCover, temp } = dataCurrent;
-
-    if (!location?.hemisphere || !location?.latitude) return;
 
     const solsticeInfo = toolsAstronomy.isNearSolstice(date, location.hemisphere, LOOKAHEAD_DAYS.SOLSTICE);
     if (!solsticeInfo.near) return;
@@ -176,8 +172,6 @@ function trackExtremeDaylight(store, daylight, location) {
 function interpretCrossQuarter({ results, situation }) {
     const { location, date, hour, daylight } = situation;
 
-    if (!location?.hemisphere) return;
-
     const crossQuarterInfo = toolsAstronomy.isNearCrossQuarter(date, location.hemisphere, LOOKAHEAD_DAYS.CROSS_QUARTER);
     if (!crossQuarterInfo.near) return;
 
@@ -197,7 +191,6 @@ function interpretCrossQuarter({ results, situation }) {
 function interpretDaylightProgress({ results, situation }) {
     const { location, date, daylight } = situation;
 
-    if (!location?.latitude || !location?.hemisphere) return;
     if (!daylight?.daylightHours) return;
 
     // Only report significant changes, not near solstice/equinox

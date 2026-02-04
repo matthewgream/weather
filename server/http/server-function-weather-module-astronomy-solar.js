@@ -12,7 +12,6 @@
 //
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-// const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
 const { FormatHelper } = require('./server-function-weather-tools-format.js');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -169,7 +168,7 @@ function interpretSkyPolarization({ results, situation }) {
 function interpretWinterSun({ results, situation }) {
     const { month, location, solar } = situation;
 
-    if (!solar?.position || !location?.latitude) return;
+    if (!solar?.position) return;
 
     const { altitude } = solar.position;
 
@@ -187,7 +186,7 @@ function interpretWinterSun({ results, situation }) {
 function interpretZenithPassage({ results, situation }) {
     const { location, solar } = situation;
 
-    if (!solar?.position || !location?.latitude) return;
+    if (!solar?.position) return;
 
     const { declination } = solar.position;
 

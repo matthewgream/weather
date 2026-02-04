@@ -79,6 +79,55 @@ function calculateComfortLevel(temp, humidity, windSpeed, solarRad) {
     return 'moderately comfortable';
 }
 
+function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function calculateGeomagneticLatitude(geoLat, geoLon) {
+    // Simplified dipole model - geomagnetic north pole ~80.5°N, 72.8°W
+    const poleLat = (80.5 * Math.PI) / 180;
+    const poleLon = (-72.8 * Math.PI) / 180;
+    const lat = (geoLat * Math.PI) / 180;
+    const lon = (geoLon * Math.PI) / 180;
+    return (Math.asin(Math.sin(lat) * Math.sin(poleLat) + Math.cos(lat) * Math.cos(poleLat) * Math.cos(lon - poleLon)) * 180) / Math.PI;
+}
+
+function isNearLocation(lat1, lon1, lat2, lon2, radiusDeg = 15) {
+    if (!lat1 || !lon1 || !lat2 || !lon2) return true; // If no location data, include it
+    return Math.abs(lat1 - lat2) < radiusDeg && Math.abs(lon1 - lon2) < radiusDeg;
+}
+
+function calculatePointToSegmentDistance(px, py, x1, y1, x2, y2) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    if (dx === 0 && dy === 0) return calculateHaversineDistance(px, py, x1, y1);
+    let t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy);
+    t = Math.max(0, Math.min(1, t));
+    return calculateHaversineDistance(px, py, x1 + t * dx, y1 + t * dy);
+}
+
+function calculateDistanceToPath(lat, lon, pathCoords) {
+    if (!pathCoords || pathCoords.length === 0) return undefined;
+    let minDist = Infinity;
+    // Check distance to path segments
+    for (let i = 0; i < pathCoords.length - 1; i++) {
+        const p1 = pathCoords[i];
+        const p2 = pathCoords[i + 1];
+        const dist = calculatePointToSegmentDistance(lat, lon, p1.lat, p1.lon, p2.lat, p2.lon);
+        if (dist < minDist) minDist = dist;
+    }
+    // Also check distance to endpoints
+    for (const p of pathCoords) {
+        const dist = calculateHaversineDistance(lat, lon, p.lat, p.lon);
+        if (dist < minDist) minDist = dist;
+    }
+    return minDist;
+}
+
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -88,6 +137,11 @@ module.exports = {
     calculateWindChill,
     calculateFeelsLike,
     calculateComfortLevel,
+    calculateHaversineDistance,
+    calculateGeomagneticLatitude,
+    isNearLocation,
+    calculatePointToSegmentDistance,
+    calculateDistanceToPath,
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

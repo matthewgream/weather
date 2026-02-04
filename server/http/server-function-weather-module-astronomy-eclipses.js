@@ -11,6 +11,7 @@
 //
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+const { calculateDistanceToPath } = require('./server-function-weather-tools-calculators.js');
 const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
 const { FormatHelper } = require('./server-function-weather-tools-format.js');
 
@@ -440,42 +441,6 @@ function isWithinDays(eclipseDate, currentDate, days) {
     return diff >= 0 && diff <= days;
 }
 
-function haversineDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371;
-    const dLat = ((lat2 - lat1) * Math.PI) / 180;
-    const dLon = ((lon2 - lon1) * Math.PI) / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-}
-
-function pointToSegmentDistance(px, py, x1, y1, x2, y2) {
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    if (dx === 0 && dy === 0) return haversineDistance(px, py, x1, y1);
-    let t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy);
-    t = Math.max(0, Math.min(1, t));
-    return haversineDistance(px, py, x1 + t * dx, y1 + t * dy);
-}
-
-function distanceToPath(lat, lon, pathCoords) {
-    if (!pathCoords || pathCoords.length === 0) return undefined;
-    let minDist = Infinity;
-    // Check distance to path segments
-    for (let i = 0; i < pathCoords.length - 1; i++) {
-        const p1 = pathCoords[i];
-        const p2 = pathCoords[i + 1];
-        const dist = pointToSegmentDistance(lat, lon, p1.lat, p1.lon, p2.lat, p2.lon);
-        if (dist < minDist) minDist = dist;
-    }
-    // Also check distance to endpoints
-    for (const p of pathCoords) {
-        const dist = haversineDistance(lat, lon, p.lat, p.lon);
-        if (dist < minDist) minDist = dist;
-    }
-    return minDist;
-}
-
 function isLunarEclipseVisible(eclipse, latitude, longitude) {
     const eclipseDate = new Date(eclipse.date);
     // Check Moon altitude at peak eclipse and 1 hour before/after
@@ -497,21 +462,12 @@ function getDanjonScale(magnitude) {
     return DANJON_SCALE[DANJON_SCALE.length - 1];
 }
 
-function capitalizeFirst(str) {
-    return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
-function formatDays(days) {
-    return `${days} day${days > 1 ? 's' : ''}`;
-}
-
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function interpretSolarEclipses({ results, situation, dataCurrent }) {
     const { location, date } = situation;
     const { cloudCover } = dataCurrent;
-    const { latitude, longitude } = location;
 
     const now = new Date(date);
 
@@ -539,7 +495,7 @@ function interpretSolarEclipses({ results, situation, dataCurrent }) {
     // =====================================================================
 
     if (todayEclipse) {
-        results.phenomena.push(`eclipse: ${capitalizeFirst(todayEclipse.type)} solar eclipse today`);
+        results.phenomena.push(`eclipse: ${FormatHelper.capitalise(todayEclipse.type)} solar eclipse today`);
 
         // eslint-disable-next-line unicorn/prefer-switch
         if (todayEclipse.type === 'total') {
@@ -554,8 +510,8 @@ function interpretSolarEclipses({ results, situation, dataCurrent }) {
         }
 
         // Visibility from user location
-        if (latitude !== undefined && longitude !== undefined && todayEclipse.pathCoords) {
-            const distance = distanceToPath(latitude, longitude, todayEclipse.pathCoords);
+        if (todayEclipse.pathCoords) {
+            const distance = calculateDistanceToPath(location.latitude, location.longitude, todayEclipse.pathCoords);
             if (distance !== undefined) {
                 if (distance < 100) {
                     results.alerts.push(`eclipse: you are near the path of ${todayEclipse.type === 'total' ? 'totality' : 'annularity'}`);
@@ -587,25 +543,23 @@ function interpretSolarEclipses({ results, situation, dataCurrent }) {
     // =====================================================================
     else if (upcomingEclipse && daysUntil <= SOLAR_LOOKAHEAD_DAYS) {
         if (daysUntil <= 7) {
-            results.phenomena.push(`eclipse: ${capitalizeFirst(upcomingEclipse.type)} solar eclipse in ${formatDays(daysUntil)}`);
+            results.phenomena.push(`eclipse: ${FormatHelper.capitalise(upcomingEclipse.type)} solar eclipse in ${FormatHelper.pluralise('days', daysUntil)}`);
             if (upcomingEclipse.type === 'total') results.alerts.push('eclipse: rare total solar eclipse approaching');
-            if (latitude !== undefined && longitude !== undefined && upcomingEclipse.pathCoords) {
-                const distance = distanceToPath(latitude, longitude, upcomingEclipse.pathCoords);
+            if (upcomingEclipse.pathCoords) {
+                const distance = calculateDistanceToPath(location.latitude, location.longitude, upcomingEclipse.pathCoords);
                 if (distance !== undefined && distance < 500) results.phenomena.push('eclipse: you may be near the eclipse path');
             }
             results.phenomena.push('eclipse: obtain certified eclipse glasses for safe viewing');
-        } else if (daysUntil <= 14 && upcomingEclipse.type === 'total') results.phenomena.push(`eclipse: total solar eclipse in ${formatDays(daysUntil)}`);
+        } else if (daysUntil <= 14 && upcomingEclipse.type === 'total') results.phenomena.push(`eclipse: total solar eclipse in ${FormatHelper.pluralise('days', daysUntil)}`);
     }
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
-// Lunar Eclipse Interpreter
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function interpretLunarEclipses({ results, situation, dataCurrent }) {
     const { location, date } = situation;
     const { cloudCover } = dataCurrent;
-    const { latitude, longitude } = location;
 
     const now = new Date(date);
 
@@ -633,7 +587,7 @@ function interpretLunarEclipses({ results, situation, dataCurrent }) {
     // =====================================================================
 
     if (todayEclipse) {
-        results.phenomena.push(`eclipse: ${capitalizeFirst(todayEclipse.type)} lunar eclipse tonight`);
+        results.phenomena.push(`eclipse: ${FormatHelper.capitalise(todayEclipse.type)} lunar eclipse tonight`);
 
         // eslint-disable-next-line unicorn/prefer-switch
         if (todayEclipse.type === 'total') {
@@ -656,15 +610,13 @@ function interpretLunarEclipses({ results, situation, dataCurrent }) {
         }
 
         // Visibility check
-        if (latitude !== undefined && longitude !== undefined) {
-            const visibility = isLunarEclipseVisible(todayEclipse, latitude, longitude);
-            if (visibility.visible) {
-                if (visibility.bestAltitude > 30) results.phenomena.push('eclipse: excellent visibility - Moon high in sky');
-                else if (visibility.bestAltitude > 10) results.phenomena.push('eclipse: Moon visible during eclipse');
-                else results.phenomena.push('eclipse: Moon low on horizon - find clear view');
-            } else {
-                results.phenomena.push('eclipse: Moon below horizon from your location');
-            }
+        const visibility = isLunarEclipseVisible(todayEclipse, location.latitude, location.longitude);
+        if (visibility.visible) {
+            if (visibility.bestAltitude > 30) results.phenomena.push('eclipse: excellent visibility - Moon high in sky');
+            else if (visibility.bestAltitude > 10) results.phenomena.push('eclipse: Moon visible during eclipse');
+            else results.phenomena.push('eclipse: Moon low on horizon - find clear view');
+        } else {
+            results.phenomena.push('eclipse: Moon below horizon from your location');
         }
 
         if (cloudCover !== undefined) {
@@ -682,10 +634,9 @@ function interpretLunarEclipses({ results, situation, dataCurrent }) {
     else if (upcomingEclipse && daysUntil <= LUNAR_LOOKAHEAD_DAYS) {
         if (upcomingEclipse.type === 'total' || (upcomingEclipse.type === 'partial' && upcomingEclipse.magnitude > 0.5)) {
             if (daysUntil <= 3) {
-                results.phenomena.push(`eclipse: ${capitalizeFirst(upcomingEclipse.type)} lunar eclipse in ${formatDays(daysUntil)}`);
-                if (latitude !== undefined && longitude !== undefined) if (isLunarEclipseVisible(upcomingEclipse, latitude, longitude).visible) results.phenomena.push('eclipse: will be visible from your location');
-            } else if (daysUntil <= 7 && upcomingEclipse.type === 'total') 
-                results.phenomena.push(`eclipse: total lunar eclipse in ${formatDays(daysUntil)}`);
+                results.phenomena.push(`eclipse: ${FormatHelper.capitalise(upcomingEclipse.type)} lunar eclipse in ${FormatHelper.pluralise('days', daysUntil)}`);
+                if (isLunarEclipseVisible(upcomingEclipse, location.latitude, location.longitude).visible) results.phenomena.push('eclipse: will be visible from your location');
+            } else if (daysUntil <= 7 && upcomingEclipse.type === 'total') results.phenomena.push(`eclipse: total lunar eclipse in ${FormatHelper.pluralise('days', daysUntil)}`);
         }
     }
 }

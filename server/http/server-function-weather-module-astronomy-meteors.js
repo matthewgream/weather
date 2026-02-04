@@ -7,7 +7,12 @@
 //
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+const { isNearLocation } = require('./server-function-weather-tools-calculators.js');
 const { FormatHelper } = require('./server-function-weather-tools-format.js');
+const { DataSlot, DataScheduler, fetchJson, createTimestampTracker } = require('./server-function-weather-tools-live.js');
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
 const ENDPOINTS = {
     nasaFireball: 'https://ssd-api.jpl.nasa.gov/fireball.api',
@@ -69,132 +74,95 @@ function assessActivityLevel(recentCount, typicalZHR, hours = 24) {
     return 'low';
 }
 
-function isNearLocation(fireball, location, radiusDeg = 15) {
-    if (!fireball.lat || !fireball.lon || !location?.latitude || !location?.longitude) return true; // If no location data, include it
-    return Math.abs(fireball.lat - location.latitude) < radiusDeg && Math.abs(fireball.lon - location.longitude) < radiusDeg;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// Timestamp helper for interpretation functions
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-function createTimestampTracker(now, timezone) {
-    const shown = new Set();
-    return {
-        get(source, fetched) {
-            if (shown.has(source) || !fetched) return '';
-            shown.add(source);
-            return FormatHelper.timestampBracket(fetched, now, timezone) + ' ';
-        },
-    };
-}
-
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-async function fetchNASAFireballs(state, situation) {
+const liveSlotFireballs = new DataSlot('fireballs', STALENESS.fireballs);
+const liveScheduler = new DataScheduler('meteors');
+
+async function liveNASAFireballsFetchAndProcess(state, situation) {
     const { location } = situation;
-    if (!state.fireballs) state.fireballs = {};
-    try {
-        // NASA Fireball API - documented at https://ssd-api.jpl.nasa.gov/doc/fireball.html
-        // Returns fireballs detected by US Government sensors
-        const params = new URLSearchParams({
-            'date-min': new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            'date-max': new Date().toISOString().split('T')[0],
-            'req-loc': 'true',
-        });
-        const response = await fetch(`${ENDPOINTS.nasaFireball}?${params}`);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json();
-        //
-        const _fetched = Date.now();
-        // NASA returns { count, fields, data } where data is array of arrays
-        if (!data.data || !Array.isArray(data.data)) {
-            // No fireballs in period - this is normal
-            state.fireballs.data = {
-                _fetched,
-                total: 0,
-                nearby: 0,
-                counts: { last24h: 0, last48h: 0, last7d: 0, last30d: 0 },
-                recent: [],
-                brightestRecent: undefined,
-                averagePerDay: 0,
-            };
-            state.fireballs.lastUpdate = _fetched;
-            state.fireballs.lastError = undefined;
-            console.error('meteors: update NASA success (0 fireballs in period)');
-            return state.fireballs.data;
-        }
-        // Fields: date, energy, impact-e, lat, lat-dir, lon, lon-dir, alt, vel
-        const { fields } = data;
-        const dateIdx = fields.indexOf('date');
-        const energyIdx = fields.indexOf('energy');
-        const latIdx = fields.indexOf('lat');
-        const latDirIdx = fields.indexOf('lat-dir');
-        const lonIdx = fields.indexOf('lon');
-        const lonDirIdx = fields.indexOf('lon-dir');
-        const altIdx = fields.indexOf('alt');
-        const velIdx = fields.indexOf('vel');
-        const fireballs = data.data.map((row) => {
-            const date = new Date(row[dateIdx]);
-            const energy = row[energyIdx] ? Number.parseFloat(row[energyIdx]) : undefined;
-            // Estimate magnitude from energy (rough approximation)
-            // Energy is in joules (10^10 J), mag -10 ~ 10^12 J, mag -5 ~ 10^9 J
+
+    return liveSlotFireballs.fetch(
+        state,
+        'meteors',
+        async () => {
+            // NASA Fireball API - documented at https://ssd-api.jpl.nasa.gov/doc/fireball.html
+            // Returns fireballs detected by US Government sensors
+            const params = new URLSearchParams({
+                'date-min': new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                'date-max': new Date().toISOString().split('T')[0],
+                'req-loc': 'true',
+            });
+            const data = await fetchJson(`${ENDPOINTS.nasaFireball}?${params}`);
+            const _fetched = Date.now();
+
+            // NASA returns { count, fields, data } where data is array of arrays
+            if (!data.data || !Array.isArray(data.data)) {
+                // No fireballs in period - this is normal
+                return {
+                    total: 0,
+                    nearby: 0,
+                    counts: { last24h: 0, last48h: 0, last7d: 0, last30d: 0 },
+                    recent: [],
+                    brightestRecent: undefined,
+                    averagePerDay: 0,
+                };
+            }
+
+            // Fields: date, energy, impact-e, lat, lat-dir, lon, lon-dir, alt, vel
+            const { fields } = data;
+            const dateIdx = fields.indexOf('date');
+            const energyIdx = fields.indexOf('energy');
+            const latIdx = fields.indexOf('lat');
+            const latDirIdx = fields.indexOf('lat-dir');
+            const lonIdx = fields.indexOf('lon');
+            const lonDirIdx = fields.indexOf('lon-dir');
+            const altIdx = fields.indexOf('alt');
+            const velIdx = fields.indexOf('vel');
+
+            const fireballs = data.data.map((row) => {
+                const date = new Date(row[dateIdx]);
+                const energy = row[energyIdx] ? Number.parseFloat(row[energyIdx]) : undefined;
+                // Estimate magnitude from energy (rough approximation)
+                // Energy is in joules (10^10 J), mag -10 ~ 10^12 J, mag -5 ~ 10^9 J
+                return {
+                    date,
+                    lat: Number.parseFloat(row[latIdx]) * (row[latDirIdx] === 'S' ? -1 : 1),
+                    lon: Number.parseFloat(row[lonIdx]) * (row[lonDirIdx] === 'W' ? -1 : 1),
+                    energy,
+                    magnitude: energy ? Math.round(-2.5 * Math.log10((energy * 1e10) / 1e9) - 5) : undefined,
+                    altitude: row[altIdx] ? Number.parseFloat(row[altIdx]) : undefined,
+                    velocity: row[velIdx] ? Number.parseFloat(row[velIdx]) : undefined,
+                    ageHours: (_fetched - date.getTime()) / 3600000,
+                };
+            });
+
+            const nearby = fireballs.filter((fb) => isNearLocation(fb.lat, fb.lon, location.latitude, location.longitude, 30));
+            const last24h = nearby.filter((fb) => fb.ageHours <= 24);
+            const last48h = nearby.filter((fb) => fb.ageHours <= 48);
+            const last7d = nearby.filter((fb) => fb.ageHours <= 168);
+            const last30d = nearby;
+
             return {
-                date,
-                lat: Number.parseFloat(row[latIdx]) * (row[latDirIdx] === 'S' ? -1 : 1),
-                lon: Number.parseFloat(row[lonIdx]) * (row[lonDirIdx] === 'W' ? -1 : 1),
-                energy,
-                magnitude: energy ? Math.round(-2.5 * Math.log10((energy * 1e10) / 1e9) - 5) : undefined,
-                altitude: row[altIdx] ? Number.parseFloat(row[altIdx]) : undefined,
-                velocity: row[velIdx] ? Number.parseFloat(row[velIdx]) : undefined,
-                ageHours: (_fetched - date.getTime()) / 3600000,
+                total: fireballs.length,
+                nearby: nearby.length,
+                counts: {
+                    last24h: last24h.length,
+                    last48h: last48h.length,
+                    last7d: last7d.length,
+                    last30d: last30d.length,
+                },
+                recent: last7d.slice(0, 10),
+                brightestRecent: last7d.reduce((best, fb) => (!best || (fb.energy && fb.energy > (best.energy || 0)) ? fb : best), undefined),
+                averagePerDay: Math.round((last30d.length / 30) * 10) / 10,
             };
-        });
-        // Filter to nearby fireballs if location provided
-        const nearby = location?.latitude ? fireballs.filter((fb) => isNearLocation(fb, location, 30)) : fireballs;
-        const last24h = nearby.filter((fb) => fb.ageHours <= 24);
-        const last48h = nearby.filter((fb) => fb.ageHours <= 48);
-        const last7d = nearby.filter((fb) => fb.ageHours <= 168);
-        const last30d = nearby;
-        state.fireballs.data = {
-            _fetched,
-            total: fireballs.length,
-            nearby: nearby.length,
-            counts: {
-                last24h: last24h.length,
-                last48h: last48h.length,
-                last7d: last7d.length,
-                last30d: last30d.length,
-            },
-            recent: last7d.slice(0, 10),
-            brightestRecent: last7d.reduce((best, fb) => (!best || (fb.energy && fb.energy > (best.energy || 0)) ? fb : best), undefined),
-            averagePerDay: Math.round((last30d.length / 30) * 10) / 10,
-        };
-        state.fireballs.lastUpdate = _fetched;
-        state.fireballs.lastError = undefined;
-        console.error(`meteors: update NASA success (${last7d.length} fireballs in 7d, ${nearby.length} nearby in 30d)`);
-        return state.fireballs.data;
-    } catch (e) {
-        state.fireballs.lastError = e.message;
-        console.error('meteors: update NASA failure:', e.message);
-        return undefined;
-    }
+        },
+        `${liveSlotFireballs.get(state)?.counts?.last7d || 0} fireballs in 7d`
+    );
 }
 
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-function getFireballs(state) {
-    if (!state.fireballs?.data) return undefined;
-    if (Date.now() - state.fireballs.lastUpdate > STALENESS.fireballs) return undefined;
-    return state.fireballs.data;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-function calculateUpdateInterval(_situation) {
+function liveNASAFireballsCalculateUpdateInterval(_situation) {
     const month = new Date().getMonth(),
         day = new Date().getDate(),
         hour = new Date().getHours();
@@ -209,17 +177,15 @@ function calculateUpdateInterval(_situation) {
     return [INTERVALS.dormant, 'no-shower'];
 }
 
-const _updateSchedule = { intervalId: undefined, currentInterval: undefined };
-function updateSchedule(state, situation) {
-    fetchNASAFireballs(state, situation).then(() => {
-        const [interval, reason] = calculateUpdateInterval(situation);
-        if (_updateSchedule.currentInterval !== interval) {
-            if (_updateSchedule.intervalId) clearInterval(_updateSchedule.intervalId);
-            _updateSchedule.currentInterval = interval;
-            _updateSchedule.intervalId = setInterval(() => updateSchedule(state, situation), interval);
-            console.error(`meteors: update interval set to ${FormatHelper.millisToString(interval)} ('${reason}')`);
-        }
-    });
+function liveSchedulerStart(state, situation) {
+    liveScheduler.run(
+        () => liveNASAFireballsFetchAndProcess(state, situation),
+        () => liveNASAFireballsCalculateUpdateInterval(situation)
+    );
+}
+
+function getFireballs(state) {
+    return liveSlotFireballs.get(state);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -265,11 +231,8 @@ function interpretMeteorActivity({ results, situation, store }) {
 
     // *** Most energetic recent fireball ***
     const fb = fireballs?.brightestRecent;
-    if (fb && fb.ageHours < 48) {
-        if (fb?.energy > 0.5)
-            // Significant energy
-            results.phenomena.push(`meteors: ${ts.get('fireballs', fireballs._fetched)}energetic fireball detected (${FormatHelper.energyJoulesE10ToString(fb.energy)}, ${FormatHelper.hoursAgoToString(fb.ageHours)})`);
-    }
+    if (fb && fb.ageHours < 48)
+        if (fb?.energy > 0.5) results.phenomena.push(`meteors: ${ts.get('fireballs', fireballs._fetched)}energetic fireball detected (${FormatHelper.energyJoulesE10ToString(fb.energy)}, ${FormatHelper.hoursAgoToString(fb.ageHours)})`);
 }
 
 function interpretFireballAlert({ results, situation, store }) {
@@ -298,19 +261,13 @@ function interpretShowerForecast({ results, situation }) {
         const currentDate = new Date(2024, month, day);
         const daysToPeak = Math.round((peakDate - currentDate) / (24 * 60 * 60 * 1000));
         // Alert 3-7 days before major showers
-        if (daysToPeak > 0 && daysToPeak <= 7) {
+        if (daysToPeak > 0 && daysToPeak <= 7)
             if (shower.typicalZHR >= 50) {
                 // Major shower
-                const zhrStr = FormatHelper.zhrToString(shower.typicalZHR);
-                const dayWord = daysToPeak === 1 ? 'day' : 'days';
-                if (daysToPeak <= 3) {
-                    results.phenomena.push(`meteors: ${shower.name} peak in ${daysToPeak} ${dayWord} (${zhrStr})`);
-                } else if (daysToPeak <= 7) {
-                    results.phenomena.push(`meteors: ${shower.name} approaching (peak in ${daysToPeak} ${dayWord})`);
-                }
+                if (daysToPeak <= 3) results.phenomena.push(`meteors: ${shower.name} peak in ${daysToPeak} ${daysToPeak === 1 ? 'day' : 'days'} (${FormatHelper.zhrToString(shower.typicalZHR)})`);
+                else if (daysToPeak <= 7) results.phenomena.push(`meteors: ${shower.name} approaching (peak in ${daysToPeak} ${daysToPeak === 1 ? 'day' : 'days'})`);
                 break; // Only report one upcoming shower
             }
-        }
     }
 }
 
@@ -333,13 +290,12 @@ function interpretTauridSeason({ results, situation, store }) {
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
-// Module Factory
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 module.exports = function ({ location, store }) {
     if (!store.astronomy_meteors_realtime) store.astronomy_meteors_realtime = {};
 
-    updateSchedule(store.astronomy_meteors_realtime, { location });
+    liveSchedulerStart(store.astronomy_meteors_realtime, { location });
 
     return {
         interpretMeteorActivity,

@@ -25,9 +25,15 @@ configData.FILE_SETS = path.join(__dirname, 'client.json');
 console.log(`Loaded 'config' using '${configPath}': ${configList}`);
 
 configData.LOCATION = {
-    elevation: 135,
+    // mandatory
     latitude: 59.662111722943266,
     longitude: 12.9955069496646,
+    elevation: 135,
+    hemisphere: 'northern',
+    timezone: 'Europe/Stockholm',
+    // optional
+    location: 'Central Sweden',
+    climateType: 'humid continental',
     summerAvgHigh: 21,
     winterAvgLow: -7,
     annualRainfall: 750, // mm
@@ -38,10 +44,6 @@ configData.LOCATION = {
     horizonClear: false,
     distanceToOcean: 140,
     nearMountains: true,
-    climateType: 'humid continental',
-    location: 'Central Sweden',
-    hemisphere: 'northern',
-    timezone: 'Europe/Stockholm',
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

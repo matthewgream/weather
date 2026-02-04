@@ -12,6 +12,7 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const { FormatHelper } = require('./server-function-weather-tools-format.js');
+const { DataSlot, DataScheduler, fetchJson, fetchText, createTimestampTracker } = require('./server-function-weather-tools-live.js');
 
 let satellite;
 try {
@@ -99,21 +100,6 @@ function minutesUntilPass(timestamp) {
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
-// Timestamp helper for interpretation functions
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-function createTimestampTracker(now, timezone) {
-    const shown = new Set();
-    return {
-        get(source, fetched) {
-            if (shown.has(source) || !fetched) return '';
-            shown.add(source);
-            return FormatHelper.timestampBracket(fetched, now, timezone) + ' ';
-        },
-    };
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function parseTLEEpochFromLine(epochStr) {
@@ -154,29 +140,30 @@ function identifyTrains(satellites) {
         .filter((plane) => plane.satellites.length >= STARLINK.minTrainSize)
         .map((plane) => {
             // Estimate how "fresh" the train is by mean motion (higher = lower = fresher)
-            const avgMeanMotion = plane.satellites.reduce((sum, s) => sum + s.meanMotion, 0) / plane.satellites.length;
+            const { satellites, inclination, raan } = plane;
+            const avgMeanMotion = satellites.reduce((sum, s) => sum + s.meanMotion, 0) / satellites.length;
             return {
-                satelliteCount: plane.satellites.length,
-                inclination: plane.inclination,
-                raan: plane.raan,
+                satelliteCount: satellites.length,
+                inclination,
+                raan,
                 avgMeanMotion,
                 // eslint-disable-next-line unicorn/no-nested-ternary, sonarjs/no-nested-conditional
                 spectacularity: avgMeanMotion >= 15.9 ? 'spectacular' : avgMeanMotion >= 15.6 ? 'impressive' : 'visible',
-                satellites: plane.satellites,
+                satellites,
             };
         })
         .sort((a, b) => b.avgMeanMotion - a.avgMeanMotion); // Most recent (lowest orbit) first
 }
 
 function predictTrainPass(train, location, targetTime) {
-    if (!satellite || !location?.latitude || !location?.longitude) return undefined;
+    if (!satellite) return undefined;
 
     try {
         // Use first satellite in train as reference
         const [sat] = train.satellites;
         // Create satrec from TLE lines
         const satrec = satellite.twoline2satrec(sat.line1, sat.line2);
-        if (!satrec || satrec.error) {
+        if (!satrec?.error) {
             console.error('satellites: Starlink satrec error:', satrec?.error);
             return undefined;
         }
@@ -211,17 +198,17 @@ function findNextTrainPass(train, location, maxHoursAhead = 24) {
     const now = Date.now();
     const stepMinutes = 5; // Check every 5 minutes
     let passStart, passEnd;
-    let maxElevation = 0;
-    let maxElevationTime;
+    let elevationMax = 0,
+        elevationMaxTime;
     for (let i = 0; i < (maxHoursAhead * 60) / stepMinutes; i++) {
         const checkTime = now + i * stepMinutes * 60 * 1000;
         const position = predictTrainPass(train, location, checkTime);
         if (!position) continue;
         if (position.isVisible) {
             if (!passStart) passStart = checkTime;
-            if (position.elevation > maxElevation) {
-                maxElevation = position.elevation;
-                maxElevationTime = checkTime;
+            if (position.elevation > elevationMax) {
+                elevationMax = position.elevation;
+                elevationMaxTime = checkTime;
             }
             passEnd = checkTime;
         } else if (passStart && passEnd) {
@@ -232,7 +219,7 @@ function findNextTrainPass(train, location, maxHoursAhead = 24) {
     if (!passStart) return undefined;
 
     const startPosition = predictTrainPass(train, location, passStart);
-    const maxPosition = predictTrainPass(train, location, maxElevationTime);
+    const maxPosition = predictTrainPass(train, location, elevationMaxTime);
     const endPosition = predictTrainPass(train, location, passEnd);
     return {
         train: {
@@ -244,8 +231,8 @@ function findNextTrainPass(train, location, maxHoursAhead = 24) {
             azimuth: startPosition?.azimuth,
         },
         max: {
-            time: maxElevationTime,
-            elevation: maxElevation,
+            time: elevationMaxTime,
+            elevation: elevationMax,
             azimuth: maxPosition?.azimuth,
         },
         end: {
@@ -260,20 +247,25 @@ function findNextTrainPass(train, location, maxHoursAhead = 24) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-async function fetchVisualPasses(state, satelliteInfo, location, apiKey) {
-    if (!apiKey || !location?.latitude || !location?.longitude) return undefined;
+const liveSlotCombined = new DataSlot('combined', STALENESS.passes);
+const liveSlotStarlink = new DataSlot('starlink', STALENESS_STARLINK.tle);
+const liveSlotStarlinkPasses = new DataSlot('starlinkPasses', STALENESS.passes);
+
+const liveSchedulerPasses = new DataScheduler('satellites');
+const liveSchedulerStarlink = new DataScheduler('satellites');
+
+async function liveCombinedVisualPassesFetchAndProcess(satelliteInfo, location, apiKey) {
+    if (!apiKey) return undefined;
 
     const { id, name } = satelliteInfo;
 
     try {
         const days = 3; // Look ahead 3 days
         const minVisibility = 120; // Minimum 2 minutes visible
-        const response = await fetch(`${ENDPOINTS.n2yoBase}/visualpasses/${id}/${location.latitude}/${location.longitude}/${location.elevation || 0}/${days}/${minVisibility}&apiKey=${apiKey}`);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json();
+        const data = await fetchJson(`${ENDPOINTS.n2yoBase}/visualpasses/${id}/${location.latitude}/${location.longitude}/${location.elevation || 0}/${days}/${minVisibility}&apiKey=${apiKey}`);
         if (data.error) throw new Error(data.error);
         const _fetched = Date.now();
-        //
+
         // Sort by brightness (best first)
         const passes = (data.passes || [])
             .map((pass) => ({
@@ -299,6 +291,7 @@ async function fetchVisualPasses(state, satelliteInfo, location, apiKey) {
                 quality: getPassQuality(pass.mag),
             }))
             .sort((a, b) => a.magnitude - b.magnitude);
+
         console.error(`satellites: update ${name} success`);
         return {
             _fetched,
@@ -315,16 +308,21 @@ async function fetchVisualPasses(state, satelliteInfo, location, apiKey) {
     }
 }
 
-async function fetchSatellites(state, situation) {
+async function liveCombinedSatellitesFetchAndProcess(state, situation) {
     const { apiKey, location } = situation;
-    if (!apiKey || !location?.latitude) return;
+
+    if (!apiKey) return;
 
     if (!state.combined) state.combined = {};
 
-    const results = await Promise.all(Object.entries(SATELLITES).map(async ([key, sat]) => ({ key, data: await fetchVisualPasses(state, sat, location, apiKey) })));
+    const results = await Promise.all(Object.entries(SATELLITES).map(async ([key, sat]) => ({ key, data: await liveCombinedVisualPassesFetchAndProcess(sat, location, apiKey) })));
     for (const { key, data } of results) if (data) state[key] = { data, lastUpdate: data._fetched };
+
     const allPasses = results.flatMap(({ data }) => data?.passes || []).sort((a, b) => a.start.time - b.start.time);
-    const _fetched = results.map(({ data }) => data._fetched).reduce((a, b) => Math.max(a, b));
+    const _fetched = results
+        .filter(({ data }) => data?._fetched)
+        .map(({ data }) => data._fetched)
+        .reduce((a, b) => Math.max(a, b), 0);
 
     state.combined.data = {
         _fetched,
@@ -340,59 +338,55 @@ async function fetchSatellites(state, situation) {
     console.error(`satellites: update passes success (${allPasses.length} total, ${state.combined.data.tonight.length} tonight)`);
 }
 
-async function fetchStarlinkTLEs(state) {
-    if (!state.starlink) state.starlink = {};
-    try {
-        const response = await fetch(ENDPOINTS.celestrakStarlink);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const text = await response.text();
-        const _fetched = Date.now();
-        //
-        // Parse TLE text format (3 lines per satellite: name, line1, line2)
-        const lines = text.trim().split('\n');
-        const satellites = [];
-        for (let i = 0; i < lines.length - 2; i += 3) {
-            const name = lines[i].trim();
-            const line1 = lines[i + 1].trim();
-            const line2 = lines[i + 2].trim();
-            // Validate TLE lines
-            if (!line1.startsWith('1 ') || !line2.startsWith('2 ')) continue;
-            // Extract epoch from line 1 (columns 19-32)
-            const epoch = parseTLEEpochFromLine(line1.slice(18, 32).trim());
-            satellites.push({
-                name,
-                line1,
-                line2,
-                epoch,
-                noradId: Number.parseInt(line1.slice(2, 7)),
-            });
-        }
-        if (satellites.length === 0) throw new Error('No TLE data parsed');
-        const trains = identifyTrains(satellites);
-        state.starlink.data = {
-            _fetched,
-            totalSatellites: satellites.length,
-            recentTrains: trains,
-            hasActiveTrain: trains.length > 0,
-            mostRecentTrain: trains.length > 0 ? trains[0] : undefined,
-        };
-        state.starlink.lastUpdate = _fetched;
-        state.starlink.lastError = undefined;
-        console.error(`satellites: update Starlink success (${satellites.length} sats, ${trains.length} recent trains)`);
-        return state.starlink.data;
-    } catch (e) {
-        state.starlink.lastError = e.message;
-        console.error('satellites: update Starlink failure:', e.message);
-        return undefined;
-    }
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+async function liveStarlinkTLEsFetchAndProcess(state) {
+    return liveSlotStarlink.fetch(
+        state,
+        'satellites',
+        async () => {
+            const text = await fetchText(ENDPOINTS.celestrakStarlink);
+
+            // Parse TLE text format (3 lines per satellite: name, line1, line2)
+            const lines = text.trim().split('\n');
+            const satellites = [];
+            for (let i = 0; i < lines.length - 2; i += 3) {
+                const name = lines[i].trim();
+                const line1 = lines[i + 1].trim();
+                const line2 = lines[i + 2].trim();
+                // Validate TLE lines
+                if (!line1.startsWith('1 ') || !line2.startsWith('2 ')) continue;
+                // Extract epoch from line 1 (columns 19-32)
+                const epoch = parseTLEEpochFromLine(line1.slice(18, 32).trim());
+                satellites.push({
+                    name,
+                    line1,
+                    line2,
+                    epoch,
+                    noradId: Number.parseInt(line1.slice(2, 7)),
+                });
+            }
+            if (satellites.length === 0) throw new Error('No TLE data parsed');
+
+            const trains = identifyTrains(satellites);
+            return {
+                totalSatellites: satellites.length,
+                recentTrains: trains,
+                hasActiveTrain: trains.length > 0,
+                mostRecentTrain: trains.length > 0 ? trains[0] : undefined,
+            };
+        },
+        `${liveSlotStarlink.get(state)?.totalSatellites || 0} sats, ${liveSlotStarlink.get(state)?.recentTrains?.length || 0} trains`
+    );
 }
 
-async function updateStarlinkPasses(state, location) {
-    if (!state.starlink?.data?.recentTrains) return;
+async function liveStarlinkPassesUpdate(state, location) {
+    const starlinkData = liveSlotStarlink.get(state);
+    if (!starlinkData?.recentTrains) return;
 
     const _fetched = Date.now();
     // Only report decent passes, sort by time
-    const passes = state.starlink.data.recentTrains
+    const passes = starlinkData.recentTrains
         .map((train) => findNextTrainPass(train, location, 24))
         .filter((nextPass) => nextPass?.max?.elevation > 15)
         .sort((a, b) => a.start.time - b.start.time);
@@ -409,53 +403,8 @@ async function updateStarlinkPasses(state, location) {
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
 
-// function getPasses(state, satelliteKey) {
-//     const satState = state[satelliteKey];
-//     if (!satState?.data) return undefined;
-//     if (Date.now() - satState.lastUpdate > STALENESS.passes) return undefined;
-//     return satState.data;
-// }
-
-function getCombinedPasses(state) {
-    if (!state.combined?.data) return undefined;
-    if (Date.now() - state.combined.lastUpdate > STALENESS.passes) return undefined;
-    return state.combined.data;
-}
-
-function getUpcomingPasses(state, withinMinutes = 120) {
-    const combined = getCombinedPasses(state);
-    if (!combined) return [];
-    return combined.allPasses.filter((pass) => {
-        const mins = minutesUntilPass(pass.start.time);
-        return mins > -5 && mins < withinMinutes; // Include passes that started up to 5 min ago
-    });
-}
-
-// function getNextBrightPass(state) {
-//     const upcoming = getUpcomingPasses(state, 720);  // Next 12 hours
-//     if (upcoming.length === 0) return undefined;
-//     return upcoming.reduce((best, pass) =>  (!best || pass.magnitude < best.magnitude) ? pass : best, undefined);
-// }
-
-function getStarlinkData(state) {
-    if (!state.starlink?.data) return undefined;
-    if (Date.now() - state.starlink.lastUpdate > STALENESS_STARLINK.tle) return undefined;
-    return state.starlink.data;
-}
-
-function getStarlinkPasses(state) {
-    if (!state.starlinkPasses?.data) return undefined;
-    // Passes are time-sensitive, use shorter staleness
-    if (Date.now() - state.starlinkPasses.lastUpdate > STALENESS.passes) return undefined;
-    return state.starlinkPasses.data;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-function updateIntervalCalculator(state, _situation) {
+function liveCombinedCalculateUpdateInterval(state, _situation) {
     const month = new Date().getMonth(),
         hour = new Date().getHours();
     const upcoming = getUpcomingPasses(state, 60);
@@ -471,34 +420,50 @@ function updateIntervalCalculator(state, _situation) {
     // Daytime - infrequent background updates
     return [INTERVALS.daytime, 'daytime'];
 }
-const _updateSchedule = { intervalId: undefined, currentInterval: undefined };
-function updateSchedule(state, situation) {
-    fetchSatellites(state, situation).then(() => {
-        const [interval, reason] = updateIntervalCalculator(state, situation);
-        if (_updateSchedule.currentInterval !== interval) {
-            if (_updateSchedule.intervalId) clearInterval(_updateSchedule.intervalId);
-            _updateSchedule.currentInterval = interval;
-            _updateSchedule.intervalId = setInterval(() => updateSchedule(state, situation), interval);
-            console.error(`satellites: update satellites interval set to ${FormatHelper.millisToString(interval)} ('${reason}')`);
-        }
+
+function liveCombinedSchedulerStart(state, situation) {
+    liveSchedulerPasses.run(
+        () => liveCombinedSatellitesFetchAndProcess(state, situation),
+        () => liveCombinedCalculateUpdateInterval(state, situation)
+    );
+}
+
+function liveStarlinkCalculateUpdateInterval(state, _situation) {
+    const hasActiveTrain = liveSlotStarlink.get(state)?.hasActiveTrain;
+    return [hasActiveTrain ? INTERVALS_STARLINK.recentLaunch : INTERVALS_STARLINK.normal, hasActiveTrain ? 'train-active' : 'no-train'];
+}
+
+function liveStarlinkSchedulerStart(state, situation) {
+    liveSchedulerStarlink.run(
+        async () => {
+            await liveStarlinkTLEsFetchAndProcess(state);
+            if (liveSlotStarlink.get(state)?.hasActiveTrain) await liveStarlinkPassesUpdate(state, situation.location);
+        },
+        () => liveStarlinkCalculateUpdateInterval(state, situation)
+    );
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+function getCombinedPasses(state) {
+    return liveSlotCombined.get(state);
+}
+
+function getUpcomingPasses(state, withinMinutes = 120) {
+    const combined = getCombinedPasses(state);
+    if (!combined) return [];
+    return combined.allPasses.filter((pass) => {
+        const mins = minutesUntilPass(pass.start.time);
+        return mins > -5 && mins < withinMinutes; // Include passes that started up to 5 min ago
     });
 }
 
-function updateStarlinkIntervalCalculator(state, _situation) {
-    return [state.starlink?.data?.hasActiveTrain ? INTERVALS_STARLINK.recentLaunch : INTERVALS_STARLINK.normal, state.starlink?.data?.hasActiveTrain ? 'train-active' : 'no-train'];
+function getStarlinkData(state) {
+    return liveSlotStarlink.get(state);
 }
-const _starlinkSchedule = { intervalId: undefined, currentInterval: undefined };
-function updateStarlinkSchedule(state, situation) {
-    fetchStarlinkTLEs(state).then(() => {
-        if (state.starlink?.data?.hasActiveTrain) updateStarlinkPasses(state, location);
-        const [interval, reason] = updateStarlinkIntervalCalculator(state, situation);
-        if (_starlinkSchedule.currentInterval !== interval) {
-            if (_starlinkSchedule.intervalId) clearInterval(_starlinkSchedule.intervalId);
-            _starlinkSchedule.currentInterval = interval;
-            _starlinkSchedule.intervalId = setInterval(() => updateStarlinkSchedule(state, situation), interval);
-            console.error(`satellites: update Starlink interval set to ${FormatHelper.millisToString(interval)} ('${reason}')`);
-        }
-    });
+
+function getStarlinkPasses(state) {
+    return liveSlotStarlinkPasses.get(state);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -606,7 +571,7 @@ function interpretStarlinkTrain({ results, situation, store }) {
 
     // Multiple trains?
     if (starlinkData?.recentTrains?.length > 1)
-        results.phenomena.push(`satellites: ${ts.get('starlinkPass', passesData._fetched)}Starlink has ${FormatHelper.countToString(starlinkData.recentTrains.length)} trains currently visible (multiple recent launches)`);
+        results.phenomena.push(`satellites: ${ts.get('starlinkPass', passesData?._fetched)}Starlink has ${FormatHelper.countToString(starlinkData.recentTrains.length)} trains currently visible (multiple recent launches)`);
 }
 
 function interpretStarlinkStats({ results, situation, store }) {
@@ -644,7 +609,6 @@ function isGeostatinaryFlareTime(month, hour) {
 function interpretGeostationaryFlares({ results, situation }) {
     const { location, hour, month } = situation;
 
-    if (!location?.latitude) return;
     if (Math.abs(location.latitude) >= GEOSTATIONARY.MAX_LATITUDE) return;
 
     const flareTime = isGeostatinaryFlareTime(month, hour);
@@ -658,17 +622,11 @@ module.exports = function ({ location, store, options }) {
     if (!store.astronomy_satellites) store.astronomy_satellites = {};
 
     const apiKey = options?.n2yoApiKey;
-    if (apiKey) {
-        updateSchedule(store.astronomy_satellites, { location, apiKey });
-    } else {
-        console.error('satellites: no N2YO API key, ISS/satellite tracking disabled');
-    }
+    if (apiKey) liveCombinedSchedulerStart(store.astronomy_satellites, { location, apiKey });
+    else console.error('satellites: no N2YO API key, ISS/satellite tracking disabled');
 
-    if (satellite) {
-        updateStarlinkSchedule(store.astronomy_satellites, { location });
-    } else {
-        console.error('satellites: no satellite.js, Starlink tracking disabled');
-    }
+    if (satellite) liveStarlinkSchedulerStart(store.astronomy_satellites, { location });
+    else console.error('satellites: no satellite.js, Starlink tracking disabled');
 
     return {
         interpretGeostationaryFlares,
@@ -678,5 +636,6 @@ module.exports = function ({ location, store, options }) {
         interpretStarlinkStats: satellite ? interpretStarlinkStats : () => {},
     };
 };
+
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------

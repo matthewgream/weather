@@ -1,8 +1,9 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const fs = require('fs');
-const path = require('path');
+const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const helpers = require('./server-function-weather-helpers.js');
 const { FormatHelper } = require('./server-function-weather-tools-format.js');
@@ -361,6 +362,7 @@ function getWeatherInterpretation(data, options = {}) {
 
 function initialise(location, options) {
     weatherLocation = location;
+    assert(location.latitude && location.longitude && location.elevation && location.hemisphere && location.timezone);
     weatherOptions = mergeObjects(DEFAULT_OPTIONS, options || {});
     if (weatherOptions.debug) console.error(`weather: DEBUG ENABLED`);
     weatherStorageStartup(weatherOptions);
@@ -376,7 +378,7 @@ function initialise(location, options) {
         ...require('./server-function-weather-module-astronomy-planets-and-stars.js')(parameters),
         ...require('./server-function-weather-module-astronomy-meteors.js')(parameters),
         ...require('./server-function-weather-module-astronomy-satellites.js')(parameters),
-        ...require('./server-function-weather-module-eclipses.js')(parameters),
+        ...require('./server-function-weather-module-astronomy-eclipses.js')(parameters),
         ...require('./server-function-weather-module-phenology.js')(parameters),
         ...require('./server-function-weather-module-calendar.js')(parameters),
         ...require('./server-function-weather-module-pollen.js')(parameters),

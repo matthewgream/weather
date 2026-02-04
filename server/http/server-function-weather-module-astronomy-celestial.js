@@ -216,8 +216,6 @@ function interpretMeteorShowers({ results, situation, dataCurrent }) {
     const { location, date, year, month, day, hour, daylight, lunar } = situation;
     const { cloudCover } = dataCurrent;
 
-    if (!location?.latitude || !location?.longitude) return;
-
     // Find active showers
     const activeShowers = METEOR_SHOWERS.filter((shower) => isShowerActive(shower, month, day));
     activeShowers.forEach((shower) => {
@@ -290,7 +288,7 @@ function interpretFireballSeason({ results, situation }) {
     if (!METEOR.FIREBALL_MONTHS.includes(month)) return;
     if (!(hour >= 21 || hour <= 3)) return;
 
-    results.phenomena.push('meteors: autumn fireball season (increased bright meteor rate)' + (location?.latitude > 55 ? ' - favorable geometry at high latitude' : ''));
+    results.phenomena.push('meteors: autumn fireball season (increased bright meteor rate)' + (location.latitude > 55 ? ' - favorable geometry at high latitude' : ''));
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -320,8 +318,6 @@ function interpretDeepSkyConditions({ results, situation, dataCurrent }) {
     if (daylight?.isDaytime) return;
     if (cloudCover !== undefined && cloudCover > 20) return;
 
-    if (!location?.latitude || !location?.longitude) return;
-
     // Calculate limiting magnitude at typical observing altitude (45)
     const limitingMagnitude = toolsAstronomy.calculateLimitingMagnitude(lunar?.brightness || 0, location.lightPollution, humidity, 45);
 
@@ -348,8 +344,6 @@ function interpretDeepSkyObjects({ results, situation, dataCurrent }) {
     // Skip during daytime or heavy clouds
     if (daylight?.isDaytime) return;
     if (cloudCover !== undefined && cloudCover > 20) return;
-
-    if (!location?.latitude || !location?.longitude) return;
 
     // Calculate limiting magnitude at typical observing altitude (45)
     const limitingMagnitude = toolsAstronomy.calculateLimitingMagnitude(lunar?.brightness || 0, location.lightPollution, humidity, 45);
