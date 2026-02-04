@@ -16,8 +16,8 @@
 //
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const helpers = require('./server-function-weather-helpers.js');
-const { FormatHelper } = require('./server-function-weather-tools-format.js');
+const { isNearSunriseOrSet, isTwilight, getTwilightDuration, getBlueHourDuration, daysIntoYear, constants } = require('./server-function-weather-helpers.js');
+const formatter = require('./server-function-weather-tools-format.js');
 const { DataSlot, DataScheduler, fetchJson, createTimestampTracker } = require('./server-function-weather-tools-live.js');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -242,38 +242,6 @@ function getSeeingForecast(state) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function isNearSunriseOrSet(daylight, hourDecimal, threshold) {
-    if (!daylight.sunriseDecimal || !daylight.sunsetDecimal) return undefined;
-    const nearSunrise = Math.abs(hourDecimal - daylight.sunriseDecimal) < threshold;
-    const nearSunset = Math.abs(hourDecimal - daylight.sunsetDecimal) < threshold;
-    if (nearSunrise || nearSunset) return nearSunrise ? 'sunrise' : 'sunset';
-    return undefined;
-}
-
-function isTwilight(daylight, hourDecimal) {
-    if (!daylight.civilDawnDecimal || !daylight.sunsetDecimal) return undefined;
-    const morningTwilight = hourDecimal > daylight.civilDawnDecimal && hourDecimal < daylight.sunriseDecimal;
-    const eveningTwilight = hourDecimal > daylight.sunsetDecimal && hourDecimal < daylight.civilDuskDecimal;
-    if (morningTwilight || eveningTwilight) return morningTwilight ? 'western' : 'eastern';
-    return undefined;
-}
-
-function getTwilightDuration(daylight) {
-    if (!daylight.civilDawnDecimal || !daylight.sunriseDecimal) return undefined;
-    return {
-        morning: (daylight.sunriseDecimal - daylight.civilDawnDecimal) * 60,
-        evening: (daylight.civilDuskDecimal - daylight.sunsetDecimal) * 60,
-    };
-}
-
-function getBlueHourDuration(daylight) {
-    if (!daylight.civilDuskDecimal || !daylight.nauticalDuskDecimal) return undefined;
-    return Math.abs(daylight.nauticalDuskDecimal - daylight.civilDuskDecimal) * 60;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
 function interpretTwilightPhase({ results, situation, dataCurrent }) {
     const { daylight } = situation;
     const { cloudCover } = dataCurrent;
@@ -315,7 +283,7 @@ function interpretTwilightPhenomena({ results, situation, dataCurrent }) {
     // Belt of Venus and Earth's shadow
     if (cloudCover !== undefined && cloudCover < 40) {
         const sunDepression = Math.abs(solar?.position?.altitude || 0);
-        if (sunDepression > BELT_OF_VENUS.MIN_DEPRESSION && sunDepression < BELT_OF_VENUS.MAX_DEPRESSION) results.phenomena.push(`twilight: Belt of Venus ${FormatHelper.degreesToString(sunDepression * 2)} high in ${twilight} sky`);
+        if (sunDepression > BELT_OF_VENUS.MIN_DEPRESSION && sunDepression < BELT_OF_VENUS.MAX_DEPRESSION) results.phenomena.push(`twilight: Belt of Venus ${formatter.degreesToString(sunDepression * 2)} high in ${twilight} sky`);
         results.phenomena.push(`twilight: Earth's shadow visible (dark band on ${twilight} horizon)`);
         // Alpenglow
         if (location?.nearMountains || location.elevation > 1000) results.phenomena.push('twilight: alpenglow on mountain peaks');
@@ -341,13 +309,13 @@ function interpretExtendedTwilight({ results, situation }) {
 
     // Extended blue hour
     const blueHourDuration = getBlueHourDuration(daylight);
-    if (blueHourDuration && blueHourDuration > 45) results.phenomena.push(`twilight: extended blue hour (${FormatHelper.secondsToString(Math.floor(blueHourDuration) * 60, '')})`);
+    if (blueHourDuration && blueHourDuration > 45) results.phenomena.push(`twilight: extended blue hour (${formatter.secondsToString(Math.floor(blueHourDuration) * 60, '')})`);
 
     // Extended twilight duration
     const twilightDuration = getTwilightDuration(daylight);
     if (twilightDuration) {
         const maxDuration = Math.max(twilightDuration.morning, twilightDuration.evening);
-        if (maxDuration > 60) results.phenomena.push(`twilight: extended duration (${FormatHelper.secondsToString(Math.floor(maxDuration) * 60, '')})`);
+        if (maxDuration > 60) results.phenomena.push(`twilight: extended duration (${formatter.secondsToString(Math.floor(maxDuration) * 60, '')})`);
     }
 }
 
@@ -403,7 +371,7 @@ function interpretCrepuscularRays({ results, situation, dataCurrent }) {
         if (cloudCover > 40 && cloudCover < 60) {
             results.phenomena.push('crepuscular rays: anticrepuscular rays possible opposite sun');
             // Antisolar point
-            if (solar?.position?.altitude < 0) results.phenomena.push(`crepuscular rays: converging at antisolar point (${FormatHelper.degreesToString(-solar.position.altitude)} altitude)`);
+            if (solar?.position?.altitude < 0) results.phenomena.push(`crepuscular rays: converging at antisolar point (${formatter.degreesToString(-solar.position.altitude)} altitude)`);
         }
     }
 }
@@ -485,7 +453,7 @@ function interpretNoctilucentClouds({ results, situation, dataCurrent }) {
     if (!(hour >= 22 || hour <= 2)) return;
     if (cloudCover !== undefined && cloudCover >= 50) return;
 
-    const daysFromSolstice = Math.abs(helpers.daysIntoYear(date) - NOCTILUCENT.SUMMER_SOLSTICE_DOY);
+    const daysFromSolstice = Math.abs(daysIntoYear(date) - NOCTILUCENT.SUMMER_SOLSTICE_DOY);
     if (daysFromSolstice < NOCTILUCENT.PRIME_WINDOW_DAYS) results.phenomena.push('noctilucent clouds: prime season - look north for silvery-blue wisps');
     else results.phenomena.push('noctilucent clouds: possible in northern sky');
 }
@@ -501,10 +469,10 @@ function interpretAtmosphericOptics({ results, situation, dataCurrent }) {
 
     // 22° halo and sundogs
     if (cloudCover !== undefined && cloudCover > 20 && cloudCover < 80)
-        if (altitude > 0 && altitude < 60) results.phenomena.push(`optics: ${FormatHelper.degreesToString(HALO.STANDARD_RADIUS)} halo possible (ice crystals)` + (altitude > 0 && altitude < 22 ? ', sundogs likely' : ''));
+        if (altitude > 0 && altitude < 60) results.phenomena.push(`optics: ${formatter.degreesToString(HALO.STANDARD_RADIUS)} halo possible (ice crystals)` + (altitude > 0 && altitude < 22 ? ', sundogs likely' : ''));
 
     // 46° halo (larger, rarer)
-    if (cloudCover !== undefined && cloudCover > 10 && cloudCover < 60 && temp < -5) if (altitude > 10 && altitude < 50) results.phenomena.push(`optics: ${FormatHelper.degreesToString(HALO.LARGE_RADIUS)} halo possible (large ring, rare)`);
+    if (cloudCover !== undefined && cloudCover > 10 && cloudCover < 60 && temp < -5) if (altitude > 10 && altitude < 50) results.phenomena.push(`optics: ${formatter.degreesToString(HALO.LARGE_RADIUS)} halo possible (large ring, rare)`);
 
     // Circumzenithal arc
     if (cloudCover !== undefined && cloudCover > 10 && cloudCover < 50 && temp < -5) if (altitude > 5 && altitude < HALO.CIRCUMZENITHAL_MAX_ALT) results.phenomena.push('optics: circumzenithal arc possible (rainbow colors near zenith)');
@@ -533,10 +501,10 @@ function interpretWhiteNights({ results, situation }) {
     const daysFromSolstice = Math.floor((location.latitude - 48) * 12.5);
     if (daysFromSolstice > 0) {
         const summerSolstice = new Date(year, 5, 21);
-        const startDate = new Date(summerSolstice.getTime() - daysFromSolstice * helpers.constants.MILLISECONDS_PER_DAY);
-        const endDate = new Date(summerSolstice.getTime() + daysFromSolstice * helpers.constants.MILLISECONDS_PER_DAY);
+        const startDate = new Date(summerSolstice.getTime() - daysFromSolstice * constants.MILLISECONDS_PER_DAY);
+        const endDate = new Date(summerSolstice.getTime() + daysFromSolstice * constants.MILLISECONDS_PER_DAY);
         if (date >= startDate && date <= endDate) {
-            if (Math.abs(date - summerSolstice) <= 7 * helpers.constants.MILLISECONDS_PER_DAY) results.phenomena.push('white nights: peak brightness (no true darkness)');
+            if (Math.abs(date - summerSolstice) <= 7 * constants.MILLISECONDS_PER_DAY) results.phenomena.push('white nights: peak brightness (no true darkness)');
             else results.phenomena.push('white nights: twilight persists all night');
         }
     }
@@ -555,8 +523,8 @@ function interpretViewingConditions({ results, situation, dataCurrent, weatherDa
 
     // *** Scintillation (twinkling) ***
     if (windSpeed !== undefined && windSpeed > 10) {
-        if (windSpeed > 20) results.phenomena.push(`observing: severe scintillation expected (${FormatHelper.windspeedToString(windSpeed)}) - jet stream influence`);
-        else if (Math.abs((pressure || 1013) - 1013) > 10) results.phenomena.push(`observing: strong scintillation (${FormatHelper.windspeedToString(windSpeed)}) - colorful star twinkling`);
+        if (windSpeed > 20) results.phenomena.push(`observing: severe scintillation expected (${formatter.windspeedToString(windSpeed)}) - jet stream influence`);
+        else if (Math.abs((pressure || 1013) - 1013) > 10) results.phenomena.push(`observing: strong scintillation (${formatter.windspeedToString(windSpeed)}) - colorful star twinkling`);
     }
 
     // *** Temperature change over last hour (thermal turbulence) ***
@@ -565,7 +533,7 @@ function interpretViewingConditions({ results, situation, dataCurrent, weatherDa
         const [oldestEntry] = period1h.entries;
         if (oldestEntry.temp !== undefined) {
             const tempChange = Math.abs(temp - oldestEntry.temp);
-            if (tempChange > 3) results.phenomena.push(`observing: rapid temperature change (${FormatHelper.temperatureToString(tempChange)}/hr) - thermal turbulence likely`);
+            if (tempChange > 3) results.phenomena.push(`observing: rapid temperature change (${formatter.temperatureToString(tempChange)}/hr) - thermal turbulence likely`);
         }
     }
 
@@ -578,7 +546,7 @@ function interpretViewingConditions({ results, situation, dataCurrent, weatherDa
                 const tempGradient = (temp - oldestEntry.temp) / timeDiffHours;
                 if (Math.abs(tempGradient) > 2)
                     results.phenomena.push(
-                        `observing: thermal gradient ${tempGradient > 0 ? 'rising' : 'falling'} (${FormatHelper.temperatureToString(Math.abs(tempGradient))}/hr) - ${tempGradient > 0 ? 'ground warming, rising air' : 'ground cooling, sinking air'}`
+                        `observing: thermal gradient ${tempGradient > 0 ? 'rising' : 'falling'} (${formatter.temperatureToString(Math.abs(tempGradient))}/hr) - ${tempGradient > 0 ? 'ground warming, rising air' : 'ground cooling, sinking air'}`
                     );
             }
         }
@@ -600,8 +568,8 @@ function interpretViewingConditions({ results, situation, dataCurrent, weatherDa
 
     // *** Humidity effects on optics ***
     if (humidity !== undefined) {
-        if (humidity > 90) results.phenomena.push(`observing: very high humidity (${FormatHelper.humidityToString(humidity)}) - optics will dew rapidly, dew heaters recommended`);
-        else if (humidity > 80) results.phenomena.push(`observing: high humidity (${FormatHelper.humidityToString(humidity)}) - monitor for dewing`);
+        if (humidity > 90) results.phenomena.push(`observing: very high humidity (${formatter.humidityToString(humidity)}) - optics will dew rapidly, dew heaters recommended`);
+        else if (humidity > 80) results.phenomena.push(`observing: high humidity (${formatter.humidityToString(humidity)}) - monitor for dewing`);
     }
 
     // *** Ground fog risk ***
@@ -617,15 +585,15 @@ function interpretViewingConditions({ results, situation, dataCurrent, weatherDa
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretSeeingForecast({ results, situation, store }) {
-    const { hour, daylight, location, now } = situation;
+function interpretSeeingForecast({ temporal, results, situation, store }) {
+    const { hour, daylight } = situation;
 
     if (!((hour >= 14 && hour <= 19) || hour >= 20 || hour <= 5 || !daylight?.isDaytime)) return;
 
     const forecast = getSeeingForecast(store.astronomy_atmospheric);
     if (!forecast) return;
 
-    const ts = createTimestampTracker(now, location.timezone);
+    const ts = createTimestampTracker(temporal, situation);
 
     // *** Current conditions (at night) ***
     if (hour >= 20 || hour <= 5 || !daylight?.isDaytime) {
@@ -653,20 +621,20 @@ function interpretSeeingForecast({ results, situation, store }) {
         results.phenomena.push(
             // eslint-disable-next-line unicorn/consistent-destructuring
             `observing: ${ts.get('seeing', forecast._fetched)}${summary.text}` +
-                (bestTonight && summary.rating !== 'bad' ? ` - best window around ${FormatHelper.timeToString(bestTonight.forecastTime, { hoursOnly: true })} (seeing ${bestTonight.seeingDesc}, ${bestTonight.cloudCoverDesc})` : '')
+                (bestTonight && summary.rating !== 'bad' ? ` - best window around ${formatter.timeToString(bestTonight.forecastTime, { hoursOnly: true })} (seeing ${bestTonight.seeingDesc}, ${bestTonight.cloudCoverDesc})` : '')
         );
     }
 }
 
-function interpretSeeingAlert({ results, situation, store }) {
-    const { hour, now, location } = situation;
+function interpretSeeingAlert({ temporal, results, situation, store }) {
+    const { hour } = situation;
 
     if (!(hour >= 15 && hour <= 18)) return;
 
     const forecast = getSeeingForecast(store.astronomy_atmospheric);
     if (!forecast?.bestTonight) return;
 
-    const ts = createTimestampTracker(now, location.timezone);
+    const ts = createTimestampTracker(temporal, situation);
 
     // Alert for exceptional conditions in late afternoon
     if (hour >= 15 && hour <= 18) {

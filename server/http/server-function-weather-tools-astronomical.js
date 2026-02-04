@@ -81,6 +81,7 @@ function getDaylightHours(date, latitude, longitude) {
     }
     const refractionDegrees = 0.5667; // 34 arcminutes
     const daylightAngle = (Math.cos((90 + refractionDegrees) * helpers.constants.DEGREES_TO_RADIANS) - Math.sin(latitudeRad) * Math.sin(declination)) / (Math.cos(latitudeRad) * Math.cos(declination));
+    // eslint-disable-next-line unicorn/no-nested-ternary, sonarjs/no-nested-conditional
     const daylightHours = times.daylightDawn && times.daylightDusk ? times.daylightDusk - times.daylightDawn + (times.daylightDusk < times.daylightDawn ? 24 : 0) : daylightAngle < -1 ? 24 : 0;
     const isDaytime = times.daylightDawn && times.daylightDusk && hours + minutes / 60 > times.daylightDawn && hours + minutes / 60 < times.daylightDusk;
     return {
@@ -215,6 +216,7 @@ function isNearSolstice(date = new Date(), hemisphere = 'northern', daysWindow =
     const currentYearLongestDay = isNorthern ? currentYearSummerSolstice : currentYearWinterSolstice;
     const currentYearShortestDay = isNorthern ? currentYearWinterSolstice : currentYearSummerSolstice;
     // Handle year boundary
+    // eslint-disable-next-line unicorn/no-nested-ternary, sonarjs/no-nested-conditional
     const otherYearRelevantSolstice = isNorthern ? (month < 6 ? prevYearWinterSolstice : nextYearSummerSolstice) : month < 6 ? getEquinoxSolstice(year - 1, 1) : getEquinoxSolstice(year + 1, 3);
     // Rest of the existing logic remains the same...
     const daysToCurrYearLongest = (currentYearLongestDay.getTime() - time) / helpers.constants.MILLISECONDS_PER_DAY;
@@ -515,6 +517,7 @@ function getSolarPosition(date, latitude, longitude, includeRefraction = false) 
         hourAngle: H,
         trueLongitude,
         equationOfTime,
+        // eslint-disable-next-line sonarjs/no-nested-conditional, unicorn/no-nested-ternary
         noon: noon < 0 ? noon + 24 : noon >= 24 ? noon - 24 : noon, // Local Mean Solar Noon
         apparentNoon: (noon + equationOfTime / 60) % 24, // Local Apparent Solar Noon (sundial noon)
         angularDiameter: 2 * Math.atan(constants.SOLAR_RADIUS_KM / (R * constants.ASTRONOMICAL_UNIT_KM)) * helpers.constants.RADIANS_TO_DEGREES,
@@ -560,7 +563,7 @@ function __getLunarEclipticLongitudeForZodiac(jd) {
     // Moon's mean longitude
     const L = helpers.normalizeAngle(218.316 + 13.176396 * (jd - 2451545));
     // Moon's mean anomaly (note: variable named M but this is Moon's anomaly, not Sun's)
-    // TODO: The -0.186 term below should use Sun's mean anomaly for full accuracy
+    // The -0.186 term below should use Sun's mean anomaly for full accuracy
     const M = helpers.normalizeAngle(134.963 + 13.064993 * (jd - 2451545));
     // Moon's mean elongation
     const D = helpers.normalizeAngle(297.85 + 12.190749 * (jd - 2451545));
@@ -928,6 +931,7 @@ function getLunarZodiac(date = new Date()) {
     // Calculate how far through the sign (0-30 degrees)
     const degreesInSign = longitude % 30;
     // Determine if early, middle, or late in sign
+    // eslint-disable-next-line unicorn/no-nested-ternary, sonarjs/no-nested-conditional
     const position = degreesInSign < 10 ? 'early' : degreesInSign < 20 ? 'middle' : 'late';
     return {
         sign,

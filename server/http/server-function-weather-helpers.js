@@ -85,14 +85,73 @@ function daysIntoYear(date = new Date()) {
     return (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - Date.UTC(date.getFullYear(), 0, 0)) / constants.MILLISECONDS_PER_DAY;
 }
 
-function isSameDay(a, b) {
-    if (a === undefined || b === undefined) return false;
-    return a.getDate() === b.getDate() && a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
+function isSameDay(date1, date2) {
+    if (date1 === undefined || date2 === undefined) return false;
+    const d1 = new Date(date1);
+    const d2 = new Date(date2);
+    return d1.getUTCFullYear() === d2.getUTCFullYear() && d1.getUTCMonth() === d2.getUTCMonth() && d1.getUTCDate() === d2.getUTCDate();
 }
 
 function daysBetween(a, b) {
     // Returns 999 (large number) if a is falsy, so comparisons like `daysBetween(x, y) > N` work when x is undefined
     return a ? Math.floor((b - a) / constants.MILLISECONDS_PER_DAY) : 999;
+}
+
+function getDaysDifference(date1, date2) {
+    const d1 = new Date(date1);
+    const d2 = new Date(date2);
+    d1.setUTCHours(0, 0, 0, 0);
+    d2.setUTCHours(0, 0, 0, 0);
+    return Math.round((d2 - d1) / (24 * 60 * 60 * 1000));
+}
+
+function isWithinDays(eclipseDate, currentDate, days) {
+    const diff = getDaysDifference(currentDate, eclipseDate);
+    return diff >= 0 && diff <= days;
+}
+
+function isInPeriod(month, day, startMonth, startDay, endMonth, endDay) {
+    const current = month * 100 + day;
+    const start = startMonth * 100 + startDay;
+    const end = endMonth * 100 + endDay;
+    return start <= end ? current >= start && current <= end : current >= start || current <= end;
+}
+
+function isDawnOrDusk(hour, minute, daylight) {
+    if (!daylight?.sunriseDecimal || !daylight?.sunsetDecimal) return false;
+    const timeDecimal = hour + minute / 60;
+    const nearDawn = Math.abs(timeDecimal - daylight.sunriseDecimal) < 1;
+    const nearDusk = Math.abs(timeDecimal - daylight.sunsetDecimal) < 1;
+    return nearDawn || nearDusk;
+}
+
+function isNearSunriseOrSet(daylight, hourDecimal, threshold) {
+    if (!daylight.sunriseDecimal || !daylight.sunsetDecimal) return undefined;
+    const nearSunrise = Math.abs(hourDecimal - daylight.sunriseDecimal) < threshold;
+    const nearSunset = Math.abs(hourDecimal - daylight.sunsetDecimal) < threshold;
+    if (nearSunrise || nearSunset) return nearSunrise ? 'sunrise' : 'sunset';
+    return undefined;
+}
+
+function isTwilight(daylight, hourDecimal) {
+    if (!daylight.civilDawnDecimal || !daylight.sunsetDecimal) return undefined;
+    const morningTwilight = hourDecimal > daylight.civilDawnDecimal && hourDecimal < daylight.sunriseDecimal;
+    const eveningTwilight = hourDecimal > daylight.sunsetDecimal && hourDecimal < daylight.civilDuskDecimal;
+    if (morningTwilight || eveningTwilight) return morningTwilight ? 'western' : 'eastern';
+    return undefined;
+}
+
+function getTwilightDuration(daylight) {
+    if (!daylight.civilDawnDecimal || !daylight.sunriseDecimal) return undefined;
+    return {
+        morning: (daylight.sunriseDecimal - daylight.civilDawnDecimal) * 60,
+        evening: (daylight.civilDuskDecimal - daylight.sunsetDecimal) * 60,
+    };
+}
+
+function getBlueHourDuration(daylight) {
+    if (!daylight.civilDuskDecimal || !daylight.nauticalDuskDecimal) return undefined;
+    return Math.abs(daylight.nauticalDuskDecimal - daylight.civilDuskDecimal) * 60;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -167,8 +226,16 @@ module.exports = {
     daysIntoYear,
     isSameDay,
     daysBetween,
+    getDaysDifference,
+    isWithinDays,
+    isInPeriod,
     normalizeTime,
     isLeapYear,
+    isDawnOrDusk,
+    isNearSunriseOrSet,
+    isTwilight,
+    getTwilightDuration,
+    getBlueHourDuration,
     dateToJulianDateUTC,
     julianDateToDateUTC,
     juliandDateToDateUTC: julianDateToDateUTC, // deprecated alias (typo) - use julianDateToDateUTC

@@ -12,8 +12,9 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // const helpers = require('./server-function-weather-helpers.js');
+const { calculateDaylightChangeRate, calculateTwilightDuration } = require('./server-function-weather-tools-calculators.js');
 const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
-const { FormatHelper } = require('./server-function-weather-tools-format.js');
+const formatter = require('./server-function-weather-tools-format.js');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -52,20 +53,6 @@ const CROSS_QUARTER_CONTEXT = {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function calculateDaylightChangeRate(latitude) {
-    // Seconds per day change, peaks at equinox
-    // sin(latitude) gives rough approximation of change rate factor
-    return Math.floor(Math.abs(Math.sin((latitude * Math.PI) / 180)) * 4) * 60;
-}
-
-function calculateTwilightDuration(latitude) {
-    // Twilight duration increases with latitude in Seconds
-    return Math.floor(90 / Math.cos((latitude * Math.PI) / 180)) * 60;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
 function interpretEquinox({ results, situation, dataCurrent }) {
     const { location, date } = situation;
     const { windSpeed } = dataCurrent;
@@ -74,13 +61,13 @@ function interpretEquinox({ results, situation, dataCurrent }) {
     if (!equinoxInfo.near) return;
 
     // Primary announcement
-    results.phenomena.push(FormatHelper.proximityToString(equinoxInfo.type, equinoxInfo.days));
+    results.phenomena.push(formatter.proximityToString(equinoxInfo.type, equinoxInfo.days));
 
     // Daylight change information
     results.phenomena.push(
         `daylight: rapidly ${equinoxInfo.type.includes('spring') ? 'increasing' : 'decreasing'}` +
-            (location.latitude > LATITUDE.HIGH ? ` (${FormatHelper.secondsToString(calculateDaylightChangeRate(location.latitude), '')}/day)` : '') +
-            `, twilight ~${FormatHelper.secondsToString(calculateTwilightDuration(location.latitude), '')}`
+            (location.latitude > LATITUDE.HIGH ? ` (${formatter.secondsToString(calculateDaylightChangeRate(location.latitude), '')}/day)` : '') +
+            `, twilight ~${formatter.secondsToString(calculateTwilightDuration(location.latitude), '')}`
     );
 
     // Equinoctial gales
@@ -100,7 +87,7 @@ function interpretSolstice({ results, situation, dataCurrent, store }) {
     if (!solsticeInfo.near) return;
 
     // Primary announcement
-    results.phenomena.push(FormatHelper.proximityToString(solsticeInfo.type, solsticeInfo.days));
+    results.phenomena.push(formatter.proximityToString(solsticeInfo.type, solsticeInfo.days));
 
     if (!store.astronomy_calendar) store.astronomy_calendar = {};
     if (!store.astronomy_calendar.daylightTracking) store.astronomy_calendar.daylightTracking = { consecutiveBrightNights: 0, consecutiveDarkDays: 0 };
@@ -114,7 +101,7 @@ function interpretSolstice({ results, situation, dataCurrent, store }) {
 
 function interpretSummerSolstice(results, store, daylight, location, lunar, cloudCover, solsticeInfo) {
     // Extended daylight
-    if (daylight?.daylightHours > DAYLIGHT.EXTENDED) results.phenomena.push(`daylight: extended (${FormatHelper.secondsToString(Math.floor(daylight.daylightHours * 60) * 60, '')})`);
+    if (daylight?.daylightHours > DAYLIGHT.EXTENDED) results.phenomena.push(`daylight: extended (${formatter.secondsToString(Math.floor(daylight.daylightHours * 60) * 60, '')})`);
 
     // Latitude-specific phenomena
     if (location.latitude > LATITUDE.ARCTIC_CIRCLE && daylight?.daylightHours >= 24) results.phenomena.push(`polar: true midnight sun (sun never sets)${cloudCover !== undefined && cloudCover < 50 ? ' (visible sun)' : ''}`);
@@ -132,13 +119,13 @@ function interpretSummerSolstice(results, store, daylight, location, lunar, clou
     // Consecutive bright nights tracking
     if (location.latitude > LATITUDE.ARCTIC_APPROACH && daylight?.daylightHours > DAYLIGHT.MIDNIGHT_SUN) {
         if (++store.astronomy_calendar.daylightTracking.consecutiveBrightNights > 7)
-            results.phenomena.push(`polar: ${FormatHelper.countToString(store.astronomy_calendar.daylightTracking.consecutiveBrightNights)} consecutive midnight sun days`);
+            results.phenomena.push(`polar: ${formatter.countToString(store.astronomy_calendar.daylightTracking.consecutiveBrightNights)} consecutive midnight sun days`);
     } else if (location.latitude > LATITUDE.ARCTIC_APPROACH) store.astronomy_calendar.daylightTracking.consecutiveBrightNights = 0;
 }
 
 function interpretWinterSolstice(results, store, daylight, location, lunar, cloudCover, temp, hour, solsticeInfo) {
     // Minimal daylight
-    if (daylight?.daylightHours < DAYLIGHT.MINIMAL) results.phenomena.push(`daylight: minimal (${FormatHelper.secondsToString(Math.floor(daylight.daylightHours * 60) * 60, '')})`);
+    if (daylight?.daylightHours < DAYLIGHT.MINIMAL) results.phenomena.push(`daylight: minimal (${formatter.secondsToString(Math.floor(daylight.daylightHours * 60) * 60, '')})`);
 
     // Latitude-specific phenomena
     if (location.latitude > LATITUDE.ARCTIC_CIRCLE && daylight?.daylightHours < DAYLIGHT.POLAR_NIGHT) results.phenomena.push('polar: polar night (sun never rises)');
@@ -156,8 +143,7 @@ function interpretWinterSolstice(results, store, daylight, location, lunar, clou
 
     // Consecutive dark days tracking
     if (location.latitude > LATITUDE.NEAR_ARCTIC && daylight?.daylightHours < DAYLIGHT.VERY_MINIMAL) {
-        if (++store.astronomy_calendar.daylightTracking.consecutiveDarkDays > 7)
-            results.phenomena.push(`polar: ${FormatHelper.countToString(store.astronomy_calendar.daylightTracking.consecutiveDarkDays)} consecutive minimal daylight days`);
+        if (++store.astronomy_calendar.daylightTracking.consecutiveDarkDays > 7) results.phenomena.push(`polar: ${formatter.countToString(store.astronomy_calendar.daylightTracking.consecutiveDarkDays)} consecutive minimal daylight days`);
     } else if (location.latitude > LATITUDE.NEAR_ARCTIC) store.astronomy_calendar.daylightTracking.consecutiveDarkDays = 0;
 }
 
@@ -175,7 +161,7 @@ function interpretCrossQuarter({ results, situation }) {
     const crossQuarterInfo = toolsAstronomy.isNearCrossQuarter(date, location.hemisphere, LOOKAHEAD_DAYS.CROSS_QUARTER);
     if (!crossQuarterInfo.near) return;
 
-    let text = FormatHelper.proximityToString(crossQuarterInfo.type, crossQuarterInfo.days);
+    let text = formatter.proximityToString(crossQuarterInfo.type, crossQuarterInfo.days);
     const crossQuarterName = Object.keys(CROSS_QUARTER_CONTEXT).find((name) => crossQuarterInfo.type.includes(name));
     if (crossQuarterName) {
         let context = CROSS_QUARTER_CONTEXT[crossQuarterName];
@@ -200,8 +186,8 @@ function interpretDaylightProgress({ results, situation }) {
 
     // High latitude notable daylight hours
     if (location.latitude > LATITUDE.VERY_HIGH) {
-        if (daylight.daylightHours > 18 && daylight.daylightHours < 22) results.phenomena.push(`daylight: ${FormatHelper.secondsToString(Math.floor(daylight.daylightHours * 60, '')) * 60} (approaching white nights)`);
-        else if (daylight.daylightHours > 5 && daylight.daylightHours < 7) results.phenomena.push(`daylight: ${FormatHelper.secondsToString(Math.floor(daylight.daylightHours * 60, '')) * 60} (deep winter darkness)`);
+        if (daylight.daylightHours > 18 && daylight.daylightHours < 22) results.phenomena.push(`daylight: ${formatter.secondsToString(Math.floor(daylight.daylightHours * 60, '')) * 60} (approaching white nights)`);
+        else if (daylight.daylightHours > 5 && daylight.daylightHours < 7) results.phenomena.push(`daylight: ${formatter.secondsToString(Math.floor(daylight.daylightHours * 60, '')) * 60} (deep winter darkness)`);
     }
 }
 

@@ -12,7 +12,7 @@
 //
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const { FormatHelper } = require('./server-function-weather-tools-format.js');
+const formatter = require('./server-function-weather-tools-format.js');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -82,7 +82,7 @@ function interpretSolarPosition({ results, situation }) {
     if (altitude <= 0) return;
 
     // Current position
-    results.phenomena.push(`sun: ${FormatHelper.positionToString(altitude, azimuth, direction)}`);
+    results.phenomena.push(`sun: ${formatter.positionToString(altitude, azimuth, direction)}`);
 
     // Altitude-based conditions
     if (altitude > SOLAR_ALTITUDE.HIGH_OVERHEAD) results.phenomena.push('sun: high overhead');
@@ -103,7 +103,7 @@ function interpretSolarNoon({ results, situation }) {
 
     const eotMinutes = Math.round(equationOfTime);
     results.phenomena.push(
-        `sun: solar noon at ${FormatHelper.secondsToString(Math.floor(noon * 60), { hoursOnly: true })} (sundial ${Math.abs(eotMinutes)} min ${eotMinutes >= 0 ? 'ahead' : 'behind'} of clock, altitude ${FormatHelper.altitudeToString(altitude)})`
+        `sun: solar noon at ${formatter.secondsToString(Math.floor(noon * 60), { hoursOnly: true })} (sundial ${Math.abs(eotMinutes)} min ${eotMinutes >= 0 ? 'ahead' : 'behind'} of clock, altitude ${formatter.altitudeToString(altitude)})`
     );
 }
 
@@ -132,8 +132,8 @@ function interpretUvIndex({ results, situation, dataCurrent }) {
     if (solarUvi === undefined || !solar?.position || solar.position.altitude <= 30) return;
 
     if (solarUvi > UV_INDEX.MODERATE) {
-        results.phenomena.push(`sun: UV index ${FormatHelper.uviToString(solarUvi)} (${getUvCategory(solarUvi)}) - protection advised`);
-        if (solarUvi >= UV_INDEX.VERY_HIGH) results.alerts.push(`sun: warning, UV index ${FormatHelper.uviToString(solarUvi)} (${getUvCategory(solarUvi)}) - limit sun exposure`);
+        results.phenomena.push(`sun: UV index ${formatter.uviToString(solarUvi)} (${getUvCategory(solarUvi)}) - protection advised`);
+        if (solarUvi >= UV_INDEX.VERY_HIGH) results.alerts.push(`sun: warning, UV index ${formatter.uviToString(solarUvi)} (${getUvCategory(solarUvi)}) - limit sun exposure`);
     }
 }
 
@@ -160,7 +160,7 @@ function interpretSkyPolarization({ results, situation }) {
     const { altitude, azimuth } = solar.position;
 
     // Sky polarization is strongest 90° from sun, useful for photography
-    if (altitude > 0 && altitude < 30) results.phenomena.push(`sun: maximum sky polarization at 90° (azimuth ~${FormatHelper.degreesToString((azimuth + 90) % 360)})`);
+    if (altitude > 0 && altitude < 30) results.phenomena.push(`sun: maximum sky polarization at 90° (azimuth ~${formatter.degreesToString((azimuth + 90) % 360)})`);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -198,7 +198,7 @@ function interpretZenithPassage({ results, situation }) {
     if (declinationDiff < 0.5) {
         results.phenomena.push('sun: directly overhead at solar noon (zenith passage)');
         results.phenomena.push('sun: no shadow at noon (Lahaina Noon)');
-    } else if (declinationDiff < 2) results.phenomena.push(`sun: near-zenith passage (${FormatHelper.degreesToString(declinationDiff, { digits: 1 })} from directly overhead)`);
+    } else if (declinationDiff < 2) results.phenomena.push(`sun: near-zenith passage (${formatter.degreesToString(declinationDiff, { digits: 1 })} from directly overhead)`);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

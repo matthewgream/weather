@@ -14,9 +14,8 @@
 //
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const { FormatHelper } = require('./server-function-weather-tools-format.js');
-// const helpers = require('./server-function-weather-helpers.js');
-// const toolsData = require('./server-function-weather-tools-data.js');
+const { isInPeriod } = require('./server-function-weather-helpers.js');
+const formatter = require('./server-function-weather-tools-format.js');
 
 /* eslint-disable sonarjs/cognitive-complexity */
 
@@ -199,13 +198,6 @@ function getAdventSunday(year, which) {
     const firstDate = new Date(year, firstAdvent.month, firstAdvent.day);
     const targetDate = new Date(firstDate.getTime() + (which - 1) * 7 * 24 * 60 * 60 * 1000);
     return { month: targetDate.getMonth(), day: targetDate.getDate() };
-}
-
-function isInPeriod(month, day, startMonth, startDay, endMonth, endDay) {
-    const current = month * 100 + day;
-    const start = startMonth * 100 + startDay;
-    const end = endMonth * 100 + endDay;
-    return start <= end ? current >= start && current <= end : current >= start || current <= end;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -820,7 +812,7 @@ function interpretConditions({ results, situation, dataCurrent, weatherData, sto
     if (temp < TEMP.BITTER_COLD) {
         results.phenomena.push('conditions: bitter arctic cold - limit outdoor exposure');
         if (windChill !== undefined && windChill < -30) {
-            results.phenomena.push(`conditions: dangerous wind chill ${FormatHelper.temperatureToString(Math.round(windChill))} - frostbite risk`);
+            results.phenomena.push(`conditions: dangerous wind chill ${formatter.temperatureToString(Math.round(windChill))} - frostbite risk`);
         }
     } else if (temp < TEMP.VERY_COLD) {
         results.phenomena.push('conditions: very cold Nordic winter day');
@@ -850,9 +842,9 @@ function interpretConditions({ results, situation, dataCurrent, weatherData, sto
         // Fresh snow detection
         const snowChange = snowDepth - state.snowDepthLast;
         if (snowChange > 10) {
-            results.phenomena.push(`conditions: fresh snow - ${FormatHelper.snowdepthToString(snowChange * 10)} of new snow!`);
+            results.phenomena.push(`conditions: fresh snow - ${formatter.snowdepthToString(snowChange * 10)} of new snow!`);
         } else if (snowChange < -10 && month >= 2 && month <= 4) {
-            results.phenomena.push(`conditions: rapid snowmelt - ${FormatHelper.snowdepthToString(Math.abs(snowChange) * 10)} melted`);
+            results.phenomena.push(`conditions: rapid snowmelt - ${formatter.snowdepthToString(Math.abs(snowChange) * 10)} melted`);
         }
         state.snowDepthLast = snowDepth;
         // First snow of season
@@ -861,7 +853,7 @@ function interpretConditions({ results, situation, dataCurrent, weatherData, sto
             state.snowDepthFirstRecorded = true;
         }
         // Deep snow
-        if (snowDepth > 100) results.phenomena.push(`conditions: deep snow cover - ${FormatHelper.snowdepthToString(snowDepth * 10)}`);
+        if (snowDepth > 100) results.phenomena.push(`conditions: deep snow cover - ${formatter.snowdepthToString(snowDepth * 10)}`);
     }
 
     // Reset first snow flag in spring
@@ -992,12 +984,12 @@ function interpretComfort({ results, situation, dataCurrent }) {
 
     // Wind chill
     if (windChill !== undefined && windChill < -15 && temp > windChill + 5) {
-        results.phenomena.push(`comfort: feels like ${FormatHelper.temperatureToString(Math.round(windChill))} with wind chill`);
+        results.phenomena.push(`comfort: feels like ${formatter.temperatureToString(Math.round(windChill))} with wind chill`);
     }
 
     // Heat index
     if (heatIndex !== undefined && heatIndex > 28 && temp < heatIndex - 3) {
-        results.phenomena.push(`comfort: feels like ${FormatHelper.temperatureToString(Math.round(heatIndex))} with humidity`);
+        results.phenomena.push(`comfort: feels like ${formatter.temperatureToString(Math.round(heatIndex))} with humidity`);
     }
 
     // =====================================================================

@@ -10,7 +10,7 @@
 //
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const { FormatHelper } = require('./server-function-weather-tools-format.js');
+const formatter = require('./server-function-weather-tools-format.js');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -111,7 +111,7 @@ class DataScheduler {
                 if (this.intervalId) clearInterval(this.intervalId);
                 this.currentInterval = interval;
                 this.intervalId = setInterval(() => this.run(updateFn, intervalCalculator), interval);
-                console.error(`${this.moduleName}: interval set to ${FormatHelper.millisToString(interval)} ('${reason}')`);
+                console.error(`${this.moduleName}: interval set to ${formatter.millisToString(interval)} ('${reason}')`);
             }
         });
     }
@@ -147,22 +147,16 @@ async function fetchText(url, options = {}) {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
-//
-// Usage:
-//   const ts = createTimestampTracker(now, timezone);
-//   results.phenomena.push(`space: ${ts.get('kp', kpData._fetched)}storm active`);
-//   // First use of 'kp' shows: "space: [14:32] storm active"
-//   // Subsequent uses show: "space: storm active"
-//
-// -----------------------------------------------------------------------------------------------------------------------------------------
 
-function createTimestampTracker(now, timezone) {
-    const shown = new Set();
+function createTimestampTracker(temporal, situation) {
+    if (!temporal._shownTimestamps) temporal._shownTimestamps = new Set();
+    const { now, location } = situation;
+    const timezone = location?.timezone || 'UTC';
     return {
         get(source, fetched) {
-            if (shown.has(source) || !fetched) return '';
-            shown.add(source);
-            return FormatHelper.timestampBracket(fetched, now, timezone) + ' ';
+            if (temporal._shownTimestamps.has(source) || !fetched) return '';
+            temporal._shownTimestamps.add(source);
+            return formatter.timestampBracket(fetched, now, timezone) + ' ';
         },
     };
 }

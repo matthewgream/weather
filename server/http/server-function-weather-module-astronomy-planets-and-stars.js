@@ -10,7 +10,7 @@
 
 const helpers = require('./server-function-weather-helpers.js');
 const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
-const { FormatHelper } = require('./server-function-weather-tools-format.js');
+const formatter = require('./server-function-weather-tools-format.js');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -67,7 +67,7 @@ function interpretVenus({ results, situation, dataCurrent }) {
 
     // Basic visibility
     const timeDesc = venusData.visibility === 'evening' ? `after sunset (${venusData.direction} sky)` : `before sunrise (${venusData.direction} sky)`;
-    results.phenomena.push(`planets: venus ${FormatHelper.degreesToString(venusData.elongation)} from Sun, visible ${timeDesc}`);
+    results.phenomena.push(`planets: venus ${formatter.degreesToString(venusData.elongation)} from Sun, visible ${timeDesc}`);
 
     // Crescent phase
     if (venusData.elongation < VENUS.CRESCENT_PHASE_MAX) results.phenomena.push('planets: venus showing crescent phase (use binoculars)' + (venusData.visibility === 'evening' ? ' - ashen light possible on dark side with telescope' : ''));
@@ -88,7 +88,7 @@ function interpretMars({ results, situation }) {
     if (!nextOpposition) return;
 
     const daysToOpposition = Math.floor((nextOpposition - date) / helpers.constants.MILLISECONDS_PER_DAY);
-    if (Math.abs(daysToOpposition) < PLANET_EVENT.OPPOSITION_WINDOW_DAYS) results.phenomena.push(FormatHelper.proximityToString('planets: mars opposition', daysToOpposition) + ' (visible all night, closest approach)');
+    if (Math.abs(daysToOpposition) < PLANET_EVENT.OPPOSITION_WINDOW_DAYS) results.phenomena.push(formatter.proximityToString('planets: mars opposition', daysToOpposition) + ' (visible all night, closest approach)');
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -169,7 +169,7 @@ function interpretSeasonalStars({ results, situation, dataCurrent }) {
     // Winter sky
     if (month >= 11 || month <= 1) {
         // eslint-disable-next-line sonarjs/no-nested-conditional, unicorn/no-nested-ternary
-        recommendations.push(`orion at its best (highest around ${FormatHelper.timeToString(22 + (month === 11 ? 2 : month === 0 ? 0 : -2), { hoursOnly: true })})`);
+        recommendations.push(`orion at its best (highest around ${formatter.timeToString(22 + (month === 11 ? 2 : month === 0 ? 0 : -2), { hoursOnly: true })})`);
         recommendations.push('winter hexagon asterism visible');
         recommendations.push('compare orange betelgeuse with blue rigel');
     }

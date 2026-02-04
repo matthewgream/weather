@@ -15,7 +15,7 @@
 
 const helpers = require('./server-function-weather-helpers.js');
 const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
-const { FormatHelper } = require('./server-function-weather-tools-format.js');
+const formatter = require('./server-function-weather-tools-format.js');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // Constants
@@ -183,7 +183,7 @@ function interpretLunarPhase({ results, situation, dataCurrent, store }) {
                 if (month >= 4 && month <= 9) {
                     const milkyWayBestHour = (17.75 - (month - 3) * 2 + 24) % 24;
                     const hourDiff = Math.abs(hour - milkyWayBestHour);
-                    if (hourDiff < 3 || hourDiff > 21) starText += ` (Milky Way core visible, best around ${FormatHelper.timeToString(Math.round(milkyWayBestHour), { hoursOnly: true })})`;
+                    if (hourDiff < 3 || hourDiff > 21) starText += ` (Milky Way core visible, best around ${formatter.timeToString(Math.round(milkyWayBestHour), { hoursOnly: true })})`;
                 }
                 results.phenomena.push(starText);
             } else if (location.lightPollution === 'medium') {
@@ -242,7 +242,7 @@ function interpretLunarPosition({ results, situation }) {
 
     // Current position
     if (altitude > 0) {
-        results.phenomena.push(`moon: ${FormatHelper.positionToString(altitude, azimuth, direction)}`);
+        results.phenomena.push(`moon: ${formatter.positionToString(altitude, azimuth, direction)}`);
 
         // Near zenith
         if (altitude > ALTITUDE.NEAR_ZENITH && altitude > 90 - Math.abs(location.latitude - dec) - 10) results.phenomena.push('moon: near zenith - excellent viewing');
@@ -253,12 +253,11 @@ function interpretLunarPosition({ results, situation }) {
 
     // Distance-based phenomena
     if (distance?.isSupermoon) {
-        if (isFullMoon(phase))
-            results.phenomena.push(`moon: supermoon - appears ${FormatHelper.percentageToString(distance.percentCloser || Math.round((1 - distance.distance / constants.LUNAR_MEAN_DISTANCE_KM) * 100))} larger than average`);
+        if (isFullMoon(phase)) results.phenomena.push(`moon: supermoon - appears ${formatter.percentageToString(distance.percentCloser || Math.round((1 - distance.distance / constants.LUNAR_MEAN_DISTANCE_KM) * 100))} larger than average`);
         else if (isNewMoon(phase)) results.phenomena.push('moon: super new moon - extra high tides expected');
         else results.phenomena.push('moon: at perigee (closest approach)');
     } else if (distance?.isMicromoon && isFullMoon(phase)) {
-        results.phenomena.push(`moon: micromoon - appears ${FormatHelper.percentageToString(distance.percentFarther || Math.round((distance.distance / constants.LUNAR_MEAN_DISTANCE_KM - 1) * 100))} smaller and dimmer`);
+        results.phenomena.push(`moon: micromoon - appears ${formatter.percentageToString(distance.percentFarther || Math.round((distance.distance / constants.LUNAR_MEAN_DISTANCE_KM - 1) * 100))} smaller and dimmer`);
     }
 }
 
@@ -273,7 +272,7 @@ function interpretLunarVisibility({ results, situation, dataCurrent }) {
     const { phase, position, times, brightness, constants } = lunar;
 
     // Illumination
-    results.phenomena.push(`moon: ${FormatHelper.percentageToString(brightness)} illuminated`);
+    results.phenomena.push(`moon: ${formatter.percentageToString(brightness)} illuminated`);
 
     // Full moon rise time
     if (isFullMoon(phase)) {
@@ -308,7 +307,7 @@ function interpretLunarVisibility({ results, situation, dataCurrent }) {
 
     // Moon dogs (paraselenae)
     if (phase > 0.4 && position?.altitude > ALTITUDE.MOON_DOG_MIN && position.altitude < ALTITUDE.MOON_DOG_MAX && temp !== undefined && temp < -10)
-        if (cloudCover !== undefined && cloudCover > 20 && cloudCover < 60) results.phenomena.push(`moon: moon dogs possible (bright spots ${FormatHelper.degreesToString(22)} beside moon)`);
+        if (cloudCover !== undefined && cloudCover > 20 && cloudCover < 60) results.phenomena.push(`moon: moon dogs possible (bright spots ${formatter.degreesToString(22)} beside moon)`);
 
     // Atmospheric dispersion at low altitude
     if (position?.altitude > 0 && position.altitude < ALTITUDE.DISPERSION_VISIBLE && phase > 0.4) results.phenomena.push('moon: atmospheric dispersion may separate colors at limb');
@@ -345,8 +344,8 @@ function interpretLunarTimes({ results, situation }) {
     const { times } = lunar;
 
     const parts = [];
-    if (times.rise) parts.push(`rises ${FormatHelper.timeToString(times.rise, { hoursOnly: true })} at ${FormatHelper.degreesToString(toolsAstronomy.calculateMoonriseAzimuth(times, location))}`);
-    if (times.set) parts.push(`sets ${FormatHelper.timeToString(times.set, { hoursOnly: true })} at ${FormatHelper.degreesToString(toolsAstronomy.calculateMoonsetAzimuth(times, location))}`);
+    if (times.rise) parts.push(`rises ${formatter.timeToString(times.rise, { hoursOnly: true })} at ${formatter.degreesToString(toolsAstronomy.calculateMoonriseAzimuth(times, location))}`);
+    if (times.set) parts.push(`sets ${formatter.timeToString(times.set, { hoursOnly: true })} at ${formatter.degreesToString(toolsAstronomy.calculateMoonsetAzimuth(times, location))}`);
     if (parts.length > 0) results.phenomena.push(`moon: ${parts.join(' and ')}`);
 }
 
@@ -368,12 +367,12 @@ function interpretLunarEvents({ results, situation }) {
     // Nodal cycle standstills
     const yearsSinceStandstill = (date - LAST_MAJOR_STANDSTILL) / (helpers.constants.DAYS_PER_YEAR * helpers.constants.MILLISECONDS_PER_DAY);
     const nodalPhase = (yearsSinceStandstill % NODAL_CYCLE_YEARS) / NODAL_CYCLE_YEARS;
-    if (nodalPhase < 0.1 || nodalPhase > 0.9) results.phenomena.push(`moon: near major standstill (declination range ±${FormatHelper.degreesToString(DECLINATION.MAJOR_STANDSTILL)})`);
-    else if (Math.abs(nodalPhase - 0.5) < 0.1) results.phenomena.push(`moon: near minor standstill (declination range ±${FormatHelper.degreesToString(DECLINATION.MINOR_STANDSTILL)})`);
+    if (nodalPhase < 0.1 || nodalPhase > 0.9) results.phenomena.push(`moon: near major standstill (declination range ±${formatter.degreesToString(DECLINATION.MAJOR_STANDSTILL)})`);
+    else if (Math.abs(nodalPhase - 0.5) < 0.1) results.phenomena.push(`moon: near minor standstill (declination range ±${formatter.degreesToString(DECLINATION.MINOR_STANDSTILL)})`);
 
     // Horizontal parallax for close approaches
     if (distance?.isSupermoon || distance?.isPerigee)
-        results.phenomena.push(`moon: horizontal parallax ${FormatHelper.degreesToString(Math.round(((((3600 * 180) / Math.PI) * (constants.LUNAR_MEAN_DISTANCE_KM / distance.distance)) / 3600) * 10) / 10)} (position shifts at horizon)`);
+        results.phenomena.push(`moon: horizontal parallax ${formatter.degreesToString(Math.round(((((3600 * 180) / Math.PI) * (constants.LUNAR_MEAN_DISTANCE_KM / distance.distance)) / 3600) * 10) / 10)} (position shifts at horizon)`);
 
     // Next phase prediction
     const daysToNext = getDaysToNextPhase(phase);

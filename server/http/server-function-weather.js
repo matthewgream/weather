@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const helpers = require('./server-function-weather-helpers.js');
-const { FormatHelper } = require('./server-function-weather-tools-format.js');
+const formatter = require('./server-function-weather-tools-format.js');
 const toolsCalculators = require('./server-function-weather-tools-calculators.js');
 const toolsEvents = require('./server-function-weather-tools-events.js');
 const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
@@ -87,7 +87,7 @@ function __storagePerisist(options, storable) {
                 const name = path.join(options.paths[level.type], level.file);
                 if (__storageFileSave(name, { timestamp, storable })) {
                     level[lastKey] = timestamp;
-                    if (options.debug) console.error(`weather: storage persisted - to ${level.type}; path=${name}, size=${FormatHelper.bytesToString(fs.statSync(name).size)}${options?.forced ? ', forced=true' : ''}`);
+                    if (options.debug) console.error(`weather: storage persisted - to ${level.type}; path=${name}, size=${formatter.bytesToString(fs.statSync(name).size)}${options?.forced ? ', forced=true' : ''}`);
                 }
             }
         });
@@ -101,7 +101,7 @@ function __storageRestore(options) {
         const name = path.join(options.paths[level.type], level.file);
         const data = __storageFileLoad(name);
         if (data?.storable && timestamp - data.timestamp < (level.maxAge || 86400000)) {
-            if (options.debug) console.error(`weather: storage restored - from ${level.type}; path=${name}, age=${FormatHelper.millisToString(timestamp - data.timestamp, '')}, size=${FormatHelper.bytesToString(fs.statSync(name).size)}`);
+            if (options.debug) console.error(`weather: storage restored - from ${level.type}; path=${name}, age=${formatter.millisToString(timestamp - data.timestamp, '')}, size=${formatter.bytesToString(fs.statSync(name).size)}`);
             return data.storable;
         }
     }
@@ -141,11 +141,11 @@ let weatherStorageStatsTimestamp = Date.now();
 
 function weatherStorageStats(options) {
     const stats = [];
-    stats.push(`cache: ${weatherData.size} entries, ~${FormatHelper.bytesToString(JSON.stringify(weatherData.raw).length)}`);
-    stats.push(`store: ${Object.keys(weatherStore).length} entries, ~${FormatHelper.bytesToString(JSON.stringify(weatherStore).length)}`);
-    stats.push(`astro: ${FormatHelper.millisToString(Date.now() - weatherCacheAstronomy.timestampAstronomy.getTime(), '')} old`);
+    stats.push(`cache: ${weatherData.size} entries, ~${formatter.bytesToString(JSON.stringify(weatherData.raw).length)}`);
+    stats.push(`store: ${Object.keys(weatherStore).length} entries, ~${formatter.bytesToString(JSON.stringify(weatherStore).length)}`);
+    stats.push(`astro: ${formatter.millisToString(Date.now() - weatherCacheAstronomy.timestampAstronomy.getTime(), '')} old`);
     if (options.storage?.persistence)
-        stats.push(options.storage.persistence.filter((level) => level.enabled && level.lastSave).map((level) => `persist[${level.type}]: saved ${FormatHelper.millisToString(Date.now() - level.lastSave, '')} ago`));
+        stats.push(options.storage.persistence.filter((level) => level.enabled && level.lastSave).map((level) => `persist[${level.type}]: saved ${formatter.millisToString(Date.now() - level.lastSave, '')} ago`));
     console.error(`weather: storage stats - ${stats.flat().join('; ')}`);
 }
 
@@ -257,7 +257,7 @@ function __weatherSituation(location, data, options) {
             season: helpers.getSeason(date, location.hemisphere),
             timestampSituation: date,
         };
-        if (options?.debug) console.error(`weather: cached situation (daily, ${date.getFullYear()}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')})`); // XXX FormatHelper
+        if (options?.debug) console.error(`weather: cached situation (daily, ${formatter.timeLocalToString(date)})`);
     }
 
     // cache astronomy, 5 minutes default
@@ -268,7 +268,7 @@ function __weatherSituation(location, data, options) {
             solar: toolsAstronomy.getSolarSituation(date, location.latitude, location.longitude),
             timestampAstronomy: date,
         };
-        if (options?.debug) console.error(`weather: cached astronomy (interval ${FormatHelper.millisToString(options?.compute?.astronomicalCalculationInterval || 300000, '')})`);
+        if (options?.debug) console.error(`weather: cached astronomy (interval ${formatter.millisToString(options?.compute?.astronomicalCalculationInterval || 300000, '')})`);
     }
 
     return {
@@ -297,7 +297,7 @@ function getWeatherInterpretationImpl(interpreters, location, dataCurrent, weath
     const situation = __weatherSituation(location, dataCurrent, options);
     if (options?.debug) console.error('weather: situation/data:', situation, dataCurrent);
     const results = { conditions: [], phenomena: [], alerts: [] };
-    const context = { results, situation, dataCurrent, weatherData, store, options, location };
+    const context = { temporal: {}, results, situation, dataCurrent, weatherData, store, options, location };
     Object.entries(interpreters).forEach(([name, func]) => {
         try {
             if (options?.debug) console.error(`weather: interpret '${name}'`);
@@ -335,7 +335,7 @@ function getWeatherInterpretation(data, options = {}) {
     // require minimal period
     const now = Date.now();
     if (now < weatherDataUpdated + options.data.gateInterval) {
-        if (options.debug) console.error(`weather: data gated - ${FormatHelper.millisToString(now - weatherDataUpdated)} since last update`);
+        if (options.debug) console.error(`weather: data gated - ${formatter.millisToString(now - weatherDataUpdated)} since last update`);
         return undefined;
     }
 

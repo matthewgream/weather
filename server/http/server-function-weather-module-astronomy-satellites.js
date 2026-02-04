@@ -11,7 +11,7 @@
 //
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const { FormatHelper } = require('./server-function-weather-tools-format.js');
+const formatter = require('./server-function-weather-tools-format.js');
 const { DataSlot, DataScheduler, fetchJson, fetchText, createTimestampTracker } = require('./server-function-weather-tools-live.js');
 
 let satellite;
@@ -469,8 +469,8 @@ function getStarlinkPasses(state) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretSatellitePasses({ results, situation, store }) {
-    const { hour, month, daylight, location, now } = situation;
+function interpretSatellitePasses({ temporal, results, situation, store }) {
+    const { hour, month, daylight } = situation;
 
     if (daylight?.isDaytime && hour > 8 && hour < 16) return;
 
@@ -480,7 +480,7 @@ function interpretSatellitePasses({ results, situation, store }) {
     const combined = getCombinedPasses(store.astronomy_satellites);
     const upcoming = getUpcomingPasses(store.astronomy_satellites, 180); // Next 3 hours
 
-    const ts = createTimestampTracker(now, location.timezone);
+    const ts = createTimestampTracker(temporal, situation);
 
     if (upcoming.length === 0) {
         // Check if we have any passes tonight at all
@@ -489,7 +489,7 @@ function interpretSatellitePasses({ results, situation, store }) {
             const minsUntil = minutesUntilPass(nextPass.start.time);
             if (minsUntil > 0 && minsUntil < 360)
                 results.phenomena.push(
-                    `satellites: ${ts.get('passes', combined?._fetched)}next ${nextPass.satellite} pass at ${FormatHelper.timeLocalToString(nextPass.start.time)} (${FormatHelper.magnitudeToString(nextPass.magnitude)}, ${FormatHelper.secondsToString(minsUntil * 60, '')} away)`
+                    `satellites: ${ts.get('passes', combined?._fetched)}next ${nextPass.satellite} pass at ${formatter.timeLocalToString(nextPass.start.time)} (${formatter.magnitudeToString(nextPass.magnitude)}, ${formatter.secondsToString(minsUntil * 60, '')} away)`
                 );
         }
     } else
@@ -498,13 +498,13 @@ function interpretSatellitePasses({ results, situation, store }) {
             const minsUntil = minutesUntilPass(pass.start.time);
 
             // eslint-disable-next-line unicorn/no-nested-ternary, sonarjs/no-nested-conditional
-            let text = `satellites: ${ts.get('passes', combined?._fetched)}${pass.satellite} ` + (minsUntil < 0 ? 'NOW' : minsUntil < 2 ? 'STARTING' : `in ${FormatHelper.secondsToString(minsUntil * 60, '')}`);
+            let text = `satellites: ${ts.get('passes', combined?._fetched)}${pass.satellite} ` + (minsUntil < 0 ? 'NOW' : minsUntil < 2 ? 'STARTING' : `in ${formatter.secondsToString(minsUntil * 60, '')}`);
             if (minsUntil < 30) {
-                text += ` ${FormatHelper.timeLocalToString(pass.start.time)} to ${FormatHelper.timeLocalToString(pass.end.time)} (rises ${FormatHelper.azimuthToString(pass.start.azimuth)}, max ${FormatHelper.degreesToString(pass.max.elevation)} ${FormatHelper.azimuthToString(pass.max.azimuth)}, ${FormatHelper.magnitudeToString(pass.magnitude)})`;
+                text += ` ${formatter.timeLocalToString(pass.start.time)} to ${formatter.timeLocalToString(pass.end.time)} (rises ${formatter.azimuthToString(pass.start.azimuth)}, max ${formatter.degreesToString(pass.max.elevation)} ${formatter.azimuthToString(pass.max.azimuth)}, ${formatter.magnitudeToString(pass.magnitude)})`;
                 if (pass.quality === 'excellent') text += ' - VERY BRIGHT';
                 else if (pass.quality === 'good') text += ' - bright';
             } else {
-                text += ` at ${FormatHelper.timeLocalToString(pass.start.time)} (${FormatHelper.magnitudeToString(pass.magnitude)})`;
+                text += ` at ${formatter.timeLocalToString(pass.start.time)} (${formatter.magnitudeToString(pass.magnitude)})`;
             }
 
             if (minsUntil <= 10 && minsUntil >= -2 && pass.magnitude < PASS_QUALITY.good) results.alerts.push(text);
@@ -512,8 +512,8 @@ function interpretSatellitePasses({ results, situation, store }) {
         }
 }
 
-function interpretBestPassTonight({ results, situation, store }) {
-    const { hour, location, now } = situation;
+function interpretBestPassTonight({ temporal, results, situation, store }) {
+    const { hour } = situation;
 
     // Only in early evening, mention the best pass of the night
     if (hour < 17 || hour > 20) return;
@@ -528,15 +528,15 @@ function interpretBestPassTonight({ results, situation, store }) {
     const minsUntil = minutesUntilPass(best.start.time);
     if (minsUntil < 60) return; // Will be reported by interpretSatellitePasses
 
-    const ts = createTimestampTracker(now, location.timezone);
+    const ts = createTimestampTracker(temporal, situation);
 
     results.phenomena.push(
-        `satellites: ${ts.get('passes', combined?._fetched)}best pass tonight - ${best.satellite} at ${FormatHelper.timeLocalToString(best.start.time)} (${FormatHelper.magnitudeToString(best.magnitude)}, max ${FormatHelper.degreesToString(best.max.elevation)})`
+        `satellites: ${ts.get('passes', combined?._fetched)}best pass tonight - ${best.satellite} at ${formatter.timeLocalToString(best.start.time)} (${formatter.magnitudeToString(best.magnitude)}, max ${formatter.degreesToString(best.max.elevation)})`
     );
 }
 
-function interpretStarlinkTrain({ results, situation, store }) {
-    const { hour, month, daylight, now, location } = situation;
+function interpretStarlinkTrain({ temporal, results, situation, store }) {
+    const { hour, month, daylight } = situation;
 
     // Only during viewing windows
     if (!isViewingWindow(hour, month) && !isViewingWindowApproaching(hour, month)) return;
@@ -545,12 +545,12 @@ function interpretStarlinkTrain({ results, situation, store }) {
     const starlinkData = getStarlinkData(store.astronomy_satellites);
     if (!starlinkData?.hasActiveTrain) return;
 
-    const ts = createTimestampTracker(now, location.timezone);
+    const ts = createTimestampTracker(temporal, situation);
 
     // Alert about active train
     const train = starlinkData.mostRecentTrain;
-    if (train.isVeryRecent) results.alerts.push(`satellites: ${ts.get('starlink', starlinkData._fetched)}STARLINK TRAIN active (${FormatHelper.countToString(train.satelliteCount)} satellites) - ${train.spectacularity} viewing`);
-    else results.phenomena.push(`satellites: ${ts.get('starlink', starlinkData._fetched)}Starlink train visible (${FormatHelper.countToString(train.satelliteCount)} satellites)`);
+    if (train.isVeryRecent) results.alerts.push(`satellites: ${ts.get('starlink', starlinkData._fetched)}STARLINK TRAIN active (${formatter.countToString(train.satelliteCount)} satellites) - ${train.spectacularity} viewing`);
+    else results.phenomena.push(`satellites: ${ts.get('starlink', starlinkData._fetched)}Starlink train visible (${formatter.countToString(train.satelliteCount)} satellites)`);
 
     // Report upcoming passes
     const passesData = getStarlinkPasses(store.astronomy_satellites);
@@ -558,33 +558,31 @@ function interpretStarlinkTrain({ results, situation, store }) {
         const pass = passesData.nextPass;
 
         if (pass.minutesUntil < 0)
-            results.alerts.push(`satellites: ${ts.get('starlinkPass', passesData._fetched)}Starlink train PASSING NOW - look ${FormatHelper.azimuthToString(pass.max.azimuth)} at ${FormatHelper.degreesToString(pass.max.elevation)}`);
+            results.alerts.push(`satellites: ${ts.get('starlinkPass', passesData._fetched)}Starlink train PASSING NOW - look ${formatter.azimuthToString(pass.max.azimuth)} at ${formatter.degreesToString(pass.max.elevation)}`);
         else if (pass.minutesUntil < 30)
             results.alerts.push(
-                `satellites: ${ts.get('starlinkPass', passesData._fetched)}Starlink train in ${pass.minutesUntil} min, ${FormatHelper.timeLocalToString(pass.start.time)} from ${FormatHelper.azimuthToString(pass.start.azimuth)} (max ${FormatHelper.degreesToString(pass.max.elevation)} ${FormatHelper.azimuthToString(pass.max.azimuth)})`
+                `satellites: ${ts.get('starlinkPass', passesData._fetched)}Starlink train in ${pass.minutesUntil} min, ${formatter.timeLocalToString(pass.start.time)} from ${formatter.azimuthToString(pass.start.azimuth)} (max ${formatter.degreesToString(pass.max.elevation)} ${formatter.azimuthToString(pass.max.azimuth)})`
             );
         else if (pass.minutesUntil < 180)
             results.phenomena.push(
-                `satellites: ${ts.get('starlinkPass', passesData._fetched)}Starlink train at ${FormatHelper.timeLocalToString(pass.start.time)} (${FormatHelper.secondsToString(pass.minutesUntil * 60, '')}, max ${FormatHelper.degreesToString(pass.max.elevation)} ${FormatHelper.azimuthToString(pass.max.azimuth)})`
+                `satellites: ${ts.get('starlinkPass', passesData._fetched)}Starlink train at ${formatter.timeLocalToString(pass.start.time)} (${formatter.secondsToString(pass.minutesUntil * 60, '')}, max ${formatter.degreesToString(pass.max.elevation)} ${formatter.azimuthToString(pass.max.azimuth)})`
             );
     }
 
     // Multiple trains?
     if (starlinkData?.recentTrains?.length > 1)
-        results.phenomena.push(`satellites: ${ts.get('starlinkPass', passesData?._fetched)}Starlink has ${FormatHelper.countToString(starlinkData.recentTrains.length)} trains currently visible (multiple recent launches)`);
+        results.phenomena.push(`satellites: ${ts.get('starlinkPass', passesData?._fetched)}Starlink has ${formatter.countToString(starlinkData.recentTrains.length)} trains currently visible (multiple recent launches)`);
 }
 
-function interpretStarlinkStats({ results, situation, store }) {
-    const { now, location } = situation;
-
+function interpretStarlinkStats({ temporal, results, situation, store }) {
     // Optional: report on Starlink constellation stats
     const starlinkData = getStarlinkData(store.astronomy_satellites);
     if (!starlinkData) return;
 
-    const ts = createTimestampTracker(now, location.timezone);
+    const ts = createTimestampTracker(temporal, situation);
 
     // Only occasionally mention constellation size, 10% chance
-    if (Math.random() < 0.1) results.phenomena.push(`satellites: ${ts.get('starlinkPass', starlinkData._fetched)}Starlink now ${FormatHelper.countToString(starlinkData.totalSatellites)} satellites`);
+    if (Math.random() < 0.1) results.phenomena.push(`satellites: ${ts.get('starlinkPass', starlinkData._fetched)}Starlink now ${formatter.countToString(starlinkData.totalSatellites)} satellites`);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

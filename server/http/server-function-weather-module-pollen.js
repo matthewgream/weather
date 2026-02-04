@@ -13,7 +13,7 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const { calculateHaversineDistance } = require('./server-function-weather-tools-calculators.js');
-const { FormatHelper } = require('./server-function-weather-tools-format.js');
+const formatter = require('./server-function-weather-tools-format.js');
 const { DataSlot, DataScheduler, fetchJson, createTimestampTracker, isCacheValid } = require('./server-function-weather-tools-live.js');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -155,7 +155,7 @@ async function livePollenFetchRegions() {
     return (await fetchJson(`${API_BASE}/regions`)).items || [];
 }
 
-async function livePollenFetchPollenTypes() {
+async function livePollenFetchTypes() {
     return (await fetchJson(`${API_BASE}/pollen-types`)).items || [];
 }
 
@@ -194,14 +194,14 @@ async function livePollenStaticDataFetchAndProcess(state, situation) {
     const { location } = situation;
 
     try {
-        const [regions, pollenTypes] = await Promise.all([livePollenFetchRegions(), livePollenFetchPollenTypes()]);
+        const [regions, pollenTypes] = await Promise.all([livePollenFetchRegions(), livePollenFetchTypes()]);
         state.staticData.regions = regions;
         state.staticData.pollenTypes = pollenTypes;
         state.staticData.lastUpdate = Date.now();
         state.staticData.lastError = undefined;
         state.selectedRegion = findNearestRegion(location.latitude, location.longitude, regions);
         if (state.selectedRegion) {
-            console.error(`pollen: selected region: ${state.selectedRegion.name} (${FormatHelper.distanceKmToString(state.selectedRegion.distance)})`);
+            console.error(`pollen: selected region: ${state.selectedRegion.name} (${formatter.distanceKmToString(state.selectedRegion.distance)})`);
             if (!isCacheValid(state.forecast?.lastUpdate, getForecastCacheDuration()[0])) await livePollenForecastFetchAndProcess(state);
         }
         console.error(`pollen: update staticData success (${regions.length} regions, ${pollenTypes.length} pollen types)`);
@@ -250,10 +250,10 @@ function getLevelsForDate(date, levelsByDate, pollenTypes) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function interpretPollen({ results, situation, dataCurrent, store }) {
+function interpretPollen({ temporal, results, situation, dataCurrent, store }) {
     if (!store.pollen || !store.pollen.selectedRegion) return; // Not ready yet
 
-    const { date, now, location } = situation;
+    const { date, month } = situation;
     const { cloudCover, precipitation, humidity, windSpeed } = dataCurrent;
 
     const forecast = getForecast(store.pollen);
@@ -262,14 +262,13 @@ function interpretPollen({ results, situation, dataCurrent, store }) {
     const regionName = store.pollen.selectedRegion.name;
     const { pollenTypes } = store.pollen.staticData;
 
-    const ts = createTimestampTracker(now, location.timezone);
+    const ts = createTimestampTracker(temporal, situation);
 
     if (forecast.isEndOfSeason) {
-        const month = new Date(date).getMonth() + 1;
-        if (month >= 1 && month <= 2) {
+        if (month + 1 >= 1 && month + 1 <= 2) {
             results.phenomena.push(`pollen: ${ts.get('pollen', forecast._fetched)}season not yet started in ${regionName}`);
             results.phenomena.push('pollen: hazel and alder may release on dry sunny days in mild winters');
-        } else if (month >= 10 && month <= 12) results.phenomena.push(`pollen: ${ts.get('pollen', forecast._fetched)}season ended for ${regionName}`);
+        } else if (month + 1 >= 10 && month + 1 <= 12) results.phenomena.push(`pollen: ${ts.get('pollen', forecast._fetched)}season ended for ${regionName}`);
         return;
     }
 
@@ -308,9 +307,9 @@ function interpretPollen({ results, situation, dataCurrent, store }) {
     // Weather context for pollen dispersal
     if (high.length > 0 || moderate.length > 0) {
         if (precipitation && precipitation > 0) results.conditions.push(`pollen: ${ts.get('pollen', forecast._fetched)}rain washing pollen from air - temporary relief`);
-        else if (humidity && humidity > 80) results.conditions.push(`pollen: ${ts.get('pollen', forecast._fetched)}high humidity (${FormatHelper.humidityToString(humidity)}) reducing airborne levels`);
+        else if (humidity && humidity > 80) results.conditions.push(`pollen: ${ts.get('pollen', forecast._fetched)}high humidity (${formatter.humidityToString(humidity)}) reducing airborne levels`);
         else if (windSpeed && windSpeed > 15 && (!cloudCover || cloudCover < 50))
-            results.conditions.push(`pollen: ${ts.get('pollen', forecast._fetched)}dry windy conditions (${FormatHelper.windspeedToString(windSpeed)}) increasing dispersal - keep windows closed`);
+            results.conditions.push(`pollen: ${ts.get('pollen', forecast._fetched)}dry windy conditions (${formatter.windspeedToString(windSpeed)}) increasing dispersal - keep windows closed`);
         else if (cloudCover !== undefined && cloudCover < 30 && (!humidity || humidity < 60)) results.conditions.push(`pollen: ${ts.get('pollen', forecast._fetched)}clear dry weather ideal for pollen release`);
     }
 

@@ -3,7 +3,7 @@
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const { cardinalDirection } = require('./server-function-weather-helpers.js');
-const { FormatHelper } = require('./server-function-weather-tools-format.js');
+const formatter = require('./server-function-weather-tools-format.js');
 // const toolsAstronomy = require('./server-function-weather-tools-astronomical.js');
 // const toolsData = require('./server-function-weather-tools-data.js');
 
@@ -321,7 +321,6 @@ const THRESHOLDS = {
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
-// Temperature Interpreter
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function interpretTemperature({ results, situation, dataCurrent, store }) {
@@ -352,7 +351,7 @@ function interpretTemperature({ results, situation, dataCurrent, store }) {
 
     for (const range of TEMP_RANGES)
         if (temp < range.below) {
-            results.conditions.push(range.label + (range.showThreshold ? ` (${range.showThreshold} ${FormatHelper.temperatureToString(range.below)})` : ''));
+            results.conditions.push(range.label + (range.showThreshold ? ` (${range.showThreshold} ${formatter.temperatureToString(range.below)})` : ''));
             if (range.alert) results.alerts.push(range.alert);
             break;
         }
@@ -367,7 +366,7 @@ function interpretTemperature({ results, situation, dataCurrent, store }) {
     if (t1h?.valid && t1h.back !== undefined) {
         const change1h = temp - t1h.back;
         if (Math.abs(change1h) > THRESHOLDS.TEMP.RAPID_HOURLY_CHANGE) {
-            results.phenomena.push(`rapid hourly temperature ${change1h > 0 ? 'rise' : 'drop'} (${FormatHelper.temperatureToString(Math.abs(change1h))})`);
+            results.phenomena.push(`rapid hourly temperature ${change1h > 0 ? 'rise' : 'drop'} (${formatter.temperatureToString(Math.abs(change1h))})`);
             if (change1h < -THRESHOLDS.TEMP.RAPID_HOURLY_CHANGE && temp < THRESHOLDS.TEMP.CHILLY) {
                 results.alerts.push('flash freeze possible');
             }
@@ -379,7 +378,7 @@ function interpretTemperature({ results, situation, dataCurrent, store }) {
     if (t3h?.valid && t3h.back !== undefined) {
         const change3h = temp - t3h.back;
         if (Math.abs(change3h) > THRESHOLDS.TEMP.SIGNIFICANT_3H_CHANGE) {
-            results.phenomena.push(`significant 3 hour temperature ${change3h > 0 ? 'rise' : 'drop'} (${FormatHelper.temperatureToString(Math.abs(change3h))})`);
+            results.phenomena.push(`significant 3 hour temperature ${change3h > 0 ? 'rise' : 'drop'} (${formatter.temperatureToString(Math.abs(change3h))})`);
         }
     }
 
@@ -387,7 +386,7 @@ function interpretTemperature({ results, situation, dataCurrent, store }) {
     if (t6h?.valid && t6h.back !== undefined) {
         const change6h = temp - t6h.back;
         if (Math.abs(change6h) > THRESHOLDS.TEMP.SIGNIFICANT_6H_CHANGE) {
-            results.phenomena.push(`significant 6 hour temperature ${change6h > 0 ? 'rise' : 'drop'} (${FormatHelper.temperatureToString(Math.abs(change6h))})`);
+            results.phenomena.push(`significant 6 hour temperature ${change6h > 0 ? 'rise' : 'drop'} (${formatter.temperatureToString(Math.abs(change6h))})`);
         }
     }
 
@@ -409,10 +408,10 @@ function interpretTemperature({ results, situation, dataCurrent, store }) {
             };
             const range24h = t24h.max - t24h.min;
             if (range24h > THRESHOLDS.TEMP.EXTREME_DIURNAL_RANGE) {
-                results.phenomena.push(`extreme 24 hour temperature variation (${FormatHelper.temperatureToString(range24h)})`);
+                results.phenomena.push(`extreme 24 hour temperature variation (${formatter.temperatureToString(range24h)})`);
                 if (month >= 4 && month <= 9) results.phenomena.push('continental climate effect');
             } else if (range24h < THRESHOLDS.TEMP.STABLE_DIURNAL_RANGE) {
-                results.phenomena.push(`stable 24 hour temperature variation (${FormatHelper.temperatureToString(range24h)})`);
+                results.phenomena.push(`stable 24 hour temperature variation (${formatter.temperatureToString(range24h)})`);
             }
         }
         if (t24h.minTime) {
@@ -436,7 +435,7 @@ function interpretTemperature({ results, situation, dataCurrent, store }) {
             };
             const range7d = t7d.max - t7d.min;
             if (range7d > THRESHOLDS.TEMP.EXTREME_WEEKLY_RANGE) {
-                results.phenomena.push(`extreme weekly temperature variation (${FormatHelper.temperatureToString(range7d)})`);
+                results.phenomena.push(`extreme weekly temperature variation (${formatter.temperatureToString(range7d)})`);
             }
         }
     }
@@ -468,7 +467,7 @@ function interpretTemperature({ results, situation, dataCurrent, store }) {
             if (temp < THRESHOLDS.TEMP.SUMMER_COLD) results.alerts.push('unusual summer cold');
         }
         if (hour >= 0 && hour <= 6 && t24h?.valid && t24h.min > THRESHOLDS.TEMP.TROPICAL_NIGHT) {
-            results.phenomena.push(`tropical night (> ${FormatHelper.temperatureToString(THRESHOLDS.TEMP.TROPICAL_NIGHT)})`);
+            results.phenomena.push(`tropical night (> ${formatter.temperatureToString(THRESHOLDS.TEMP.TROPICAL_NIGHT)})`);
         }
     }
 
@@ -500,10 +499,10 @@ function interpretPressure({ results, situation, dataCurrent, store }) {
     // -------------------------------------------------------------------------
 
     if (pressureAdjusted < THRESHOLDS.PRESSURE.SEVERE_LOW) {
-        results.conditions.push(`severe storm conditions (< ${FormatHelper.pressureToString(THRESHOLDS.PRESSURE.SEVERE_LOW)})`);
+        results.conditions.push(`severe storm conditions (< ${formatter.pressureToString(THRESHOLDS.PRESSURE.SEVERE_LOW)})`);
         results.alerts.push(`dangerously low pressure`);
     } else if (pressureAdjusted < THRESHOLDS.PRESSURE.STORMY) {
-        results.conditions.push(`stormy (< ${FormatHelper.pressureToString(THRESHOLDS.PRESSURE.STORMY)})`);
+        results.conditions.push(`stormy (< ${formatter.pressureToString(THRESHOLDS.PRESSURE.STORMY)})`);
     } else if (pressureAdjusted < THRESHOLDS.PRESSURE.UNSETTLED) {
         results.conditions.push('unsettled');
     } else if (pressureAdjusted >= THRESHOLDS.PRESSURE.NORMAL_LOW && pressureAdjusted <= THRESHOLDS.PRESSURE.NORMAL_HIGH) {
@@ -513,7 +512,7 @@ function interpretPressure({ results, situation, dataCurrent, store }) {
     } else if (pressureAdjusted > THRESHOLDS.PRESSURE.SETTLED && pressureAdjusted <= THRESHOLDS.PRESSURE.HIGH) {
         results.conditions.push('high pressure');
     } else if (pressureAdjusted > THRESHOLDS.PRESSURE.HIGH) {
-        results.conditions.push(`very high pressure (> ${FormatHelper.pressureToString(THRESHOLDS.PRESSURE.HIGH)})`);
+        results.conditions.push(`very high pressure (> ${formatter.pressureToString(THRESHOLDS.PRESSURE.HIGH)})`);
     }
 
     // -------------------------------------------------------------------------
@@ -526,7 +525,7 @@ function interpretPressure({ results, situation, dataCurrent, store }) {
     if (t1h?.valid && t1h.back !== undefined) {
         const change1h = pressure - t1h.back;
         if (Math.abs(change1h) > THRESHOLDS.PRESSURE.RAPID_HOURLY_CHANGE) {
-            results.alerts.push(`rapid hourly pressure ${change1h > 0 ? 'rise' : 'drop'} (${FormatHelper.pressureToString(Math.abs(change1h))})`);
+            results.alerts.push(`rapid hourly pressure ${change1h > 0 ? 'rise' : 'drop'} (${formatter.pressureToString(Math.abs(change1h))})`);
             store.pressure.rapidChanges.push({ timestamp, change: change1h });
         }
     }
@@ -539,9 +538,9 @@ function interpretPressure({ results, situation, dataCurrent, store }) {
         else if (change3h > 0) store.pressure.trend = 'rising';
         else store.pressure.trend = 'falling';
         if (Math.abs(change3h) > THRESHOLDS.PRESSURE.SIGNIFICANT_3H_CHANGE) {
-            results.phenomena.push(`significant 3h pressure ${change3h > 0 ? 'rise' : 'drop'} (${FormatHelper.pressureToString(Math.abs(change3h))})`);
+            results.phenomena.push(`significant 3h pressure ${change3h > 0 ? 'rise' : 'drop'} (${formatter.pressureToString(Math.abs(change3h))})`);
         } else if (Math.abs(change3h) > THRESHOLDS.PRESSURE.MODERATE_3H_CHANGE) {
-            results.phenomena.push(`moderate 3h pressure ${change3h > 0 ? 'rise' : 'drop'} (${FormatHelper.pressureToString(Math.abs(change3h))})`);
+            results.phenomena.push(`moderate 3h pressure ${change3h > 0 ? 'rise' : 'drop'} (${formatter.pressureToString(Math.abs(change3h))})`);
         }
         if (store.pressure.trend === 'falling') {
             if (change3h < -THRESHOLDS.PRESSURE.SIGNIFICANT_3H_CHANGE) {
@@ -571,7 +570,7 @@ function interpretPressure({ results, situation, dataCurrent, store }) {
             const change24h = pressure - t24h.back;
             store.pressure.change24h = change24h;
             if (Math.abs(change24h) > THRESHOLDS.PRESSURE.SIGNIFICANT_24H_CHANGE) {
-                results.phenomena.push(`significant 24h pressure ${change24h > 0 ? 'rise' : 'drop'} (${FormatHelper.pressureToString(Math.abs(change24h))})`);
+                results.phenomena.push(`significant 24h pressure ${change24h > 0 ? 'rise' : 'drop'} (${formatter.pressureToString(Math.abs(change24h))})`);
                 if (change24h > THRESHOLDS.PRESSURE.BUILDING_HIGH) results.phenomena.push('strong high pressure building');
                 else if (change24h < THRESHOLDS.PRESSURE.DEEPENING_LOW) results.phenomena.push('deepening low pressure system');
             }
@@ -588,7 +587,7 @@ function interpretPressure({ results, situation, dataCurrent, store }) {
             };
             const range24h = t24h.max - t24h.min;
             if (range24h > THRESHOLDS.PRESSURE.EXTREME_24H_RANGE) {
-                results.phenomena.push(`extreme 24h pressure variation (${FormatHelper.pressureToString(range24h)})`);
+                results.phenomena.push(`extreme 24h pressure variation (${formatter.pressureToString(range24h)})`);
                 results.alerts.push('unstable atmospheric conditions');
             } else if (range24h < THRESHOLDS.PRESSURE.STABLE_24H_RANGE) {
                 results.phenomena.push('very stable pressure');
@@ -635,15 +634,15 @@ function interpretHumidity({ results, situation, dataCurrent, store, weatherData
     // -------------------------------------------------------------------------
 
     if (humidity >= THRESHOLDS.HUMIDITY.FOG_LIKELY) {
-        results.conditions.push(`saturated (> ${FormatHelper.humidityToString(THRESHOLDS.HUMIDITY.FOG_LIKELY)})`);
+        results.conditions.push(`saturated (> ${formatter.humidityToString(THRESHOLDS.HUMIDITY.FOG_LIKELY)})`);
     } else if (humidity > THRESHOLDS.HUMIDITY.VERY_HUMID) {
-        results.conditions.push(`very humid (> ${FormatHelper.humidityToString(THRESHOLDS.HUMIDITY.VERY_HUMID)})`);
+        results.conditions.push(`very humid (> ${formatter.humidityToString(THRESHOLDS.HUMIDITY.VERY_HUMID)})`);
     } else if (humidity > THRESHOLDS.HUMIDITY.HUMID) {
         results.conditions.push('humid');
     } else if (humidity >= THRESHOLDS.HUMIDITY.COMFORT_LOW && humidity <= THRESHOLDS.HUMIDITY.COMFORT_HIGH) {
         // Comfort range - no condition added
     } else if (humidity < THRESHOLDS.HUMIDITY.VERY_DRY) {
-        results.conditions.push(`very dry (< ${FormatHelper.humidityToString(THRESHOLDS.HUMIDITY.VERY_DRY)})`);
+        results.conditions.push(`very dry (< ${formatter.humidityToString(THRESHOLDS.HUMIDITY.VERY_DRY)})`);
         results.alerts.push(`extremely dry conditions`);
     } else if (humidity < THRESHOLDS.HUMIDITY.DRY) {
         results.conditions.push('dry');
@@ -660,7 +659,7 @@ function interpretHumidity({ results, situation, dataCurrent, store, weatherData
         const change3h = humidity - t3h.back;
         store.humidity.change3h = change3h;
         if (Math.abs(change3h) > THRESHOLDS.HUMIDITY.RAPID_3H_CHANGE) {
-            results.phenomena.push(`rapid 3 hour humidity ${change3h > 0 ? 'increase' : 'decrease'} (${FormatHelper.humidityToString(Math.abs(change3h))})`);
+            results.phenomena.push(`rapid 3 hour humidity ${change3h > 0 ? 'increase' : 'decrease'} (${formatter.humidityToString(Math.abs(change3h))})`);
         }
     }
 
@@ -669,7 +668,7 @@ function interpretHumidity({ results, situation, dataCurrent, store, weatherData
         const change6h = humidity - t6h.back;
         store.humidity.change6h = change6h;
         if (Math.abs(change6h) > THRESHOLDS.HUMIDITY.RAPID_6H_CHANGE) {
-            results.phenomena.push(`significant 6 hour humidity ${change6h > 0 ? 'increase' : 'decrease'} (${FormatHelper.humidityToString(Math.abs(change6h))})`);
+            results.phenomena.push(`significant 6 hour humidity ${change6h > 0 ? 'increase' : 'decrease'} (${formatter.humidityToString(Math.abs(change6h))})`);
         }
     }
 
@@ -684,7 +683,7 @@ function interpretHumidity({ results, situation, dataCurrent, store, weatherData
             };
             const range24h = t24h.max - t24h.min;
             if (range24h > 50) {
-                results.phenomena.push(`large 24 hour humidity variation (${FormatHelper.humidityToString(range24h)})`);
+                results.phenomena.push(`large 24 hour humidity variation (${formatter.humidityToString(range24h)})`);
             } else if (range24h < 10) {
                 results.phenomena.push('stable 24 hour humidity levels');
             }
@@ -696,7 +695,7 @@ function interpretHumidity({ results, situation, dataCurrent, store, weatherData
     // -------------------------------------------------------------------------
 
     const period24h = weatherData?.getPeriod?.('24h');
-    if (period24h?.entries.length > 0) {
+    if (period24h?.entries?.length) {
         store.humidity.dryHours24h = period24h.estimateHours((e) => e.humidity !== undefined && e.humidity < THRESHOLDS.HUMIDITY.DRY);
         store.humidity.humidHours24h = period24h.estimateHours((e) => e.humidity !== undefined && e.humidity > THRESHOLDS.HUMIDITY.VERY_HUMID);
         if (store.humidity.dryHours24h > THRESHOLDS.HUMIDITY.DRY_STREAK_WARNING) {
@@ -768,7 +767,7 @@ function interpretWind({ results, situation, dataCurrent, store, weatherData }) 
     // -------------------------------------------------------------------------
 
     if (windSpeed < THRESHOLDS.WIND.CALM) {
-        results.conditions.push(`calm (< ${FormatHelper.windspeedToString(THRESHOLDS.WIND.CALM)})`);
+        results.conditions.push(`calm (< ${formatter.windspeedToString(THRESHOLDS.WIND.CALM)})`);
     } else if (windSpeed < THRESHOLDS.WIND.LIGHT_AIR) {
         results.conditions.push('light air');
     } else if (windSpeed < THRESHOLDS.WIND.LIGHT_BREEZE) {
@@ -794,12 +793,12 @@ function interpretWind({ results, situation, dataCurrent, store, weatherData }) 
         results.conditions.push(`strong gale`);
         results.alerts.push(`strong gale warning`);
     } else if (windSpeed < THRESHOLDS.WIND.STORM) {
-        results.conditions.push(`storm (< ${FormatHelper.windspeedToString(THRESHOLDS.WIND.STORM)})`);
-        results.alerts.push(`storm warning (< ${FormatHelper.windspeedToString(THRESHOLDS.WIND.STORM)})`);
+        results.conditions.push(`storm (< ${formatter.windspeedToString(THRESHOLDS.WIND.STORM)})`);
+        results.alerts.push(`storm warning (< ${formatter.windspeedToString(THRESHOLDS.WIND.STORM)})`);
         if (location.forestCoverage === 'high') results.alerts.push('severe tree damage likely');
     } else if (windSpeed < THRESHOLDS.WIND.VIOLENT_STORM) {
-        results.conditions.push(`violent storm (< ${FormatHelper.windspeedToString(THRESHOLDS.WIND.VIOLENT_STORM)})`);
-        results.alerts.push(`violent storm warning (< ${FormatHelper.windspeedToString(THRESHOLDS.WIND.VIOLENT_STORM)})`);
+        results.conditions.push(`violent storm (< ${formatter.windspeedToString(THRESHOLDS.WIND.VIOLENT_STORM)})`);
+        results.alerts.push(`violent storm warning (< ${formatter.windspeedToString(THRESHOLDS.WIND.VIOLENT_STORM)})`);
     } else {
         results.conditions.push(`hurricane force`);
         results.alerts.push(`hurricane force wind warning`);
@@ -809,11 +808,11 @@ function interpretWind({ results, situation, dataCurrent, store, weatherData }) 
         store.wind.gustFactor = windGust / windSpeed;
     }
     if (store.wind.gustFactor > THRESHOLDS.WIND.SEVERE_GUST_FACTOR) {
-        results.phenomena.push(`severe gusts (${Math.round((store.wind.gustFactor - 1) * 100)}% stronger, > ${FormatHelper.windspeedToString(THRESHOLDS.WIND.SEVERE_GUST_FACTOR)})`);
-        results.alerts.push(`dangerous gusts (${FormatHelper.windspeedToString(windGust)}, > ${FormatHelper.windspeedToString(THRESHOLDS.WIND.SEVERE_GUST_FACTOR)})`);
+        results.phenomena.push(`severe gusts (${Math.round((store.wind.gustFactor - 1) * 100)}% stronger, > ${formatter.windspeedToString(THRESHOLDS.WIND.SEVERE_GUST_FACTOR)})`);
+        results.alerts.push(`dangerous gusts (${formatter.windspeedToString(windGust)}, > ${formatter.windspeedToString(THRESHOLDS.WIND.SEVERE_GUST_FACTOR)})`);
     } else if (store.wind.gustFactor > THRESHOLDS.WIND.DANGEROUS_GUST_FACTOR) {
-        results.phenomena.push(`gusty (${Math.round((store.wind.gustFactor - 1) * 100)}% stronger, > ${FormatHelper.windspeedToString(THRESHOLDS.WIND.DANGEROUS_GUST_FACTOR)})`);
-        if (windSpeed > 10) results.alerts.push(`dangerous gusts (${FormatHelper.windspeedToString(windGust)})`);
+        results.phenomena.push(`gusty (${Math.round((store.wind.gustFactor - 1) * 100)}% stronger, > ${formatter.windspeedToString(THRESHOLDS.WIND.DANGEROUS_GUST_FACTOR)})`);
+        if (windSpeed > 10) results.alerts.push(`dangerous gusts (${formatter.windspeedToString(windGust)})`);
     } else if (store.wind.gustFactor > THRESHOLDS.WIND.MODERATE_GUST_FACTOR) {
         results.phenomena.push('moderate gusts');
     }
@@ -870,9 +869,9 @@ function interpretWind({ results, situation, dataCurrent, store, weatherData }) 
         const change3h = windSpeed - t3h.back;
         store.wind.change3h = change3h;
         if (change3h > 5) {
-            results.phenomena.push(`wind strengthening (+${FormatHelper.windspeedToString(change3h)} in 3 hours)`);
+            results.phenomena.push(`wind strengthening (+${formatter.windspeedToString(change3h)} in 3 hours)`);
         } else if (change3h < -5) {
-            results.phenomena.push(`wind easing (-${FormatHelper.windspeedToString(change3h)} in 3 hours)`);
+            results.phenomena.push(`wind easing (-${formatter.windspeedToString(change3h)} in 3 hours)`);
         }
     }
 
@@ -902,7 +901,7 @@ function interpretWind({ results, situation, dataCurrent, store, weatherData }) 
     // -------------------------------------------------------------------------
 
     const period24h = weatherData?.getPeriod?.('24h');
-    if (period24h?.entries.length > 0) {
+    if (period24h?.entries?.length) {
         store.wind.calmHours24h = period24h.estimateHours((e) => e.windSpeed !== undefined && e.windSpeed < THRESHOLDS.WIND.CALM);
         store.wind.stormHours24h = period24h.estimateHours((e) => e.windSpeed !== undefined && e.windSpeed > THRESHOLDS.WIND.NEAR_GALE);
     }
@@ -986,7 +985,7 @@ function interpretClouds({ results, situation, dataCurrent, store, weatherData }
     // -------------------------------------------------------------------------
 
     if (cloudCover < THRESHOLDS.CLOUDS.CLEAR) {
-        results.conditions.push(`clear sky (< ${FormatHelper.cloudCoverToString(THRESHOLDS.CLOUDS.CLEAR)})`);
+        results.conditions.push(`clear sky (< ${formatter.cloudCoverToString(THRESHOLDS.CLOUDS.CLEAR)})`);
         if (daylight.isDaytime) results.phenomena.push('full sunshine');
         else if (location.lightPollution === 'low') results.phenomena.push('excellent stargazing conditions');
     } else if (cloudCover < THRESHOLDS.CLOUDS.MOSTLY_CLEAR) {
@@ -1000,7 +999,7 @@ function interpretClouds({ results, situation, dataCurrent, store, weatherData }
     } else if (cloudCover < THRESHOLDS.CLOUDS.OVERCAST) {
         results.conditions.push('cloudy');
     } else {
-        results.conditions.push(`overcast (> ${FormatHelper.cloudCoverToString(THRESHOLDS.CLOUDS.OVERCAST)})`);
+        results.conditions.push(`overcast (> ${formatter.cloudCoverToString(THRESHOLDS.CLOUDS.OVERCAST)})`);
         if (daylight.isDaytime) results.phenomena.push('no direct sunshine');
     }
 
@@ -1051,7 +1050,7 @@ function interpretClouds({ results, situation, dataCurrent, store, weatherData }
     // -------------------------------------------------------------------------
 
     const period24h = weatherData?.getPeriod?.('24h');
-    if (period24h?.entries.length > 0) {
+    if (period24h?.entries?.length) {
         store.clouds.clearHours24h = period24h.estimateHours((e) => e.cloudCover !== undefined && e.cloudCover < THRESHOLDS.CLOUDS.CLEAR);
         store.clouds.overcastHours24h = period24h.estimateHours((e) => e.cloudCover !== undefined && e.cloudCover > THRESHOLDS.CLOUDS.OVERCAST);
     }
@@ -1076,7 +1075,7 @@ function interpretClouds({ results, situation, dataCurrent, store, weatherData }
 
     // Check for prolonged conditions over multiple days using 7d period
     const period7d = weatherData?.getPeriod?.('7d');
-    if (period7d?.entries.length > 0) {
+    if (period7d?.entries?.length) {
         const overcastHours7d = period7d.estimateHours((e) => e.cloudCover !== undefined && e.cloudCover > THRESHOLDS.CLOUDS.OVERCAST);
         const clearHours7d = period7d.estimateHours((e) => e.cloudCover !== undefined && e.cloudCover < THRESHOLDS.CLOUDS.CLEAR);
         if (overcastHours7d > 72) {
@@ -1137,19 +1136,19 @@ function interpretPrecipitation({ results, situation, dataCurrent, store, weathe
         if (rainRate < THRESHOLDS.RAIN.TRACE) {
             results.conditions.push('trace precipitation');
         } else if (rainRate < THRESHOLDS.RAIN.LIGHT) {
-            results.conditions.push(`light precipitation (< ${FormatHelper.rainfallToString(THRESHOLDS.RAIN.LIGHT)}/h)`);
+            results.conditions.push(`light precipitation (< ${formatter.rainfallToString(THRESHOLDS.RAIN.LIGHT)}/h)`);
         } else if (rainRate < THRESHOLDS.RAIN.LIGHT_MODERATE) {
             results.conditions.push('light to moderate precipitation');
         } else if (rainRate < THRESHOLDS.RAIN.MODERATE) {
             results.conditions.push('moderate precipitation');
         } else if (rainRate < THRESHOLDS.RAIN.HEAVY) {
-            results.conditions.push(`heavy precipitation (< ${FormatHelper.rainfallToString(THRESHOLDS.RAIN.HEAVY)}/h)`);
+            results.conditions.push(`heavy precipitation (< ${formatter.rainfallToString(THRESHOLDS.RAIN.HEAVY)}/h)`);
         } else if (rainRate < THRESHOLDS.RAIN.VERY_HEAVY) {
-            results.conditions.push(`very heavy precipitation (< ${FormatHelper.rainfallToString(THRESHOLDS.RAIN.VERY_HEAVY)}/h)`);
-            results.alerts.push(`heavy rainfall warning (< ${FormatHelper.rainfallToString(THRESHOLDS.RAIN.VERY_HEAVY)}/h)`);
+            results.conditions.push(`very heavy precipitation (< ${formatter.rainfallToString(THRESHOLDS.RAIN.VERY_HEAVY)}/h)`);
+            results.alerts.push(`heavy rainfall warning (< ${formatter.rainfallToString(THRESHOLDS.RAIN.VERY_HEAVY)}/h)`);
         } else if (rainRate < THRESHOLDS.RAIN.EXTREME) {
-            results.conditions.push(`extreme precipitation (< ${FormatHelper.rainfallToString(THRESHOLDS.RAIN.EXTREME)}/h)`);
-            results.alerts.push(`extreme rainfall warning (< ${FormatHelper.rainfallToString(THRESHOLDS.RAIN.EXTREME)}/h)`);
+            results.conditions.push(`extreme precipitation (< ${formatter.rainfallToString(THRESHOLDS.RAIN.EXTREME)}/h)`);
+            results.alerts.push(`extreme rainfall warning (< ${formatter.rainfallToString(THRESHOLDS.RAIN.EXTREME)}/h)`);
         } else {
             results.conditions.push(`torrential precipitation`);
             results.alerts.push(`torrential rainfall`);
@@ -1189,30 +1188,30 @@ function interpretPrecipitation({ results, situation, dataCurrent, store, weathe
         store.precipitation.accumulation1h = period1h.sum('rainRate') || 0;
     }
     if (store.precipitation.accumulation1h > THRESHOLDS.RAIN.FLASH_FLOOD_RISK) {
-        results.alerts.push(`flash flood risk (${FormatHelper.rainfallToString(store.precipitation.accumulation1h)} in an hour)`);
+        results.alerts.push(`flash flood risk (${formatter.rainfallToString(store.precipitation.accumulation1h)} in an hour)`);
     }
 
     const period24h = weatherData?.getPeriod?.('24h');
-    if (period24h?.entries.length > 0) {
+    if (period24h?.entries?.length) {
         store.precipitation.accumulation24h = period24h.sum('rainRate') || 0;
         store.precipitation.maxRate24h = period24h.max('rainRate') || rainRate;
         store.precipitation.wetHours24h = period24h.estimateHours((e) => e.rainRate !== undefined && e.rainRate > 0);
     }
     if (store.precipitation.accumulation24h > THRESHOLDS.RAIN.EXTREME_24H) {
-        results.alerts.push(`extreme 24 hour precipitation (${FormatHelper.rainfallToString(store.precipitation.accumulation24h)})`);
+        results.alerts.push(`extreme 24 hour precipitation (${formatter.rainfallToString(store.precipitation.accumulation24h)})`);
     } else if (store.precipitation.accumulation24h > THRESHOLDS.RAIN.ALERT_24H) {
-        results.alerts.push(`significant 24 hour precipitation (${FormatHelper.rainfallToString(store.precipitation.accumulation24h)})`);
+        results.alerts.push(`significant 24 hour precipitation (${formatter.rainfallToString(store.precipitation.accumulation24h)})`);
     } else if (store.precipitation.accumulation24h > THRESHOLDS.RAIN.SIGNIFICANT_24H) {
-        results.phenomena.push(`notable 24 hour precipitation (${FormatHelper.rainfallToString(store.precipitation.accumulation24h)})`);
+        results.phenomena.push(`notable 24 hour precipitation (${formatter.rainfallToString(store.precipitation.accumulation24h)})`);
     }
 
     const period7d = weatherData?.getPeriod?.('7d');
-    if (period7d?.entries.length > 0) {
+    if (period7d?.entries?.length) {
         store.precipitation.accumulation7d = period7d.sum('rainRate') || 0;
         store.precipitation.dryDays7d = Math.round(period7d.estimateHours((e) => e.rainRate === undefined || e.rainRate < 0.1) / 24);
     }
     if (store.precipitation.accumulation7d > THRESHOLDS.RAIN.WET_WEEK) {
-        results.phenomena.push(`wet week (${FormatHelper.rainfallToString(store.precipitation.accumulation7d)} total)`);
+        results.phenomena.push(`wet week (${formatter.rainfallToString(store.precipitation.accumulation7d)} total)`);
         if (location.forestCoverage === 'high') results.phenomena.push('saturated forest floor');
     } else if (store.precipitation.accumulation7d < THRESHOLDS.RAIN.DRY_WEEK) {
         results.phenomena.push('dry week');
@@ -1285,9 +1284,9 @@ function interpretLight({ results, dataCurrent, store }) {
 
     if (radAvg !== undefined) {
         if (radAvg > THRESHOLDS.SOLAR.EXTREME_RAD) {
-            results.conditions.push(`extreme sunlight (> ${FormatHelper.solarToString(THRESHOLDS.SOLAR.EXTREME_RAD)})`);
+            results.conditions.push(`extreme sunlight (> ${formatter.solarToString(THRESHOLDS.SOLAR.EXTREME_RAD)})`);
         } else if (radAvg > THRESHOLDS.SOLAR.INTENSE_RAD) {
-            results.conditions.push(`intense sunlight (> ${FormatHelper.solarToString(THRESHOLDS.SOLAR.INTENSE_RAD)})`);
+            results.conditions.push(`intense sunlight (> ${formatter.solarToString(THRESHOLDS.SOLAR.INTENSE_RAD)})`);
         } else if (radAvg > THRESHOLDS.SOLAR.STRONG_RAD) {
             results.conditions.push('strong sunlight');
         } else if (radAvg > THRESHOLDS.SOLAR.MODERATE_RAD) {
@@ -1303,13 +1302,13 @@ function interpretLight({ results, dataCurrent, store }) {
 
     if (uviAvg !== undefined) {
         if (uviAvg >= THRESHOLDS.SOLAR.UV_EXTREME) {
-            results.conditions.push(`extreme UV (> ${FormatHelper.uviToString(THRESHOLDS.SOLAR.UV_EXTREME)})`);
-            results.alerts.push(`extreme UV warning (> ${FormatHelper.uviToString(THRESHOLDS.SOLAR.UV_EXTREME)})`);
+            results.conditions.push(`extreme UV (> ${formatter.uviToString(THRESHOLDS.SOLAR.UV_EXTREME)})`);
+            results.alerts.push(`extreme UV warning (> ${formatter.uviToString(THRESHOLDS.SOLAR.UV_EXTREME)})`);
         } else if (uviAvg >= THRESHOLDS.SOLAR.UV_VERY_HIGH) {
-            results.conditions.push(`very high UV (> ${FormatHelper.uviToString(THRESHOLDS.SOLAR.UV_VERY_HIGH)})`);
-            results.alerts.push(`very high UV - sun protection essential (> ${FormatHelper.uviToString(THRESHOLDS.SOLAR.UV_VERY_HIGH)})`);
+            results.conditions.push(`very high UV (> ${formatter.uviToString(THRESHOLDS.SOLAR.UV_VERY_HIGH)})`);
+            results.alerts.push(`very high UV - sun protection essential (> ${formatter.uviToString(THRESHOLDS.SOLAR.UV_VERY_HIGH)})`);
         } else if (uviAvg >= THRESHOLDS.SOLAR.UV_HIGH) {
-            results.conditions.push(`high UV (> ${FormatHelper.uviToString(THRESHOLDS.SOLAR.UV_HIGH)})`);
+            results.conditions.push(`high UV (> ${formatter.uviToString(THRESHOLDS.SOLAR.UV_HIGH)})`);
             results.phenomena.push('sun protection recommended');
         } else if (uviAvg >= THRESHOLDS.SOLAR.UV_MODERATE) {
             results.conditions.push('moderate UV');
@@ -1347,27 +1346,25 @@ function interpretSnow({ results, situation, dataCurrent, store }) {
     if (snowDepth === 0) {
         if (month >= 11 || month <= 2) {
             results.phenomena.push('no snow cover during winter');
-            if (store.snow.maxDepth > 100) {
-                results.phenomena.push(`snow-free after ${FormatHelper.snowdepthToString(store.snow.maxDepth)} max depth`);
-            }
+            if (store.snow.maxDepth > 100) results.phenomena.push(`snow-free after ${formatter.snowdepthToString(store.snow.maxDepth)} max depth`);
         }
     } else if (snowDepth < THRESHOLDS.SNOW.TRACE) {
         results.conditions.push('trace snow cover');
     } else if (snowDepth < THRESHOLDS.SNOW.LIGHT_COVER) {
-        results.conditions.push(`light snow cover (< ${FormatHelper.snowdepthToString(THRESHOLDS.SNOW.LIGHT_COVER)})`);
+        results.conditions.push(`light snow cover (< ${formatter.snowdepthToString(THRESHOLDS.SNOW.LIGHT_COVER)})`);
         if (month >= 3 && month <= 4) results.phenomena.push('spring snow melt beginning');
     } else if (snowDepth < THRESHOLDS.SNOW.MODERATE_COVER) {
-        results.conditions.push(`moderate snow cover (< ${FormatHelper.snowdepthToString(THRESHOLDS.SNOW.MODERATE_COVER)})`);
+        results.conditions.push(`moderate snow cover (< ${formatter.snowdepthToString(THRESHOLDS.SNOW.MODERATE_COVER)})`);
     } else if (snowDepth < THRESHOLDS.SNOW.DEEP_COVER) {
-        results.conditions.push(`deep snow cover (< ${FormatHelper.snowdepthToString(THRESHOLDS.SNOW.DEEP_COVER)})`);
+        results.conditions.push(`deep snow cover (< ${formatter.snowdepthToString(THRESHOLDS.SNOW.DEEP_COVER)})`);
         results.phenomena.push('challenging forest mobility');
     } else if (snowDepth < THRESHOLDS.SNOW.VERY_DEEP_COVER) {
-        results.conditions.push(`very deep snow cover (< ${FormatHelper.snowdepthToString(THRESHOLDS.SNOW.VERY_DEEP_COVER)})`);
-        results.alerts.push(`extreme snow depth (< ${FormatHelper.snowdepthToString(THRESHOLDS.SNOW.VERY_DEEP_COVER)})`);
+        results.conditions.push(`very deep snow cover (< ${formatter.snowdepthToString(THRESHOLDS.SNOW.VERY_DEEP_COVER)})`);
+        results.alerts.push(`extreme snow depth (< ${formatter.snowdepthToString(THRESHOLDS.SNOW.VERY_DEEP_COVER)})`);
         results.phenomena.push('restricted mobility in forest');
     } else {
-        results.conditions.push(`exceptional snow cover (> ${FormatHelper.snowdepthToString(THRESHOLDS.SNOW.VERY_DEEP_COVER)})`);
-        results.alerts.push(`exceptional snow depth (> ${FormatHelper.snowdepthToString(THRESHOLDS.SNOW.VERY_DEEP_COVER)})`);
+        results.conditions.push(`exceptional snow cover (> ${formatter.snowdepthToString(THRESHOLDS.SNOW.VERY_DEEP_COVER)})`);
+        results.alerts.push(`exceptional snow depth (> ${formatter.snowdepthToString(THRESHOLDS.SNOW.VERY_DEEP_COVER)})`);
     }
 
     // -------------------------------------------------------------------------
@@ -1389,18 +1386,18 @@ function interpretSnow({ results, situation, dataCurrent, store }) {
         }
     }
     if (store.snow.accumulation24h > THRESHOLDS.SNOW.EXTREME_24H) {
-        results.alerts.push(`extreme 24 hour snowfall (${FormatHelper.snowdepthToString(store.snow.accumulation24h)})`);
+        results.alerts.push(`extreme 24 hour snowfall (${formatter.snowdepthToString(store.snow.accumulation24h)})`);
     } else if (store.snow.accumulation24h > THRESHOLDS.SNOW.HEAVY_24H) {
-        results.alerts.push(`heavy 24 hour snowfall (${FormatHelper.snowdepthToString(store.snow.accumulation24h)})`);
+        results.alerts.push(`heavy 24 hour snowfall (${formatter.snowdepthToString(store.snow.accumulation24h)})`);
     } else if (store.snow.accumulation24h > THRESHOLDS.SNOW.MODERATE_24H) {
-        results.phenomena.push(`moderate 24 hour snowfall (${FormatHelper.snowdepthToString(store.snow.accumulation24h)})`);
+        results.phenomena.push(`moderate 24 hour snowfall (${formatter.snowdepthToString(store.snow.accumulation24h)})`);
     } else if (store.snow.accumulation24h > THRESHOLDS.SNOW.LIGHT_24H) {
-        results.phenomena.push(`light 24 hour snowfall (${FormatHelper.snowdepthToString(store.snow.accumulation24h)})`);
+        results.phenomena.push(`light 24 hour snowfall (${formatter.snowdepthToString(store.snow.accumulation24h)})`);
     }
     if (store.snow.meltRate24h > THRESHOLDS.SNOW.RAPID_MELT) {
-        results.phenomena.push(`rapid 24 hour snowmelt (${FormatHelper.snowdepthToString(store.snow.meltRate24h)})`);
+        results.phenomena.push(`rapid 24 hour snowmelt (${formatter.snowdepthToString(store.snow.meltRate24h)})`);
     } else if (store.snow.meltRate24h > THRESHOLDS.SNOW.MODERATE_MELT) {
-        results.phenomena.push(`moderate 24 hour snowmelt (${FormatHelper.snowdepthToString(store.snow.meltRate24h)})`);
+        results.phenomena.push(`moderate 24 hour snowmelt (${formatter.snowdepthToString(store.snow.meltRate24h)})`);
     }
 
     const t7d = trends['7d'];
@@ -1457,29 +1454,27 @@ function interpretIce({ results, situation, dataCurrent, store, weatherData }) {
     // -------------------------------------------------------------------------
 
     if (iceDepth === 0) {
-        if (month >= 11 || month <= 3) {
-            results.phenomena.push('open water');
-        }
+        if (month >= 11 || month <= 3) results.phenomena.push('open water');
     } else if (iceDepth < THRESHOLDS.ICE.THIN) {
-        results.conditions.push(`thin ice cover (< ${FormatHelper.icedepthToString(THRESHOLDS.ICE.THIN)})`);
+        results.conditions.push(`thin ice cover (< ${formatter.icedepthToString(THRESHOLDS.ICE.THIN)})`);
         results.alerts.push('unsafe ice conditions - stay off ice');
     } else if (iceDepth < THRESHOLDS.ICE.WALKABLE) {
-        results.conditions.push(`forming ice (< ${FormatHelper.icedepthToString(THRESHOLDS.ICE.WALKABLE)})`);
+        results.conditions.push(`forming ice (< ${formatter.icedepthToString(THRESHOLDS.ICE.WALKABLE)})`);
         results.phenomena.push('ice may support single person on foot with caution');
     } else if (iceDepth < THRESHOLDS.ICE.GROUP_SAFE) {
-        results.conditions.push(`moderate ice cover (< ${FormatHelper.icedepthToString(THRESHOLDS.ICE.GROUP_SAFE)})`);
+        results.conditions.push(`moderate ice cover (< ${formatter.icedepthToString(THRESHOLDS.ICE.GROUP_SAFE)})`);
         results.phenomena.push('ice supports walking (Swedish: 10cm standard)');
     } else if (iceDepth < THRESHOLDS.ICE.SNOWMOBILE) {
-        results.conditions.push(`thick ice cover (< ${FormatHelper.icedepthToString(THRESHOLDS.ICE.SNOWMOBILE)})`);
+        results.conditions.push(`thick ice cover (< ${formatter.icedepthToString(THRESHOLDS.ICE.SNOWMOBILE)})`);
         results.phenomena.push('ice supports group activities');
     } else if (iceDepth < THRESHOLDS.ICE.VEHICLE) {
-        results.conditions.push(`very thick ice (< ${FormatHelper.icedepthToString(THRESHOLDS.ICE.VEHICLE)})`);
+        results.conditions.push(`very thick ice (< ${formatter.icedepthToString(THRESHOLDS.ICE.VEHICLE)})`);
         results.phenomena.push('ice supports snowmobile (Swedish: 20cm standard)');
     } else if (iceDepth < THRESHOLDS.ICE.HEAVY_VEHICLE) {
-        results.conditions.push(`exceptional ice (< ${FormatHelper.icedepthToString(THRESHOLDS.ICE.HEAVY_VEHICLE)})`);
+        results.conditions.push(`exceptional ice (< ${formatter.icedepthToString(THRESHOLDS.ICE.HEAVY_VEHICLE)})`);
         results.phenomena.push('ice supports light vehicles (Swedish: 25cm standard)');
     } else {
-        results.conditions.push(`extreme ice thickness (> ${FormatHelper.icedepthToString(THRESHOLDS.ICE.HEAVY_VEHICLE)})`);
+        results.conditions.push(`extreme ice thickness (> ${formatter.icedepthToString(THRESHOLDS.ICE.HEAVY_VEHICLE)})`);
         results.phenomena.push('ice supports heavy vehicles');
     }
 
@@ -1504,9 +1499,9 @@ function interpretIce({ results, situation, dataCurrent, store, weatherData }) {
 
     if (iceDepth > THRESHOLDS.ICE.THIN) {
         if (store.ice.growthRate7d > THRESHOLDS.ICE.RAPID_GROWTH) {
-            results.phenomena.push(`rapid 7 day ice growth (${FormatHelper.icedepthToString(store.ice.growthRate7d)})`);
+            results.phenomena.push(`rapid 7 day ice growth (${formatter.icedepthToString(store.ice.growthRate7d)})`);
         } else if (store.ice.meltRate7d > THRESHOLDS.ICE.RAPID_MELT) {
-            results.phenomena.push(`ice deteriorating over 7 days (${FormatHelper.icedepthToString(store.ice.meltRate7d)})`);
+            results.phenomena.push(`ice deteriorating over 7 days (${formatter.icedepthToString(store.ice.meltRate7d)})`);
             if (iceDepth < THRESHOLDS.ICE.GROUP_SAFE) {
                 results.alerts.push('ice becoming unsafe');
             }
@@ -1519,7 +1514,7 @@ function interpretIce({ results, situation, dataCurrent, store, weatherData }) {
 
     // Calculate safe days from 7d period data
     const period7d = weatherData?.getPeriod?.('7d');
-    if (period7d?.entries.length > 0) {
+    if (period7d?.entries?.length) {
         store.ice.safeDays7d = period7d.estimateDays((e) => e.iceDepth !== undefined && e.iceDepth >= THRESHOLDS.ICE.WALKABLE);
         if (iceDepth >= THRESHOLDS.ICE.WALKABLE && store.ice.safeDays7d > 5) {
             results.phenomena.push('ice fishing conditions established');
@@ -1609,9 +1604,7 @@ function interpretRadiation({ results, situation, dataCurrent, store }) {
     const acpmTrends = store.conditions?.trends?.radiationAcpm || {};
 
     const t24h = radiationAcpm === undefined ? cpmTrends['24h'] : acpmTrends['24h'];
-    if (t24h?.valid && t24h.avg !== undefined) {
-        store.radiation.baseline = t24h.avg;
-    }
+    if (t24h?.valid && t24h.avg !== undefined) store.radiation.baseline = t24h.avg;
     if (store.radiation.baseline > 0) {
         const ratio = radiationValue / store.radiation.baseline;
         if (ratio > THRESHOLDS.RADIATION.CRITICAL_ANOMALY_MULTIPLIER) {
@@ -1633,12 +1626,12 @@ function interpretRadiation({ results, situation, dataCurrent, store }) {
 
     if (radationUsvh !== undefined) {
         if (radationUsvh > THRESHOLDS.RADIATION.DOSE_DANGEROUS) {
-            results.alerts.push(`dangerous dose rate (> ${FormatHelper.radiationToString(THRESHOLDS.RADIATION.DOSE_DANGEROUS)})`);
+            results.alerts.push(`dangerous dose rate (> ${formatter.radiationToString(THRESHOLDS.RADIATION.DOSE_DANGEROUS)})`);
         } else if (radationUsvh > THRESHOLDS.RADIATION.DOSE_HIGH) {
-            results.alerts.push(`high dose rate (> ${FormatHelper.radiationToString(THRESHOLDS.RADIATION.DOSE_HIGH)})`);
+            results.alerts.push(`high dose rate (> ${formatter.radiationToString(THRESHOLDS.RADIATION.DOSE_HIGH)})`);
             results.phenomena.push('limit prolonged exposure');
         } else if (radationUsvh > THRESHOLDS.RADIATION.DOSE_ELEVATED) {
-            results.phenomena.push(`elevated dose rate (> ${FormatHelper.radiationToString(THRESHOLDS.RADIATION.DOSE_ELEVATED)})`);
+            results.phenomena.push(`elevated dose rate (> ${formatter.radiationToString(THRESHOLDS.RADIATION.DOSE_ELEVATED)})`);
         }
         store.radiation.doseRate = radationUsvh;
         const now = new Date();
@@ -1649,7 +1642,7 @@ function interpretRadiation({ results, situation, dataCurrent, store }) {
         }
         store.radiation.dailyDose += radationUsvh / 60;
         if (store.radiation.dailyDose > 2.4) {
-            results.phenomena.push(`daily dose ${FormatHelper.radiationToString(store.radiation.dailyDose)} (above average ${FormatHelper.radiationToString(2.4)})`);
+            results.phenomena.push(`daily dose ${formatter.radiationToString(store.radiation.dailyDose)} (above average ${formatter.radiationToString(2.4)})`);
         }
     }
 
@@ -1699,20 +1692,20 @@ function interpretCombination({ results, situation, dataCurrent, store, weatherD
         if (humidity > THRESHOLDS.HUMIDITY.VERY_HUMID && temp > THRESHOLDS.TEMP.WARM) {
             results.phenomena.push('oppressive humidity');
             if (heatIndex && heatIndex > temp + 5) {
-                results.phenomena.push(`humidity making it feel ${FormatHelper.temperatureToString(heatIndex - temp)} warmer`);
+                results.phenomena.push(`humidity making it feel ${formatter.temperatureToString(heatIndex - temp)} warmer`);
             }
         }
 
         // Heat index warnings
         if (heatIndex !== undefined) {
             if (heatIndex >= THRESHOLDS.COMPOUND.HEAT_INDEX_EXTREME) {
-                results.alerts.push(`extreme heat index ${FormatHelper.temperatureToString(heatIndex)} (> ${FormatHelper.temperatureToString(THRESHOLDS.COMPOUND.HEAT_INDEX_EXTREME)})`);
+                results.alerts.push(`extreme heat index ${formatter.temperatureToString(heatIndex)} (> ${formatter.temperatureToString(THRESHOLDS.COMPOUND.HEAT_INDEX_EXTREME)})`);
             } else if (heatIndex >= THRESHOLDS.COMPOUND.HEAT_INDEX_DANGER) {
-                results.alerts.push(`dangerous heat index ${FormatHelper.temperatureToString(heatIndex)} (> ${FormatHelper.temperatureToString(THRESHOLDS.COMPOUND.HEAT_INDEX_DANGER)})`);
+                results.alerts.push(`dangerous heat index ${formatter.temperatureToString(heatIndex)} (> ${formatter.temperatureToString(THRESHOLDS.COMPOUND.HEAT_INDEX_DANGER)})`);
             } else if (heatIndex >= THRESHOLDS.COMPOUND.HEAT_INDEX_WARNING) {
-                results.alerts.push(`high heat index ${FormatHelper.temperatureToString(heatIndex)} (> ${FormatHelper.temperatureToString(THRESHOLDS.COMPOUND.HEAT_INDEX_WARNING)})`);
+                results.alerts.push(`high heat index ${formatter.temperatureToString(heatIndex)} (> ${formatter.temperatureToString(THRESHOLDS.COMPOUND.HEAT_INDEX_WARNING)})`);
             } else if (heatIndex >= THRESHOLDS.COMPOUND.HEAT_INDEX_CAUTION) {
-                results.phenomena.push(`heat index ${FormatHelper.temperatureToString(heatIndex)} (> ${FormatHelper.temperatureToString(THRESHOLDS.COMPOUND.HEAT_INDEX_CAUTION)})`);
+                results.phenomena.push(`heat index ${formatter.temperatureToString(heatIndex)} (> ${formatter.temperatureToString(THRESHOLDS.COMPOUND.HEAT_INDEX_CAUTION)})`);
             }
         }
 
@@ -1731,7 +1724,7 @@ function interpretCombination({ results, situation, dataCurrent, store, weatherD
         if (rainRate > 0) {
             if (temp < -5) {
                 results.phenomena.push('snow (powder)');
-                results.phenomena.push(`snow accumulation rate: ~${FormatHelper.snowdepthToString(rainRate * 10)}/hour`);
+                results.phenomena.push(`snow accumulation rate: ~${formatter.snowdepthToString(rainRate * 10)}/hour`);
             } else if (temp < -2) {
                 results.phenomena.push('snow');
             } else if (temp < THRESHOLDS.TEMP.FREEZING) {
@@ -1796,13 +1789,13 @@ function interpretCombination({ results, situation, dataCurrent, store, weatherD
         if (temp < 10 && windSpeed > 3 && windChill !== undefined) {
             const windChillDiff = Math.round(temp - windChill);
             if (windChillDiff >= 3) {
-                results.phenomena.push(`feels ${FormatHelper.temperatureToString(windChillDiff)} colder due to wind`);
+                results.phenomena.push(`feels ${formatter.temperatureToString(windChillDiff)} colder due to wind`);
                 if (windChill < THRESHOLDS.COMPOUND.WIND_CHILL_DANGEROUS) {
-                    results.alerts.push(`extreme wind chill ${FormatHelper.temperatureToString(windChill)} (< ${FormatHelper.temperatureToString(THRESHOLDS.COMPOUND.WIND_CHILL_DANGEROUS)}) - frostbite in minutes`);
+                    results.alerts.push(`extreme wind chill ${formatter.temperatureToString(windChill)} (< ${formatter.temperatureToString(THRESHOLDS.COMPOUND.WIND_CHILL_DANGEROUS)}) - frostbite in minutes`);
                 } else if (windChill < THRESHOLDS.COMPOUND.WIND_CHILL_EXTREME) {
-                    results.alerts.push(`extreme wind chill ${FormatHelper.temperatureToString(windChill)} (< ${FormatHelper.temperatureToString(THRESHOLDS.COMPOUND.WIND_CHILL_EXTREME)})`);
+                    results.alerts.push(`extreme wind chill ${formatter.temperatureToString(windChill)} (< ${formatter.temperatureToString(THRESHOLDS.COMPOUND.WIND_CHILL_EXTREME)})`);
                 } else if (windChill < THRESHOLDS.COMPOUND.WIND_CHILL_SEVERE) {
-                    results.alerts.push(`severe wind chill: ${FormatHelper.temperatureToString(windChill)} (< ${FormatHelper.temperatureToString(THRESHOLDS.COMPOUND.WIND_CHILL_SEVERE)}) - limit exposure`);
+                    results.alerts.push(`severe wind chill: ${formatter.temperatureToString(windChill)} (< ${formatter.temperatureToString(THRESHOLDS.COMPOUND.WIND_CHILL_SEVERE)}) - limit exposure`);
                 } else if (windChill < THRESHOLDS.COMPOUND.WIND_CHILL_COLD) {
                     results.phenomena.push('significant wind chill factor');
                 }

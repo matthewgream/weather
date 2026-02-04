@@ -16,8 +16,8 @@
 
 /* eslint-disable sonarjs/cognitive-complexity */
 
-// const helpers = require('./server-function-weather-helpers.js');
-// const { FormatHelper } = require('./server-function-weather-tools-format.js');
+const { isDawnOrDusk } = require('./server-function-weather-helpers.js');
+// const formatter = require('./server-function-weather-tools-format.js');
 const toolsEvents = require('./server-function-weather-tools-events.js');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -145,14 +145,6 @@ function getRecentRainfall(weatherData, daysBack = 7) {
     return period.entries.reduce((total, entry) => (entry.rainRate === undefined ? total : total + entry.rainRate / 60), 0);
 }
 
-function isDawnOrDusk(hour, minute, daylight) {
-    if (!daylight?.sunriseDecimal || !daylight?.sunsetDecimal) return false;
-    const timeDecimal = hour + minute / 60;
-    const nearDawn = Math.abs(timeDecimal - daylight.sunriseDecimal) < 1;
-    const nearDusk = Math.abs(timeDecimal - daylight.sunsetDecimal) < 1;
-    return nearDawn || nearDusk;
-}
-
 function getPressureTrend(weatherData, hoursBack = 3) {
     if (!weatherData?.getPeriod) return undefined;
     const period = weatherData.getPeriod(`${hoursBack}h`);
@@ -173,6 +165,7 @@ function hadRecentFrost(weatherData, hoursBack = 24) {
 function isWindowStart(hour, minute, targetHour) {
     return hour === targetHour && minute < 15;
 }
+
 // CULTIVATION: Market Garden, Crops, Orchards, Livestock
 // -----------------------------------------------------------------------------------------------------------------------------------------
 

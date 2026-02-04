@@ -128,6 +128,17 @@ function calculateDistanceToPath(lat, lon, pathCoords) {
     return minDist;
 }
 
+function calculateDaylightChangeRate(latitude) {
+    // Seconds per day change, peaks at equinox
+    // sin(latitude) gives rough approximation of change rate factor
+    return Math.floor(Math.abs(Math.sin((latitude * Math.PI) / 180)) * 4) * 60;
+}
+
+function calculateTwilightDuration(latitude) {
+    // Twilight duration increases with latitude in Seconds
+    return Math.floor(90 / Math.cos((latitude * Math.PI) / 180)) * 60;
+}
+
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -142,6 +153,8 @@ module.exports = {
     isNearLocation,
     calculatePointToSegmentDistance,
     calculateDistanceToPath,
+    calculateDaylightChangeRate,
+    calculateTwilightDuration,
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
