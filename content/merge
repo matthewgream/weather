@@ -255,7 +255,7 @@ async function main() {
         console.error('Weather data validation failed.');
         process.exit(1);
     }
-    if (!await saveWeatherDataStreaming('wu-master.json', data)) {
+    if (!(await saveWeatherDataStreaming('wu-master.json', data))) {
         console.error('Weather data save failed.');
         process.exit(1);
     }
@@ -266,4 +266,3 @@ async function main() {
 }
 
 main();
-

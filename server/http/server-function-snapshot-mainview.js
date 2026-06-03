@@ -12,6 +12,7 @@ const THUMBNAIL_WIDTH_SNAPSHOT = 200;
 const SNAPSHOT_INTERVALS = [15, 30, 45, 60];
 const SNAPSHOT_CACHE_TIME = 65 * 60 * 1000;
 const SNAPSHOT_REBUILD_TIME = 30 * 1000;
+const SNAPSHOT_MIN_STORE_INTERVAL = 60 * 1000; // gate: store at most one snapshot per this interval (regardless of capture rate)
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -61,6 +62,7 @@ function initialise(app, prefix, directory, server) {
     // this is also not the correct way to do it. should not create symlink, but just return the specific timestamped
     // snapshot. otherwise, we can be out of sync between clients and thumbnails / snapshots.
     let snapshotList__ = [];
+    let snapshotReceivedTime__;
     function snapshotsLoad(directory) {
         snapshotList__ = fs
             .readdirSync(directory)
@@ -86,9 +88,16 @@ function initialise(app, prefix, directory, server) {
         }
     }
     function snapshotsInsert(filename, data) {
+        const now = Date.now();
+        // gate: enforce minimum spacing between consecutively stored snapshots, based on receipt time
+        if (snapshotReceivedTime__ && now - snapshotReceivedTime__ < SNAPSHOT_MIN_STORE_INTERVAL) {
+            console.log(`snapshot gated: ${filename} (${Math.round((now - snapshotReceivedTime__) / 1000)}s since last stored < ${SNAPSHOT_MIN_STORE_INTERVAL / 1000}s)`);
+            return;
+        }
         try {
             fs.writeFileSync(path.join(directory, filename), data);
             snapshotList__.unshift(filename);
+            snapshotReceivedTime__ = now;
             console.log(`snapshot received: ${filename} (--> ${directory})`);
         } catch (e) {
             console.error('Error storing snapshot:', e);
