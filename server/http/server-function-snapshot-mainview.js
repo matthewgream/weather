@@ -62,7 +62,8 @@ function initialise(app, prefix, directory, server) {
     // this is also not the correct way to do it. should not create symlink, but just return the specific timestamped
     // snapshot. otherwise, we can be out of sync between clients and thumbnails / snapshots.
     let snapshotList__ = [];
-    let snapshotReceivedTime__;
+    let snapshotAnchorTime__; // receipt time of the most recent frame retained in the 1h trail
+    let snapshotLatest__; // { file, time } of the freshest frame, kept for the live view, pending trail decision
     function snapshotsLoad(directory) {
         snapshotList__ = fs
             .readdirSync(directory)
@@ -89,19 +90,31 @@ function initialise(app, prefix, directory, server) {
     }
     function snapshotsInsert(filename, data) {
         const now = Date.now();
-        // gate: enforce minimum spacing between consecutively stored snapshots, based on receipt time
-        if (snapshotReceivedTime__ && now - snapshotReceivedTime__ < SNAPSHOT_MIN_STORE_INTERVAL) {
-            console.log(`snapshot gated: ${filename} (${Math.round((now - snapshotReceivedTime__) / 1000)}s since last stored < ${SNAPSHOT_MIN_STORE_INTERVAL / 1000}s)`);
-            return;
-        }
+        // always store the freshest frame so the live/large view stays current
         try {
             fs.writeFileSync(path.join(directory, filename), data);
             snapshotList__.unshift(filename);
-            snapshotReceivedTime__ = now;
             console.log(`snapshot received: ${filename} (--> ${directory})`);
         } catch (e) {
             console.error('Error storing snapshot:', e);
+            return;
         }
+        // thin the 1h trail: the previous frame, now superseded, is kept only if it is far enough
+        // from the last retained frame to anchor the trail (>= SNAPSHOT_MIN_STORE_INTERVAL); else drop it
+        if (snapshotLatest__ === undefined) {
+            snapshotAnchorTime__ = now; // first frame anchors the trail
+        } else if (snapshotLatest__.time - snapshotAnchorTime__ >= SNAPSHOT_MIN_STORE_INTERVAL) {
+            snapshotAnchorTime__ = snapshotLatest__.time; // far enough from last anchor: retain in trail
+        } else {
+            try {
+                fs.unlinkSync(path.join(directory, snapshotLatest__.file));
+            } catch (e) {
+                if (e.code !== 'ENOENT') console.error(`Error dropping interim snapshot ${snapshotLatest__.file}:`, e);
+            }
+            snapshotList__ = snapshotList__.filter((file) => file !== snapshotLatest__.file);
+            console.log(`snapshot trail-gated: ${snapshotLatest__.file} (interim, superseded after ${Math.round((now - snapshotLatest__.time) / 1000)}s)`);
+        }
+        snapshotLatest__ = { file: filename, time: now };
     }
 
     //
