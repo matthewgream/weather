@@ -119,71 +119,76 @@ function initialise(app, prefix, directory, server) {
 
     //
 
-    async function intervalsSnapshotsSet(sourcePath, targetName, width) {
+    // resolve the live/trail views dynamically to real frames instead of via symlinks: the freshest frame backs
+    // the live 'snapshot.jpg' view, and each 'snapshot_M<n>.jpg' resolves to the frame closest to <n> min ago.
+    // nothing is symlinked, so an alias can never dangle to a trail-gated or expired frame.
+    function getCurrentFile() {
+        return snapshotList__[0]; // freshest real frame (never gated)
+    }
+    function getIntervalFile(interval) {
+        const targetTime = new Date(Date.now() - interval * 60 * 1000);
+        const closest = snapshotList__.reduce(
+            (closest, file) => {
+                try {
+                    const fileTime = getSnapshotTimestamp(file);
+                    if (fileTime) {
+                        const diff = Math.abs(targetTime - fileTime);
+                        if (!closest.file || diff < closest.diff) return { file, diff };
+                    }
+                } catch (e) {
+                    console.error(`Error comparing snapshot ${file}:`, e);
+                }
+                return closest;
+            },
+            { file: undefined, diff: Infinity }
+        );
+        return closest.file;
+    }
+    function resolveFile(name) {
+        if (name === 'snapshot.jpg') return getCurrentFile();
+        const match = name.match(/^snapshot_M(\d+)\.jpg$/);
+        if (match) return getIntervalFile(Number.parseInt(match[1], 10));
+        return name; // already a real timestamped frame
+    }
+    async function warmThumbnail(file, width) {
+        if (!file) return;
         try {
-            await getThumbnailImage(targetName, width);
+            await getThumbnailImage(file, width);
         } catch (e) {
-            console.error(`Error generating thumbnails for ${targetName}:`, e);
-        }
-        const targetPath = path.join(directory, targetName);
-        try {
-            fs.unlinkSync(targetPath);
-        } catch (e) {
-            if (e.code !== 'ENOENT') console.error(`Error removing symlink for ${targetPath}:`, e);
-        }
-        try {
-            fs.symlinkSync(sourcePath, targetPath);
-        } catch (e) {
-            console.error(`Error creating symlink for ${targetPath}:`, e);
+            console.error(`Error pre-warming thumbnail for ${file}:`, e);
         }
     }
-    async function intervalsSnapshotsRebuild() {
+    async function intervalsRebuild() {
         snapshotsExpire();
         if (snapshotList__.length === 0) return;
-        const closestSnapshots = {};
-        for (const interval of SNAPSHOT_INTERVALS) {
-            const targetTime = new Date(Date.now() - interval * 60 * 1000);
-            const closest = snapshotList__.reduce(
-                (closest, file) => {
-                    try {
-                        const fileTime = getSnapshotTimestamp(file);
-                        if (fileTime) {
-                            const diff = Math.abs(targetTime - fileTime);
-                            if (!closest.file || diff < closest.diff) {
-                                return { file, diff };
-                            }
-                        }
-                    } catch (e) {
-                        console.error(`Error comparing snapshot ${file}:`, e);
-                    }
-                    return closest;
-                },
-                { file: undefined, diff: Infinity }
-            );
-            if (closest.file) closestSnapshots[interval] = closest.file;
-        }
-        for (const interval in closestSnapshots) await intervalsSnapshotsSet(path.join(directory, closestSnapshots[interval]), `snapshot_M${interval}.jpg`, THUMBNAIL_WIDTH_SNAPSHOT);
+        // pre-warm the thumbnail cache so a page render (current + 4 trail thumbs) never pays generation cost on
+        // demand; the cache keys on the resolved frame's mtime, so a warm entry stays valid until the frame rotates
+        await warmThumbnail(getCurrentFile(), THUMBNAIL_WIDTH_CAMERA);
+        for (const interval of SNAPSHOT_INTERVALS) await warmThumbnail(getIntervalFile(interval), THUMBNAIL_WIDTH_SNAPSHOT);
     }
     async function intervalsThumbnailsGet() {
         const thumbnails = {};
-        for (const interval of SNAPSHOT_INTERVALS) thumbnails[`M${interval}`] = await createThumbnailFromImage(`snapshot_M${interval}.jpg`, THUMBNAIL_WIDTH_SNAPSHOT);
-        // current view resolves to the freshest real frame (never gated), so it can never reference a deleted file
+        for (const interval of SNAPSHOT_INTERVALS) {
+            const file = getIntervalFile(interval);
+            thumbnails[`M${interval}`] = file ? await createThumbnailFromImage(file, THUMBNAIL_WIDTH_SNAPSHOT) : undefined;
+        }
+        const current = getCurrentFile();
         // eslint-disable-next-line dot-notation
-        thumbnails['current'] = snapshotList__.length > 0 ? await createThumbnailFromImage(snapshotList__[0], THUMBNAIL_WIDTH_CAMERA) : undefined;
+        thumbnails['current'] = current ? await createThumbnailFromImage(current, THUMBNAIL_WIDTH_CAMERA) : undefined;
         return thumbnails;
     }
 
     snapshotsLoad(directory);
-    intervalsSnapshotsRebuild();
-    setInterval(intervalsSnapshotsRebuild, SNAPSHOT_REBUILD_TIME);
+    intervalsRebuild();
+    setInterval(intervalsRebuild, SNAPSHOT_REBUILD_TIME);
 
     //
 
     app.get(prefix + '/thumb/:file(snapshot\\.jpg|snapshot_M\\d+\\.jpg)', async (req, res) => {
         const { file } = req.params;
         const width = Number.parseInt(req.query.w) || THUMBNAIL_WIDTH_SNAPSHOT;
-        // 'snapshot.jpg' is the current-view alias; resolve it to the freshest real frame (never gated)
-        const target = file === 'snapshot.jpg' ? snapshotList__[0] : file;
+        // resolve the live/trail aliases to their current real frame (never gated, so never dangling)
+        const target = resolveFile(file);
         try {
             if (!target) return res.status(404).send('Thumbnail not found');
             const imagedata = await getThumbnailImage(target, width);
@@ -212,7 +217,7 @@ function initialise(app, prefix, directory, server) {
 
     return {
         getThumbnails: intervalsThumbnailsGet,
-        getCurrentFile: () => snapshotList__[0], // freshest real frame (never gated), backing the 'snapshot.jpg' live-view alias
+        resolveFile, // map a live/trail alias ('snapshot.jpg' | 'snapshot_M<n>.jpg') to its current real frame for direct serving
         insert: snapshotsInsert,
         getDiagnosticsProxyConfig: () => ({
             target: server,

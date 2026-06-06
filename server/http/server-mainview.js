@@ -81,15 +81,14 @@ diagnostics.registerDiagnosticsSource('Auth::/status', () => authentication.getD
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-// the live full-size snapshot and the M15/M30/M45/M60 trail are symlinks in DATA_CACHE served by the
-// static middleware below; a fresh frame lands (and the symlinks are rebuilt) on a ~30s cadence, so cap
-// their cache lifetime to expire as the next frame is due, and never let an intermediary (e.g. cloudflare)
+// the live full-size snapshot and the M15/M30/M45/M60 trail are aliases resolved at request time to real
+// timestamped frames in DATA_CACHE (no symlinks); a fresh frame lands on a ~30s cadence, so cap the live
+// view's cache lifetime to expire as the next frame is due, and never let an intermediary (e.g. cloudflare)
 // hold a stale frame or cache a transient miss for longer than that window.
 const SNAPSHOT_LIVE_PERIOD = 30 * 1000;
 app.get('/:file(snapshot\\.jpg|snapshot_M\\d+\\.jpg)', (req, res) => {
-    // 'snapshot.jpg' is the live-view alias; resolve it to the freshest real frame (never gated, so never dangling).
-    // the M15/M30/M45/M60 trail entries are still symlinks in DATA_CACHE and are served by name directly.
-    const file = req.params.file === 'snapshot.jpg' ? server_snapshots.getCurrentFile() : req.params.file;
+    // resolve the live/trail alias to its current real frame (never gated, so never dangling)
+    const file = server_snapshots.resolveFile(req.params.file);
     if (!file) {
         res.set('Cache-Control', 'no-store');
         return res.status(404).send('snapshot not available');
@@ -97,7 +96,7 @@ app.get('/:file(snapshot\\.jpg|snapshot_M\\d+\\.jpg)', (req, res) => {
     const filePath = path.join(configData.DATA_CACHE, file);
     let stat;
     try {
-        stat = fs.lstatSync(filePath); // symlink's own mtime == when it was last (re)pointed
+        stat = fs.lstatSync(filePath); // real frame; mtime == capture time
     } catch {
         res.set('Cache-Control', 'no-store');
         return res.status(404).send('snapshot not available');
