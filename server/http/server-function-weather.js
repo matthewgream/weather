@@ -4,6 +4,7 @@
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
+const zlib = require('node:zlib');
 
 const { constants, getSeason, daysIntoYear, dateToJulianDateUTC } = require('./server-function-weather-helpers.js');
 const formatter = require('./server-function-weather-tools-format.js');
@@ -35,14 +36,14 @@ const DEFAULT_OPTIONS = {
             {
                 type: 'cache',
                 enabled: true,
-                file: 'weather-storage.json',
+                file: 'weather-storage.json.gz',
                 interval: 5 * constants.MILLISECONDS_PER_MINUTE, // 5 minutes
                 maxAge: 2 * constants.MILLISECONDS_PER_HOUR, // 2 hours
             },
             {
                 type: 'store',
                 enabled: true,
-                file: 'weather-storage.json',
+                file: 'weather-storage.json.gz',
                 interval: 30 * constants.MILLISECONDS_PER_MINUTE, // 30 minutes
                 maxAge: 7 * constants.MILLISECONDS_PER_DAY, // 7 days
             },
@@ -56,10 +57,41 @@ const DEFAULT_OPTIONS = {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-function __storageFileSave(filepath, data) {
+// storage is gzip-compressed on disk (weather-*.json.gz). serialization (JSON.stringify) is unavoidably
+// synchronous, but the heavy gzip + write are offloaded: periodic saves use async zlib.gzip (libuv threadpool)
+// so the event loop stays free; only the forced shutdown save is synchronous, to guarantee it completes before
+// the process exits. level 1 keeps it fast/low-CPU (weather time-series only compresses ~3x regardless).
+const STORAGE_GZIP_OPTIONS = { level: 1 };
+
+function __storageDecode(buf) {
+    // accept gzip (magic 1f 8b) or legacy plain JSON, so pre-gzip files still load during migration
+    const json = buf.length > 1 && buf[0] === 0x1F && buf[1] === 0x8B ? zlib.gunzipSync(buf).toString('utf8') : buf.toString('utf8');
+    return JSON.parse(json);
+}
+
+function __storageFileSaveSync(filepath, data) {
     try {
         if (!fs.existsSync(path.dirname(filepath))) fs.mkdirSync(path.dirname(filepath), { recursive: true });
-        fs.writeFileSync(filepath, JSON.stringify(data), 'utf8');
+        fs.writeFileSync(filepath, zlib.gzipSync(JSON.stringify(data), STORAGE_GZIP_OPTIONS));
+        return true;
+    } catch (e) {
+        console.error(`weather: storage failed to save (sync) to '${filepath}':`, e);
+        return false;
+    }
+}
+
+async function __storageFileSave(filepath, data) {
+    let json;
+    try {
+        json = JSON.stringify(data); // synchronous snapshot, captured before any await yields the event loop
+    } catch (e) {
+        console.error(`weather: storage failed to serialize for '${filepath}':`, e);
+        return false;
+    }
+    try {
+        await fs.promises.mkdir(path.dirname(filepath), { recursive: true });
+        const compressed = await new Promise((resolve, reject) => zlib.gzip(json, STORAGE_GZIP_OPTIONS, (e, buf) => (e ? reject(e) : resolve(buf))));
+        await fs.promises.writeFile(filepath, compressed);
         return true;
     } catch (e) {
         console.error(`weather: storage failed to save to '${filepath}':`, e);
@@ -69,7 +101,10 @@ function __storageFileSave(filepath, data) {
 
 function __storageFileLoad(filepath) {
     try {
-        if (fs.existsSync(filepath)) return JSON.parse(fs.readFileSync(filepath, 'utf8'));
+        if (fs.existsSync(filepath)) return __storageDecode(fs.readFileSync(filepath));
+        // one-time migration: fall back to the pre-gzip uncompressed file if the .gz isn't there yet
+        const legacy = filepath.endsWith('.gz') ? filepath.slice(0, -3) : undefined;
+        if (legacy && fs.existsSync(legacy)) return __storageDecode(fs.readFileSync(legacy));
     } catch (e) {
         console.error(`weather: storage failed to load from '${filepath}':`, e);
     }
@@ -83,12 +118,17 @@ function __storagePerisist(options, storable) {
         .filter((level) => level.enabled && level.file)
         .forEach((level) => {
             const lastKey = `last${level.type}Save`;
-            if (options?.forced || !level[lastKey] || timestamp - level[lastKey] > level.interval) {
-                const name = path.join(options.paths[level.type], level.file);
-                if (__storageFileSave(name, { timestamp, storable })) {
-                    level[lastKey] = timestamp;
-                    if (options.debug) console.error(`weather: storage persisted - to ${level.type}; path=${name}, size=${formatter.bytesToString(fs.statSync(name).size)}${options?.forced ? ', forced=true' : ''}`);
-                }
+            if (!(options?.forced || !level[lastKey] || timestamp - level[lastKey] > level.interval)) return;
+            const name = path.join(options.paths[level.type], level.file);
+            const onSaved = () => {
+                level[lastKey] = timestamp;
+                if (options.debug) console.error(`weather: storage persisted - to ${level.type}; path=${name}, size=${formatter.bytesToString(fs.statSync(name).size)}${options?.forced ? ', forced=true' : ''}`);
+            };
+            // shutdown save must be synchronous (finish before the process exits); steady-state saves are non-blocking
+            if (options?.forced) {
+                if (__storageFileSaveSync(name, { timestamp, storable })) onSaved();
+            } else {
+                __storageFileSave(name, { timestamp, storable }).then((ok) => ok && onSaved());
             }
         });
 }
