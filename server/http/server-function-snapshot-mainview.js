@@ -141,7 +141,6 @@ function initialise(app, prefix, directory, server) {
         snapshotsExpire();
         if (snapshotList__.length === 0) return;
         const closestSnapshots = {};
-        const [earliest] = snapshotList__;
         for (const interval of SNAPSHOT_INTERVALS) {
             const targetTime = new Date(Date.now() - interval * 60 * 1000);
             const closest = snapshotList__.reduce(
@@ -164,13 +163,13 @@ function initialise(app, prefix, directory, server) {
             if (closest.file) closestSnapshots[interval] = closest.file;
         }
         for (const interval in closestSnapshots) await intervalsSnapshotsSet(path.join(directory, closestSnapshots[interval]), `snapshot_M${interval}.jpg`, THUMBNAIL_WIDTH_SNAPSHOT);
-        await intervalsSnapshotsSet(path.join(directory, earliest), 'snapshot.jpg', THUMBNAIL_WIDTH_CAMERA);
     }
     async function intervalsThumbnailsGet() {
         const thumbnails = {};
         for (const interval of SNAPSHOT_INTERVALS) thumbnails[`M${interval}`] = await createThumbnailFromImage(`snapshot_M${interval}.jpg`, THUMBNAIL_WIDTH_SNAPSHOT);
+        // current view resolves to the freshest real frame (never gated), so it can never reference a deleted file
         // eslint-disable-next-line dot-notation
-        thumbnails['current'] = await createThumbnailFromImage('snapshot.jpg', THUMBNAIL_WIDTH_CAMERA);
+        thumbnails['current'] = snapshotList__.length > 0 ? await createThumbnailFromImage(snapshotList__[0], THUMBNAIL_WIDTH_CAMERA) : undefined;
         return thumbnails;
     }
 
@@ -183,8 +182,11 @@ function initialise(app, prefix, directory, server) {
     app.get(prefix + '/thumb/:file(snapshot\\.jpg|snapshot_M\\d+\\.jpg)', async (req, res) => {
         const { file } = req.params;
         const width = Number.parseInt(req.query.w) || THUMBNAIL_WIDTH_SNAPSHOT;
+        // 'snapshot.jpg' is the current-view alias; resolve it to the freshest real frame (never gated)
+        const target = file === 'snapshot.jpg' ? snapshotList__[0] : file;
         try {
-            const imagedata = await getThumbnailImage(file, width);
+            if (!target) return res.status(404).send('Thumbnail not found');
+            const imagedata = await getThumbnailImage(target, width);
             if (!imagedata) return res.status(404).send('Thumbnail not found');
             res.set('Content-Type', 'image/jpeg');
             res.set('Cache-Control', 'public, max-age=300');
