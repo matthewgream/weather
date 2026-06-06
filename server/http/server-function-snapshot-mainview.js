@@ -212,6 +212,7 @@ function initialise(app, prefix, directory, server) {
 
     return {
         getThumbnails: intervalsThumbnailsGet,
+        getCurrentFile: () => snapshotList__[0], // freshest real frame (never gated), backing the 'snapshot.jpg' live-view alias
         insert: snapshotsInsert,
         getDiagnosticsProxyConfig: () => ({
             target: server,

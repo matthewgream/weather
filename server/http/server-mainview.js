@@ -87,7 +87,14 @@ diagnostics.registerDiagnosticsSource('Auth::/status', () => authentication.getD
 // hold a stale frame or cache a transient miss for longer than that window.
 const SNAPSHOT_LIVE_PERIOD = 30 * 1000;
 app.get('/:file(snapshot\\.jpg|snapshot_M\\d+\\.jpg)', (req, res) => {
-    const filePath = path.join(configData.DATA_CACHE, req.params.file);
+    // 'snapshot.jpg' is the live-view alias; resolve it to the freshest real frame (never gated, so never dangling).
+    // the M15/M30/M45/M60 trail entries are still symlinks in DATA_CACHE and are served by name directly.
+    const file = req.params.file === 'snapshot.jpg' ? server_snapshots.getCurrentFile() : req.params.file;
+    if (!file) {
+        res.set('Cache-Control', 'no-store');
+        return res.status(404).send('snapshot not available');
+    }
+    const filePath = path.join(configData.DATA_CACHE, file);
     let stat;
     try {
         stat = fs.lstatSync(filePath); // symlink's own mtime == when it was last (re)pointed
