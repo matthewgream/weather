@@ -81,6 +81,26 @@ diagnostics.registerDiagnosticsSource('Auth::/status', () => authentication.getD
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+// the live full-size snapshot and the M15/M30/M45/M60 trail are symlinks in DATA_CACHE served by the
+// static middleware below; a fresh frame lands (and the symlinks are rebuilt) on a ~30s cadence, so cap
+// their cache lifetime to expire as the next frame is due, and never let an intermediary (e.g. cloudflare)
+// hold a stale frame or cache a transient miss for longer than that window.
+const SNAPSHOT_LIVE_PERIOD = 30 * 1000;
+app.get('/:file(snapshot\\.jpg|snapshot_M\\d+\\.jpg)', (req, res) => {
+    const filePath = path.join(configData.DATA_CACHE, req.params.file);
+    let stat;
+    try {
+        stat = fs.lstatSync(filePath); // symlink's own mtime == when it was last (re)pointed
+    } catch {
+        res.set('Cache-Control', 'no-store');
+        return res.status(404).send('snapshot not available');
+    }
+    const remaining = Math.max(0, Math.ceil((SNAPSHOT_LIVE_PERIOD - (Date.now() - stat.mtimeMs)) / 1000));
+    res.set('Cache-Control', `public, max-age=${remaining}, must-revalidate`);
+    return res.sendFile(filePath, { cacheControl: false }); // keep our Cache-Control; retain ETag/Last-Modified for cheap 304s
+});
+console.log(`Loaded 'snapshot cache-control' using 'period=${SNAPSHOT_LIVE_PERIOD}ms'`);
+
 app.use(exp.static(configData.DATA_CACHE));
 console.log(`Loaded 'static' using '${configData.DATA_CACHE}'`);
 
