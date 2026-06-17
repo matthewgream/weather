@@ -28,158 +28,160 @@ const formatWindDirection = (e, v) =>
     v === undefined ? 'n/a' : `${v.toFixed(e.decimals ?? 0)}° ${['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][Math.floor(((v + 11.25) % 360) / 22.5)]}`;
 const formatDepthFromMMtoCM = (e, v) => (v === undefined ? 'n/a' : (v / 10).toFixed(e.decimals ?? 0));
 
-const formatList = [
-    {
-        name: 'Outside',
-        id: 'outside',
-        elems: [
-            {
-                label: 'Temperature',
-                id: 'temp',
-                unit: '°C',
-                path: 'weather/branna.temp',
-                decimals: 1,
-                format,
-            },
-            {
-                label: 'Humidity',
-                id: 'humidity',
-                unit: '%',
-                path: 'weather/branna.humidity',
-                format,
-            },
-            {
-                label: 'Pressure',
-                id: 'pressure',
-                unit: 'hPa',
-                path: 'weather/branna.baromrel',
-                decimals: 2,
-                format,
-            },
-            {
-                label: 'Wind Speed',
-                id: 'windspeed',
-                unit: 'm/s',
-                path: 'weather/branna.windspeed',
-                decimals: 1,
-                format: formatWindSpeed,
-            },
-            {
-                label: 'Wind Gust',
-                id: 'windgust',
-                unit: 'm/s',
-                path: 'weather/branna.windgust',
-                decimals: 1,
-                format: formatWindSpeed,
-            },
-            {
-                label: 'Wind Direction',
-                id: 'winddir',
-                unit: '',
-                path: 'weather/branna.winddir',
-                format: formatWindDirection,
-            },
-            {
-                label: 'Rain Rate',
-                id: 'rainrate',
-                unit: 'mm/hr',
-                path: 'weather/branna.rainrate',
-                decimals: 1,
-                format,
-            },
-            {
-                label: 'Rain Daily',
-                id: 'raindaily',
-                unit: 'mm',
-                path: 'weather/branna.dailyrain',
-                decimals: 1,
-                format,
-            },
-            {
-                label: 'Solar Radiation',
-                id: 'solarrad',
-                unit: 'W/m²',
-                path: 'weather/branna.solarradiation',
-                decimals: 1,
-                format,
-            },
-            {
-                label: 'Solar UVI',
-                id: 'solaruv',
-                unit: '',
-                path: 'weather/branna.uv',
-                decimals: 1,
-                format,
-            },
-            {
-                label: 'Snow Depth',
-                id: 'snowdepth',
-                unit: 'cm',
-                path: 'weather/branna.depth_ch1',
-                decimals: 0,
-                format: formatDepthFromMMtoCM,
-            },
-            {
-                label: 'Radiation',
-                id: 'radiationcpm',
-                unit: 'cpm',
-                path: 'sensors/radiation.cpm',
-                decimals: 1,
-                format,
-            },
-            {
-                label: 'Radiation (1 hour avg)',
-                id: 'radiationacpm',
-                unit: 'cpm',
-                path: 'sensors/radiation.acpm',
-                decimals: 1,
-                format,
-            },
-            {
-                label: 'Radiation (dosing)',
-                id: 'radiationusvh',
-                unit: 'uSv/h',
-                path: 'sensors/radiation.usvh',
-                decimals: 2,
-                format,
-            },
-        ],
-    },
-    {
-        name: 'Lake',
-        id: 'lake',
-        elems: [
-            {
-                label: 'Surface (5-15cm)',
-                id: 'surface',
-                unit: '°C',
-                path: 'weather/branna.tf_ch1',
-                decimals: 1,
-                format,
-            },
-            {
-                label: 'Submerged (-1m)',
-                id: 'submerged',
-                unit: '°C',
-                path: 'weather/branna.tf_ch2',
-                decimals: 1,
-                format,
-            },
-            {
-                label: 'Ice Depth',
-                id: 'icedepth',
-                unit: 'cm',
-                path: 'sensors/water.icedepth',
-                decimals: 0,
-                format: formatDepthFromMMtoCM,
-            },
-        ],
-    },
-    {
-        id: 'internal',
-        elems: [{ label: 'Battery WH65', id: 'battery', path: 'weather/branna.wh65batt' }],
-    },
-];
+function getFormatList(srcs) {
+    return [
+        {
+            name: 'Outside',
+            id: 'outside',
+            elems: [
+                {
+                    label: 'Temperature',
+                    id: 'temp',
+                    unit: '°C',
+                    path: `weather/${srcs.weather}.temp`,
+                    decimals: 1,
+                    format,
+                },
+                {
+                    label: 'Humidity',
+                    id: 'humidity',
+                    unit: '%',
+                    path: `weather/${srcs.weather}.humidity`,
+                    format,
+                },
+                {
+                    label: 'Pressure',
+                    id: 'pressure',
+                    unit: 'hPa',
+                    path: `weather/${srcs.weather}.baromrel`,
+                    decimals: 2,
+                    format,
+                },
+                {
+                    label: 'Wind Speed',
+                    id: 'windspeed',
+                    unit: 'm/s',
+                    path: `weather/${srcs.weather}.windspeed`,
+                    decimals: 1,
+                    format: formatWindSpeed,
+                },
+                {
+                    label: 'Wind Gust',
+                    id: 'windgust',
+                    unit: 'm/s',
+                    path: `weather/${srcs.weather}.windgust`,
+                    decimals: 1,
+                    format: formatWindSpeed,
+                },
+                {
+                    label: 'Wind Direction',
+                    id: 'winddir',
+                    unit: '',
+                    path: `weather/${srcs.weather}.winddir`,
+                    format: formatWindDirection,
+                },
+                {
+                    label: 'Rain Rate',
+                    id: 'rainrate',
+                    unit: 'mm/hr',
+                    path: `weather/${srcs.weather}.rainrate`,
+                    decimals: 1,
+                    format,
+                },
+                {
+                    label: 'Rain Daily',
+                    id: 'raindaily',
+                    unit: 'mm',
+                    path: `weather/${srcs.weather}.dailyrain`,
+                    decimals: 1,
+                    format,
+                },
+                {
+                    label: 'Solar Radiation',
+                    id: 'solarrad',
+                    unit: 'W/m²',
+                    path: `weather/${srcs.weather}.solarradiation`,
+                    decimals: 1,
+                    format,
+                },
+                {
+                    label: 'Solar UVI',
+                    id: 'solaruv',
+                    unit: '',
+                    path: `weather/${srcs.weather}.uv`,
+                    decimals: 1,
+                    format,
+                },
+                {
+                    label: 'Snow Depth',
+                    id: 'snowdepth',
+                    unit: 'cm',
+                    path: `sensors/${srcs.snowdepth}`,
+                    decimals: 0,
+                    format: formatDepthFromMMtoCM,
+                },
+                {
+                    label: 'Radiation',
+                    id: 'radiationcpm',
+                    unit: 'cpm',
+                    path: `sensors/${srcs.radiation}.cpm`,
+                    decimals: 1,
+                    format,
+                },
+                {
+                    label: 'Radiation (1 hour avg)',
+                    id: 'radiationacpm',
+                    unit: 'cpm',
+                    path: `sensors/${srcs.radiation}.acpm`,
+                    decimals: 1,
+                    format,
+                },
+                {
+                    label: 'Radiation (dosing)',
+                    id: 'radiationusvh',
+                    unit: 'uSv/h',
+                    path: `sensors/${srcs.radiation}.usvh`,
+                    decimals: 2,
+                    format,
+                },
+            ],
+        },
+        {
+            name: 'Lake',
+            id: 'lake',
+            elems: [
+                {
+                    label: 'Surface (5-15cm)',
+                    id: 'surface',
+                    unit: '°C',
+                    path: `weather/${srcs.weather}.tf_ch1`,
+                    decimals: 1,
+                    format,
+                },
+                {
+                    label: 'Submerged (-1m)',
+                    id: 'submerged',
+                    unit: '°C',
+                    path: `weather/${srcs.weather}.tf_ch2`,
+                    decimals: 1,
+                    format,
+                },
+                {
+                    label: 'Ice Depth',
+                    id: 'icedepth',
+                    unit: 'cm',
+                    path: `sensors/${srcs.icedepth}`,
+                    decimals: 0,
+                    format: formatDepthFromMMtoCM,
+                },
+            ],
+        },
+        {
+            id: 'internal',
+            elems: [{ label: 'Battery WH65', id: 'battery', path: `weather/${srcs.weather}.wh65batt` }],
+        },
+    ];
+}
 
 const locate = (data, path) => path.split('.').reduce((accm, part) => accm && accm[part], data);
 
@@ -193,7 +195,7 @@ const formatBanner = (timestamp, timediff) =>
 function updateBanner(timestamp) {
     const timediff = Math.floor((Date.now() - new Date(timestamp.replace(/([+-]\d{2})Z$/, '$1:00')).getTime()) / (60 * 1000));
     const element = document.querySelector('#banner');
-    if (element) element.innerHTML = timediff > 60 ? formatBanner(timestamp, timediff) : '';
+    if (element) element.innerHTML = timediff > 60 ? formatBanner(timestamp, timediff) + '<br />' : '';
 }
 
 function createBanner(timestamp) {
@@ -237,10 +239,10 @@ function coalescePhenomena(phenomena) {
     return result;
 }
 
-function createSectionDataSummary(data_location, vars) {
-    const outside = formatList[0].elems;
-    const lake = formatList[1].elems;
-    const internal = formatList[2].elems;
+function createSectionDataSummary(list, data_location, vars) {
+    const outside = list[0].elems;
+    const lake = list[1].elems;
+    const internal = list[2].elems;
 
     const temp = locate(vars, outside[0].path);
     const humidity = locate(vars, outside[1].path);
@@ -398,15 +400,15 @@ function createSectionDataSummary(data_location, vars) {
     return summary.join('<br>');
 }
 
-function updateSectionData(data_location, vars) {
+function updateSectionData(list, data_location, vars) {
     const element = document.querySelector('#text-summary-details');
-    if (element) element.innerHTML = createSectionDataSummary(data_location, vars);
+    if (element) element.innerHTML = createSectionDataSummary(list, data_location, vars);
 }
-function createSectionData(data_location, vars) {
+function createSectionData(list, data_location, vars) {
     return `
     	<section class="section">
         	<div class="text-summary" id="text-summary-details">
-				${createSectionDataSummary(data_location, vars)}
+				${createSectionDataSummary(list, data_location, vars)}
 			</div>
     	</section>
 	`;
@@ -567,6 +569,7 @@ function createHeader() {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+const srcs = SOURCES;
 const conf = CONFIG;
 const varsInterval = 30 * 1000;
 let varsOffset = 1 * 1000;
@@ -575,9 +578,10 @@ let varsTimer;
 
 function update(vars) {
     varsLast = vars;
+    const list = getFormatList(srcs);
     const time = locate(vars, conf.var_timestamp);
     updateBanner(time);
-    updateSectionData(conf.location_data, vars);
+    updateSectionData(list, conf.location_data, vars);
     updateSectionTime(time);
 }
 
@@ -617,9 +621,10 @@ function schedule(vars) {
 function create(vars, data) {
     varsLast = vars;
     timezone = conf.location_data.timezone; // eslint-disable-line prefer-destructuring
+    const list = getFormatList(srcs);
     const time = locate(vars, conf.var_timestamp);
     const links = conf.external_links;
-    document.querySelector('#weather-dashboard').innerHTML = [createHeader(), createBanner(time), createSectionData(conf.location_data, vars), createSectionCamera(data), createSectionTime(time), createSectionLinks(links)].join('');
+    document.querySelector('#weather-dashboard').innerHTML = [createHeader(), createBanner(time), createSectionData(list, conf.location_data, vars), createSectionCamera(data), createSectionTime(time), createSectionLinks(links)].join('');
     schedule(vars);
 }
 

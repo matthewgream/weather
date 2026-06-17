@@ -15,6 +15,8 @@ configData.CONTENT_DATA_SUBS = ['weather/#', 'sensors/#', 'snapshots/#', 'alert/
 configData.CONTENT_VIEW_VARS = ['weather/ulrikashus', 'weather/branna', 'sensors/radiation', 'aviation_alerts', 'aviation_weather', 'interpretation'];
 configData.DIAGNOSTICS_PUBLISH_TOPIC = 'server/mainview';
 configData.DIAGNOSTICS_PUBLISH_PERIOD = 60;
+configData.INTERPRETATION_VARS = 'weather/ulrikashus';
+configData.INTERPRETATION_RADS = 'sensors/radiation';
 configData.DATA_VIEWS = path.join(configData.DATA, 'http');
 configData.DATA_ASSETS = path.join(configData.DATA, 'assets');
 configData.DATA_IMAGES = path.join(configData.DATA, 'images');
@@ -61,11 +63,14 @@ app.set('view engine', 'ejs');
 app.set('views', configData.DATA_VIEWS);
 console.log(`Loaded 'express' using 'ejs=${configData.DATA_VIEWS}'`);
 
-app.use((req, res, next) => {
-    if (req.path === '/' && !req.secure) return res.redirect(`https://${req.headers.host.split(':')[0]}${req.url}`);
-    return next();
-});
-console.log(`Loaded 'redirect' using 'http -> https'`);
+const ENABLE_REDIRECT = false;
+if (ENABLE_REDIRECT) {
+    app.use((req, res, next) => {
+         if (req.path === '/' && !req.secure) return res.redirect(`https://${req.headers.host.split(':')[0]}${req.url}`);
+         return next();
+    });
+    console.log(`Loaded 'redirect' using 'http -> https'`);
+}
 
 const credentials = require('./server-function-credentials.js')(configData.FQDN);
 console.log(`Loaded 'credentials' using '${configData.FQDN}'`);
@@ -178,9 +183,9 @@ console.log(`Loaded '/' using 'server-mainview' && data/vars`);
 const weather_options = { debug: false, suppress: { stable: true }, n2yoApiKey: configData.N2YO_API_KEY, paths: { store: configData.DATA_STORE, cache: configData.DATA_CACHE } };
 const weather_module = require('./server-function-weather.js')(configData.LOCATION, weather_options);
 function getWeatherInterpretation(vars) {
-    const dataConditions = vars['weather/branna'];
+    const dataConditions = vars[configData.INTERPRETATION_VARS];
     if (!dataConditions) return undefined;
-    const dataSensorRadiation = vars['sensors/radiation'] || {};
+    const dataSensorRadiation = vars[configData.INTERPRETATION_RADS] || {};
     try {
         const interpretation = weather_module.getWeatherInterpretation({
             timestamp: dataConditions.timestamp || Date.now(),
