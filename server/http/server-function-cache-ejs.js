@@ -217,9 +217,9 @@ class SingleEJSTemplateCache {
     }
     fallbackMinifyTemplate(templateSource) {
         return templateSource
-            .replaceAll(/<!--[\S\s]*?-->/, '') // eslint-disable-line regexp/match-any
-            .replaceAll(/>\s+</, '><')
-            .replaceAll(/\s+/, ' ')
+            .replaceAll(/<!--[\S\s]*?-->/g, '') // eslint-disable-line regexp/match-any
+            .replaceAll(/>\s+</g, '><')
+            .replaceAll(/\s+/g, ' ')
             .trim();
     }
 
@@ -260,15 +260,15 @@ class SingleEJSTemplateCache {
     }
     fallbackMinifyOutput(html) {
         return html
-            .replaceAll(/<!--[\S\s]*?-->/, '') // eslint-disable-line regexp/match-any
-            .replaceAll(/>\s+</, '><')
-            .replaceAll(/\s+/, ' ')
-            .replaceAll(/\s*([,:;{}])\s*/, '$1')
-            .replaceAll(/;\s*}/, '}') // eslint-disable-line regexp/strict
-            .replaceAll(/\s+(?=<\/)/, '')
-            .replaceAll(/(?<=>)\s+/, '')
-            .replaceAll(/"\s+>/, '">')
-            .replaceAll(/\s+\/>/, '/>')
+            .replaceAll(/<!--[\S\s]*?-->/g, '') // eslint-disable-line regexp/match-any
+            .replaceAll(/>\s+</g, '><')
+            .replaceAll(/\s+/g, ' ')
+            .replaceAll(/\s*([,:;{}])\s*/g, '$1')
+            .replaceAll(/;\s*}/g, '}') // eslint-disable-line regexp/strict
+            .replaceAll(/\s+(?=<\/)/g, '')
+            .replaceAll(/(?<=>)\s+/g, '')
+            .replaceAll(/"\s+>/g, '">')
+            .replaceAll(/\s+\/>/g, '/>')
             .trim();
     }
 

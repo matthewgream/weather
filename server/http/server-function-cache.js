@@ -421,36 +421,36 @@ class StaticFileCache {
 
     fallbackMinifyCSS(css) {
         return css
-            .replaceAll(/\/\*[\S\s]*?\*\//, '') // eslint-disable-line regexp/match-any
-            .replaceAll(/\s+/, ' ')
-            .replaceAll(/\s*([+,:;>{}~])\s*/, '$1')
+            .replaceAll(/\/\*[\S\s]*?\*\//g, '') // eslint-disable-line regexp/match-any
+            .replaceAll(/\s+/g, ' ')
+            .replaceAll(/\s*([+,:;>{}~])\s*/g, '$1')
             .replaceAll(';}', '}')
             .trim();
     }
     fallbackMinifyJS(js) {
         return js
-            .replaceAll(/(?:^|\s)\/\/(?![^\n\r]*["'`]).*$/m, '')
-            .replaceAll(/\/\*[\S\s]*?\*\//, '') // eslint-disable-line regexp/match-any
-            .replaceAll(/\s+/, ' ')
-            .replaceAll(/\s*([!%&()*+,/:;<=>?[\]^{|}~\-])\s*/, '$1') // eslint-disable-line no-useless-escape
+            .replaceAll(/(?:^|\s)\/\/(?![^\n\r]*["'`]).*$/gm, '')
+            .replaceAll(/\/\*[\S\s]*?\*\//g, '') // eslint-disable-line regexp/match-any
+            .replaceAll(/\s+/g, ' ')
+            .replaceAll(/\s*([!%&()*+,/:;<=>?[\]^{|}~\-])\s*/g, '$1') // eslint-disable-line no-useless-escape
             .replaceAll(';}', '}')
             .trim();
     }
     fallbackMinifyHTML(html) {
         return html
-            .replaceAll(/<!--[\S\s]*?-->/, '') // eslint-disable-line regexp/match-any
-            .replaceAll(/>\s+</, '><')
-            .replaceAll(/^\s+/m, '')
-            .replaceAll(/\s+$/m, '')
-            .replaceAll(/\s+/, ' ')
+            .replaceAll(/<!--[\S\s]*?-->/g, '') // eslint-disable-line regexp/match-any
+            .replaceAll(/>\s+</g, '><')
+            .replaceAll(/^\s+/gm, '')
+            .replaceAll(/\s+$/gm, '')
+            .replaceAll(/\s+/g, ' ')
             .trim();
     }
     fallbackMinifySVG(svg) {
         return svg
-            .replaceAll(/<!--[\S\s]*?-->/, '') // eslint-disable-line regexp/match-any
-            .replaceAll(/\s+/, ' ')
-            .replaceAll(/\s*=\s*/, '=')
-            .replaceAll(/(<\s+|\s+>)/, (match) => match.trim())
+            .replaceAll(/<!--[\S\s]*?-->/g, '') // eslint-disable-line regexp/match-any
+            .replaceAll(/\s+/g, ' ')
+            .replaceAll(/\s*=\s*/g, '=')
+            .replaceAll(/(<\s+|\s+>)/g, (match) => match.trim())
             .trim();
     }
 
