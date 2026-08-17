@@ -17,7 +17,7 @@
 // const { constants } = require('./server-function-weather-helpers.js');
 const formatter = require('./server-function-weather-tools-format.js');
 const { calculateGeomagneticLatitude } = require('./server-function-weather-tools-calculators.js');
-const { DataSlot, DataScheduler, fetchJson, createTimestampTracker } = require('./server-function-weather-tools-live.js');
+const { DataSlot, DataScheduler, fetchJson, fetchText, createTimestampTracker } = require('./server-function-weather-tools-live.js');
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -25,8 +25,8 @@ const { DataSlot, DataScheduler, fetchJson, createTimestampTracker } = require('
 const ENDPOINTS = {
     kpIndex1m: 'https://services.swpc.noaa.gov/json/planetary_k_index_1m.json',
     kpForecast: 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json',
-    solarWind: 'https://services.swpc.noaa.gov/products/solar-wind/plasma-7-day.json',
-    solarWindMag: 'https://services.swpc.noaa.gov/products/solar-wind/mag-7-day.json',
+    solarWind: 'https://services.swpc.noaa.gov/json/rtsw/rtsw_wind_1m.json',
+    solarWindMag: 'https://services.swpc.noaa.gov/json/rtsw/rtsw_mag_1m.json',
     alerts: 'https://services.swpc.noaa.gov/products/alerts.json',
     auroraOvation: 'https://services.swpc.noaa.gov/json/ovation_aurora_latest.json',
 };
@@ -192,7 +192,7 @@ async function liveHelioFetchKpIndex(state) {
                 },
             };
         },
-        `Kp=${liveSlotHelioKpIndex.get(state)?.current || '?'}`
+        () => `Kp=${liveSlotHelioKpIndex.get(state)?.current || '?'}`
     );
 }
 
@@ -225,8 +225,26 @@ async function liveHelioFetchKpForecast(state) {
                 stormExpected: max24h !== undefined && max24h >= KP_THRESHOLDS.minorStorm,
             };
         },
-        `max24h=${liveSlotHelioKpForecast.get(state)?.max24h || '?'}`
+        () => `max24h=${liveSlotHelioKpForecast.get(state)?.max24h || '?'}`
     );
+}
+
+// The RTSW feeds emit bare NaN for dropped readings, which is not valid JSON and
+// makes JSON.parse throw, so fetch as text and null them out first. NaN only ever
+// appears in value position in these feeds, never inside a string.
+async function liveHelioRtswFetch(url) {
+    return JSON.parse((await fetchText(url)).replaceAll(/:\s*(?:NaN|-?Infinity)\b/g, ': null'));
+}
+
+// The RTSW feeds return newest-first and interleave several spacecraft (ACE, SOLAR1,
+// IMAP); only records flagged 'active' come from the currently designated primary.
+// Keep those, drop any missing the reading we need, and restore ascending time order
+// so the slicing below still reads as "the last N minutes".
+function liveHelioRtswRecent(data, minutes, isUsable) {
+    return (Array.isArray(data) ? data : [])
+        .filter((d) => d?.active && isUsable(d))
+        .sort((a, b) => String(a.time_tag).localeCompare(String(b.time_tag)))
+        .slice(-minutes);
 }
 
 async function liveHelioFetchSolarWind(state) {
@@ -234,30 +252,30 @@ async function liveHelioFetchSolarWind(state) {
         state,
         'heliophysics',
         async () => {
-            const data = await fetchJson(ENDPOINTS.solarWind);
-            const recent = data.slice(-60);
+            const data = await liveHelioRtswFetch(ENDPOINTS.solarWind);
+            const recent = liveHelioRtswRecent(data, 60, (d) => Number.isFinite(d.proton_speed) && Number.isFinite(d.proton_density));
             const latest = recent[recent.length - 1];
             if (!latest) throw new Error('No data');
-            const speeds = recent.map((d) => Number.parseFloat(d[2])).filter((v) => !Number.isNaN(v));
-            const densities = recent.map((d) => Number.parseFloat(d[1])).filter((v) => !Number.isNaN(v));
+            const speeds = recent.map((d) => d.proton_speed);
+            const densities = recent.map((d) => d.proton_density);
             return {
-                timestamp: latest[0],
-                density: Number.parseFloat(latest[1]),
-                speed: Number.parseFloat(latest[2]),
-                temperature: Number.parseFloat(latest[3]),
+                timestamp: latest.time_tag,
+                density: latest.proton_density,
+                speed: latest.proton_speed,
+                temperature: Number.isFinite(latest.proton_temperature) ? latest.proton_temperature : undefined,
                 stats: {
                     avgSpeed: speeds.length > 0 ? Math.round(speeds.reduce((a, b) => a + b, 0) / speeds.length) : undefined,
                     maxSpeed: speeds.length > 0 ? speeds.reduce((a, b) => Math.max(a, b)) : undefined,
                     avgDensity: densities.length > 0 ? Math.round((densities.reduce((a, b) => a + b, 0) / densities.length) * 10) / 10 : undefined,
                 },
                 derived: {
-                    isHighSpeed: Number.parseFloat(latest[2]) > 500,
-                    isVeryHighSpeed: Number.parseFloat(latest[2]) > 700,
-                    isDense: Number.parseFloat(latest[1]) > 10,
+                    isHighSpeed: latest.proton_speed > 500,
+                    isVeryHighSpeed: latest.proton_speed > 700,
+                    isDense: latest.proton_density > 10,
                 },
             };
         },
-        `${liveSlotHelioSolarWind.get(state)?.speed || '?'} km/s`
+        () => `${liveSlotHelioSolarWind.get(state)?.speed || '?'} km/s`
     );
 }
 
@@ -266,25 +284,25 @@ async function liveHelioFetchSolarWindMag(state) {
         state,
         'heliophysics',
         async () => {
-            const data = await fetchJson(ENDPOINTS.solarWindMag);
-            // Data format: [time_tag, bx_gsm, by_gsm, bz_gsm, lon_gsm, lat_gsm, bt]
-            const recent = data.slice(-60); // Last hour
+            const data = await liveHelioRtswFetch(ENDPOINTS.solarWindMag);
+            // Data format: objects with { time_tag, bx_gsm, by_gsm, bz_gsm, bt, ... }
+            const recent = liveHelioRtswRecent(data, 60, (d) => Number.isFinite(d.bz_gsm) && Number.isFinite(d.bt)); // Last hour
             const latest = recent[recent.length - 1];
             if (!latest) throw new Error('No data');
-            const bzValues = recent.map((d) => Number.parseFloat(d[3])).filter((v) => !Number.isNaN(v));
-            const btValues = recent.map((d) => Number.parseFloat(d[6])).filter((v) => !Number.isNaN(v));
-            const bzCurrent = Number.parseFloat(latest[3]);
-            const btCurrent = Number.parseFloat(latest[6]);
+            const bzValues = recent.map((d) => d.bz_gsm);
+            const btValues = recent.map((d) => d.bt);
+            const bzCurrent = latest.bz_gsm;
+            const btCurrent = latest.bt;
             const bzAvg = bzValues.length > 0 ? bzValues.reduce((a, b) => a + b, 0) / bzValues.length : undefined;
             const bzMin = bzValues.length > 0 ? bzValues.reduce((a, b) => Math.min(a, b)) : undefined;
-            const btMax = btValues.length > 0 ? bzValues.reduce((a, b) => Math.max(a, b)) : undefined;
+            const btMax = btValues.length > 0 ? btValues.reduce((a, b) => Math.max(a, b)) : undefined;
             // Check for sustained southward Bz (important for aurora)
             const bzRecent = bzValues.slice(-15); // Last 15 minutes
             const sustainedSouth = bzRecent.length > 10 && bzRecent.every((bz) => bz < BZ_THRESHOLDS.slightlySouth);
             return {
-                timestamp: latest[0],
-                bx: Number.parseFloat(latest[1]),
-                by: Number.parseFloat(latest[2]),
+                timestamp: latest.time_tag,
+                bx: latest.bx_gsm,
+                by: latest.by_gsm,
                 bz: bzCurrent,
                 bt: btCurrent,
                 stats: {
@@ -302,7 +320,7 @@ async function liveHelioFetchSolarWindMag(state) {
                 },
             };
         },
-        `Bz=${liveSlotHelioSolarWindMag.get(state)?.bz?.toFixed(1) || '?'} nT`
+        () => `Bz=${liveSlotHelioSolarWindMag.get(state)?.bz?.toFixed(1) || '?'} nT`
     );
 }
 
@@ -355,7 +373,7 @@ async function liveHelioFetchAuroraOvation(state, situation) {
                 },
             };
         },
-        `prob=${liveSlotHelioAuroraOvation.get(state)?.location?.probability || '?'}%`
+        () => `prob=${liveSlotHelioAuroraOvation.get(state)?.location?.probability || '?'}%`
     );
 }
 
@@ -374,7 +392,7 @@ async function liveHelioFetchAlerts(state) {
                 hasActiveAlert: recent.some((a) => a.message?.includes('Alert')),
             };
         },
-        `${liveSlotHelioAlerts.get(state)?.all?.length || 0} active`
+        () => `${liveSlotHelioAlerts.get(state)?.all?.length || 0} active`
     );
 }
 

@@ -4,6 +4,15 @@
     --bg-color: #f0f4f8;
     --card-bg: white;
     --card-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --muted-color: #666;
+    --link-color: #0066cc;
+    --border-color: #ccc;
+    --panel-bg: white;
+    --hover-bg: #f0f4f8;
+    --overlay-bg: rgba(0, 0, 0, 0.7);
+    --overlay-color: white;
+    --image-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    --thumb-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     --spacing-sm: 0.5rem;
     --spacing-md: 1rem;
     --spacing-lg: 1.5rem;
@@ -67,18 +76,18 @@ h2 {
 .time-updated {
     text-align: center;
     margin-top: 16px;
-    color: #666;
+    color: var(--muted-color);
     font-size: 0.9em;
     font-style: italic;
 }
 .external-links {
     text-align: center;
     margin-top: 10px;
-    color: #666;
+    color: var(--muted-color);
 }
 .external-links a {
     text-decoration: none;
-    color: #0066cc;
+    color: var(--link-color);
 }
 .external-links a:hover {
     text-decoration: underline;
@@ -92,7 +101,7 @@ h2 {
     max-width: 100%;
     height: auto;
     border-radius: 4px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--image-shadow);
     transition: opacity 0.2s ease;
 }
 .camera-hint {
@@ -100,8 +109,8 @@ h2 {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background-color: rgba(0, 0, 0, 0.7);
-    color: white;
+    background-color: var(--overlay-bg);
+    color: var(--overlay-color);
     padding: 8px 12px;
     border-radius: 4px;
     font-size: 14px;
@@ -145,7 +154,7 @@ h2 {
     width: 100%;
     height: auto;
     border-radius: 4px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--thumb-shadow);
     opacity: 1;
     transition: opacity 0.3s ease;
 }
@@ -157,8 +166,8 @@ h2 {
     bottom: 5px;
     left: 0;
     right: 0;
-    background-color: rgba(0, 0, 0, 0.7);
-    color: white;
+    background-color: var(--overlay-bg);
+    color: var(--overlay-color);
     padding: 3px 5px;
     font-size: 12px;
     text-align: center;
@@ -227,7 +236,7 @@ h2 {
     text-decoration: underline;
 }
 .config-selector-panel label:hover {
-    background-color: #f0f4f8;
+    background-color: var(--hover-bg);
 }
 @media (max-width: 480px) {
     .dashboard {
@@ -241,4 +250,33 @@ h2 {
     .value {
         text-align: right;
     }
+}
+
+/* Inverse (dark) palette, selected with ?inverse=on — for wall displays that
+   sit in a dark room, where the default near-white ground is a lamp. The
+   class goes on <html> from an inline script in the document head so the
+   first paint is already dark; setting it later flashes white.
+
+   Only the colour tokens above are re-declared; every rule reads them, so
+   nothing else needs a dark variant. Values are the lightness-mirror of
+   their light counterparts in the same family, which keeps the contrast
+   relationships of the original design. */
+html.inverse {
+    --primary-color: #63b3ed;
+    --text-color: #e2e8f0;
+    --bg-color: #0d1117;
+    --card-bg: #161b22;
+    --card-shadow: none;
+    --muted-color: #8b949e;
+    --link-color: #63b3ed;
+    --border-color: #30363d;
+    --panel-bg: #161b22;
+    --hover-bg: #21262d;
+    --image-shadow: none;
+    --thumb-shadow: none;
+}
+/* The light theme leans on a drop shadow to lift the card off the page;
+   that reads as nothing on a dark ground, so use a hairline instead. */
+html.inverse .dashboard {
+    border: 1px solid var(--border-color);
 }

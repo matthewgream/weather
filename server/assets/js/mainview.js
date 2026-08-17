@@ -624,7 +624,21 @@ function create(vars, data) {
     const list = getFormatList(srcs);
     const time = locate(vars, conf.var_timestamp);
     const links = conf.external_links;
-    document.querySelector('#weather-dashboard').innerHTML = [createHeader(), createBanner(time), createSectionData(list, conf.location_data, vars), createSectionCamera(data), createSectionTime(time), createSectionLinks(links)].join('');
+    // Keyed by the names viewSections() accepts — see the URL parameter block
+    // in mainview-config.js. Built lazily so a section that is switched off
+    // costs nothing: createSectionCamera(), for one, starts its own refresh
+    // timer as a side effect of being called.
+    const sections = {
+        header: () => createHeader(),
+        banner: () => createBanner(time),
+        data: () => createSectionData(list, conf.location_data, vars),
+        camera: () => createSectionCamera(data),
+        time: () => createSectionTime(time),
+        links: () => createSectionLinks(links),
+    };
+    document.querySelector('#weather-dashboard').innerHTML = viewSections()
+        .map((section) => sections[section]())
+        .join('');
     schedule(vars);
 }
 

@@ -159,7 +159,7 @@ async function liveNASAFireballsFetchAndProcess(state, situation) {
                 averagePerDay: Math.round((last30d.length / 30) * 10) / 10,
             };
         },
-        `${liveSlotFireballs.get(state)?.counts?.last7d || 0} fireballs in 7d`
+        () => `${liveSlotFireballs.get(state)?.counts?.last7d || 0} fireballs in 7d`
     );
 }
 

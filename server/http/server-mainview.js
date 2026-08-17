@@ -72,8 +72,8 @@ if (ENABLE_REDIRECT) {
     console.log(`Loaded 'redirect' using 'http -> https'`);
 }
 
-const credentials = require('./server-function-credentials.js')(configData.FQDN);
-console.log(`Loaded 'credentials' using '${configData.FQDN}'`);
+// const credentials = require('./server-function-credentials.js')(configData.FQDN);
+// console.log(`Loaded 'credentials' using '${configData.FQDN}'`);
 
 const authentication = require('./server-function-authentication.js')(app, '/status', { type: 'basic', basic: { user: '', pass: configData.PASS } });
 console.log(`Loaded 'authentication' on '/status' using 'type=basic, pass=${configData.PASS}'`);
@@ -371,8 +371,8 @@ app.use((req, res) => {
 
 const httpServer = require('http').createServer(app);
 httpServer.listen(80, () => console.log(`Loaded 'http' using 'port=${httpServer.address().port}'`));
-const httpsServer = require('https').createServer(credentials, app);
-httpsServer.listen(443, () => console.log(`Loaded 'https' using 'port=${httpsServer.address().port}'`));
+// const httpsServer = require('https').createServer(credentials, app);
+// httpsServer.listen(443, () => console.log(`Loaded 'https' using 'port=${httpsServer.address().port}'`));
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------

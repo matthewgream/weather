@@ -218,7 +218,7 @@ async function liveSeeingFetchAndProcess(state, situation) {
                 summary: generateSeeingSummary(tonight, bestTonight),
             };
         },
-        `tonight: ${liveSlotSeeing.get(state)?.tonight?.length || 0} points, best: ${liveSlotSeeing.get(state)?.bestTonight?.seeingDesc || 'n/a'}`
+        () => `tonight: ${liveSlotSeeing.get(state)?.tonight?.length || 0} points, best: ${liveSlotSeeing.get(state)?.bestTonight?.seeingDesc || 'n/a'}`
     );
 }
 

@@ -24,82 +24,82 @@ const formatter = require('./server-function-weather-tools-format.js');
 
 // Swedish public holidays (röda dagar) - month is 0-indexed, -1 means moveable, calculated at runtime
 const HOLIDAYS = [
-    { month: 0, day: 1, name: 'Nyårsdagen', message: 'Gott Nytt År! (Happy New Year)' },
-    { month: 0, day: 6, name: 'Trettondedag jul', message: 'Trettondedag jul (Epiphany) - end of Christmas holidays' },
-    { month: 4, day: 1, name: 'Första maj', message: 'Första maj (May Day) - labor day, spring celebrations' },
-    { month: 5, day: 6, name: 'Sveriges nationaldag', message: 'Sveriges nationaldag - Swedish National Day' },
-    { month: 11, day: 24, name: 'Julafton', message: 'JULAFTON - God Jul! Main Swedish Christmas celebration', extra: 'Kalle Anka (Donald Duck) at 3pm, julbord, and tomten' },
+    { month: 0, day: 1, name: 'Nyårsdagen', message: 'gott nytt år! (happy new year)' },
+    { month: 0, day: 6, name: 'Trettondedag jul', message: 'trettondedag jul (epiphany) - end of christmas holidays' },
+    { month: 4, day: 1, name: 'Första maj', message: 'första maj (may day) - labor day, spring celebrations' },
+    { month: 5, day: 6, name: 'Sveriges nationaldag', message: 'sveriges nationaldag - swedish national day' },
+    { month: 11, day: 24, name: 'Julafton', message: 'JULAFTON - god jul! main swedish christmas celebration', extra: 'kalle anka (donald duck) at 3pm, julbord, and tomten' },
     { month: 11, day: 25, name: 'Juldagen', message: 'Juldagen - visiting family, leftover julbord' },
-    { month: 11, day: 26, name: 'Annandag jul', message: 'Annandag jul (Boxing Day)' },
-    { month: 11, day: 31, name: 'Nyårsafton', message: 'Nyårsafton - fireworks at midnight, Gott Nytt År!' },
+    { month: 11, day: 26, name: 'Annandag jul', message: 'annandag jul (boxing day)' },
+    { month: 11, day: 31, name: 'Nyårsafton', message: 'nyårsafton - fireworks at midnight, gott nytt år!' },
 ];
 
 // Traditional days (not public holidays but culturally significant)
 const TRADITIONAL_DAYS = [
     // January
-    { month: 0, day: 13, name: 'Tjugondag Knut', message: 'Tjugondag Knut - time to "plunder" and take down the Christmas tree' },
+    { month: 0, day: 13, name: 'Tjugondag Knut', message: 'tjugondag knut - time to "plunder" and take down the christmas tree' },
     // February
-    { month: 1, day: 14, name: 'Alla hjärtans dag', message: "Alla hjärtans dag (Valentine's Day)" },
+    { month: 1, day: 14, name: 'Alla hjärtans dag', message: "alla hjärtans dag (valentine's day)" },
     // Fettisdagen is moveable - handled separately
     // March
-    { month: 2, day: 25, name: 'Våffeldagen', message: 'Våffeldagen (Waffle Day) - bake waffles!' },
-    { month: 2, day: 25, name: 'Vårfrudagen', message: 'Vårfrudagen (Lady Day) - traditional start of spring work' },
+    { month: 2, day: 25, name: 'Våffeldagen', message: 'våffeldagen (waffle day) - bake waffles!' },
+    { month: 2, day: 25, name: 'Vårfrudagen', message: 'vårfrudagen (lady day) - traditional start of spring work' },
     // April
-    { month: 3, day: 1, name: 'Första april', message: 'Första april - watch out for april fools!' },
-    { month: 3, day: 30, name: 'Valborgsmässoafton', message: 'Valborgsmässoafton - welcome spring with bonfires and song!' },
+    { month: 3, day: 1, name: 'Första april', message: 'första april - watch out for april fools!' },
+    { month: 3, day: 30, name: 'Valborgsmässoafton', message: 'valborgsmässoafton - welcome spring with bonfires and song!' },
     // August
-    { month: 7, day: 8, name: 'Kräftpremiär', message: 'Kräftpremiär tradition - crayfish season begins!' },
+    { month: 7, day: 8, name: 'Kräftpremiär', message: 'kräftpremiär tradition - crayfish season begins!' },
     // October
-    { month: 9, day: 4, name: 'Kanelbullens dag', message: 'Kanelbullens dag - eat cinnamon buns!' },
-    { month: 9, day: 31, name: 'Halloween', message: 'Halloween - spöken och godis!' },
+    { month: 9, day: 4, name: 'Kanelbullens dag', message: 'kanelbullens dag - eat cinnamon buns!' },
+    { month: 9, day: 31, name: 'Halloween', message: 'halloween - spöken och godis!' },
     // November
-    { month: 10, day: 11, name: 'Mårten Gås', message: "Mårten Gås (St. Martin's Day) - eat goose, especially in Skåne" },
+    { month: 10, day: 11, name: 'Mårten Gås', message: "mårten gås (st. martin's day) - eat goose, especially in skåne" },
     // December
-    { month: 11, day: 10, name: 'Nobeldagen', message: 'Nobeldagen - Nobel Prize ceremony in Stockholm' },
-    { month: 11, day: 13, name: 'Luciadagen', message: 'LUCIADAGEN - Lucia processions, lussekatter, and glögg', extra: '"ljus i mörka natten" - light in the dark night' },
-    { month: 11, day: 23, name: 'Dan före dan före', message: 'Dan före dan före dopparedan - two days until Christmas!' },
+    { month: 11, day: 10, name: 'Nobeldagen', message: 'nobeldagen - nobel prize ceremony in stockholm' },
+    { month: 11, day: 13, name: 'Luciadagen', message: 'LUCIADAGEN - lucia processions, lussekatter, and glögg', extra: '"ljus i mörka natten" - light in the dark night' },
+    { month: 11, day: 23, name: 'Dan före dan före', message: 'dan före dan före dopparedan - two days until christmas!' },
 ];
 
 // Seasonal periods with weather-dependent messages
 const SEASONAL_PERIODS = [
     // School breaks
-    { startMonth: 1, startDay: 15, endMonth: 1, endDay: 28, name: 'sportlov', message: 'Sportlov period (winter school break)' },
-    { startMonth: 9, startDay: 25, endMonth: 9, endDay: 31, name: 'höstlov', message: 'Höstlov period (autumn school break)' },
+    { startMonth: 1, startDay: 15, endMonth: 1, endDay: 28, name: 'sportlov', message: 'sportlov period (winter school break)' },
+    { startMonth: 9, startDay: 25, endMonth: 9, endDay: 31, name: 'höstlov', message: 'höstlov period (autumn school break)' },
     // Cultural seasons
-    { startMonth: 5, startDay: 5, endMonth: 5, endDay: 15, name: 'student', message: 'Student season - watch for white caps and celebrating graduates' },
-    { startMonth: 6, startDay: 1, endMonth: 6, endDay: 31, name: 'industrisemester', message: 'Industrisemester - Sweden on summer holiday' },
-    { startMonth: 7, startDay: 8, endMonth: 7, endDay: 31, name: 'kräftskiva', message: 'Kräftskiva season - time for crayfish parties!' },
-    { startMonth: 7, startDay: 15, endMonth: 7, endDay: 25, name: 'skolstart', message: 'Skolstart - schools beginning new term' },
-    { startMonth: 8, startDay: 15, endMonth: 9, endDay: 15, name: 'ruska', message: 'Ruska - autumn foliage season' },
+    { startMonth: 5, startDay: 5, endMonth: 5, endDay: 15, name: 'student', message: 'student season - watch for white caps and celebrating graduates' },
+    { startMonth: 6, startDay: 1, endMonth: 6, endDay: 31, name: 'industrisemester', message: 'industrisemester - sweden on summer holiday' },
+    { startMonth: 7, startDay: 8, endMonth: 7, endDay: 31, name: 'kräftskiva', message: 'kräftskiva season - time for crayfish parties!' },
+    { startMonth: 7, startDay: 15, endMonth: 7, endDay: 25, name: 'skolstart', message: 'skolstart - schools beginning new term' },
+    { startMonth: 8, startDay: 15, endMonth: 9, endDay: 15, name: 'ruska', message: 'ruska - autumn foliage season' },
     // Light periods
-    { startMonth: 5, startDay: 15, endMonth: 6, endDay: 15, name: 'white_nights', message: 'White nights period - twilight all night' },
-    { startMonth: 0, startDay: 1, endMonth: 0, endDay: 15, name: 'kaamos', message: 'Kaamos period continues - embrace the winter darkness' },
-    { startMonth: 11, startDay: 10, endMonth: 11, endDay: 24, name: 'darkest', message: 'Darkest period of year - light returns soon' },
+    { startMonth: 5, startDay: 15, endMonth: 6, endDay: 15, name: 'white_nights', message: 'white nights period - twilight all night' },
+    { startMonth: 0, startDay: 1, endMonth: 0, endDay: 15, name: 'kaamos', message: 'kaamos period continues - embrace the winter darkness' },
+    { startMonth: 11, startDay: 10, endMonth: 11, endDay: 24, name: 'darkest', message: 'darkest period of year - light returns soon' },
 ];
 
 // Equinoxes and solstices (approximate dates)
 const ASTRONOMICAL_EVENTS = [
-    { month: 2, startDay: 19, endDay: 22, message: 'Vårdagjämning (spring equinox) - day and night equal' },
-    { month: 5, startDay: 20, endDay: 23, message: 'Sommarsolstånd (summer solstice) - longest day' },
-    { month: 8, startDay: 21, endDay: 24, message: 'Höstdagjämning (autumn equinox) - light and dark equal' },
-    { month: 11, startDay: 20, endDay: 23, message: 'Vintersolstånd (winter solstice) - shortest day, light returns' },
+    { month: 2, startDay: 19, endDay: 22, message: 'vårdagjämning (spring equinox) - day and night equal' },
+    { month: 5, startDay: 20, endDay: 23, message: 'sommarsolstånd (summer solstice) - longest day' },
+    { month: 8, startDay: 21, endDay: 24, message: 'höstdagjämning (autumn equinox) - light and dark equal' },
+    { month: 11, startDay: 20, endDay: 23, message: 'vintersolstånd (winter solstice) - shortest day, light returns' },
 ];
 
 // Activity seasons with conditions
 const ACTIVITY_SEASONS = [
     // Winter activities
-    { startMonth: 11, endMonth: 3, name: 'skiing', message: 'Cross-country skiing season', requires: { minSnow: 15 } },
-    { startMonth: 0, endMonth: 2, name: 'ice_fishing', message: 'Ice fishing season', requires: { minIce: 15 } },
-    { startMonth: 11, endMonth: 2, name: 'ice_skating', message: 'Natural ice skating season', requires: { minIce: 10, maxSnow: 5 } },
+    { startMonth: 11, endMonth: 3, name: 'skiing', message: 'cross-country skiing season', requires: { minSnow: 15 } },
+    { startMonth: 0, endMonth: 2, name: 'ice_fishing', message: 'ice fishing season', requires: { minIce: 15 } },
+    { startMonth: 11, endMonth: 2, name: 'ice_skating', message: 'natural ice skating season', requires: { minIce: 10, maxSnow: 5 } },
     // Summer activities
-    { startMonth: 5, endMonth: 7, name: 'swimming', message: 'Swimming season', requires: { minTemp: 20 } },
-    { startMonth: 4, endMonth: 9, name: 'hiking', message: 'Hiking season' },
-    { startMonth: 5, endMonth: 7, name: 'camping', message: 'Camping season' },
-    { startMonth: 3, endMonth: 9, name: 'cycling', message: 'Cycling season' },
+    { startMonth: 5, endMonth: 7, name: 'swimming', message: 'swimming season', requires: { minTemp: 20 } },
+    { startMonth: 4, endMonth: 9, name: 'hiking', message: 'hiking season' },
+    { startMonth: 5, endMonth: 7, name: 'camping', message: 'camping season' },
+    { startMonth: 3, endMonth: 9, name: 'cycling', message: 'cycling season' },
     // Fishing
-    { startMonth: 3, endMonth: 4, name: 'pike_spring', message: "Spring pike fishing - they're in the shallows" },
-    { startMonth: 8, endMonth: 10, name: 'pike_fall', message: 'Autumn pike fishing - excellent season' },
-    { startMonth: 7, endMonth: 8, name: 'crayfish', message: 'Crayfish season' },
+    { startMonth: 3, endMonth: 4, name: 'pike_spring', message: "spring pike fishing - they're in the shallows" },
+    { startMonth: 8, endMonth: 10, name: 'pike_fall', message: 'autumn pike fishing - excellent season' },
+    { startMonth: 7, endMonth: 8, name: 'crayfish', message: 'crayfish season' },
 ];
 
 const HOURS = {

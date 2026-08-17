@@ -377,7 +377,7 @@ async function liveStarlinkTLEsFetchAndProcess(state) {
                 mostRecentTrain: trains.length > 0 ? trains[0] : undefined,
             };
         },
-        `${liveSlotStarlink.get(state)?.totalSatellites || 0} sats, ${liveSlotStarlink.get(state)?.recentTrains?.length || 0} trains`
+        () => `${liveSlotStarlink.get(state)?.totalSatellites || 0} sats, ${liveSlotStarlink.get(state)?.recentTrains?.length || 0} trains`
     );
 }
 

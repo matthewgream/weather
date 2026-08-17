@@ -61,7 +61,12 @@ class DataSlot {
             slot.data = { _fetched, ...result };
             slot.lastUpdate = _fetched;
             slot.lastError = undefined;
-            const info = successInfo ? ` (${successInfo})` : '';
+            // successInfo should be a thunk: evaluated here, after the slot is updated, so it
+            // describes what was just fetched. A bare value is evaluated by the caller before
+            // the fetch even runs, which reports the previous cycle's data - or nothing at all,
+            // since get() treats a stale slot as empty and staleness is what triggered the fetch.
+            const successInfoValue = typeof successInfo === 'function' ? successInfo(slot.data) : successInfo;
+            const info = successInfoValue ? ` (${successInfoValue})` : '';
             console.error(`${moduleName}: update ${this.name} success${info}`);
             return slot.data;
         } catch (e) {
