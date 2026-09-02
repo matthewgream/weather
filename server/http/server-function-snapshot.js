@@ -245,6 +245,13 @@ class SnapshotContentsManager {
 
 class SnapshotThumbnailsManager {
     constructor(options = {}) {
+        // 'size'/'time' below are the contract. A caller passing a plausible-looking alias (maxEntries, ttl)
+        // otherwise falls straight through to the defaults and silently runs a 2048 entry / 24 hour cache;
+        // on a 466M box that is tens of MB of retained JPEG buffers instead of one or two, and nothing says so.
+        const optionsKnown = new Set(['size', 'time', 'autoCleanup', 'cleanupInterval']);
+        const optionsUnknown = Object.keys(options).filter((key) => !optionsKnown.has(key));
+        if (optionsUnknown.length > 0)
+            throw new Error(`SnapshotThumbnailsManager: unknown option(s) '${optionsUnknown.join("', '")}' (known: '${[...optionsKnown].join("', '")}')`);
         this.cacheEntries = {};
         this.cacheDetails = {};
         this.cacheSize = options.size || 2048;

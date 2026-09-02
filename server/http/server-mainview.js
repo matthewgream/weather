@@ -143,6 +143,23 @@ console.log(`Loaded 'sets' on '/sets' using 'filename=${configData.FILE_SETS}`);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+// sharp/libvips settings are process-global, so they are set here at the entry point rather than in the
+// snapshot module, which is shared with the archiver on a machine that is not memory constrained.
+//
+// Measured on vader 2026-09-01: node held ~227M of anonymous memory while V8 accounted for only 77M
+// (heapTotal 61M + external 16M). The ~150M difference is native allocation libvips makes outside V8's
+// view, and it did not move when the thumbnail cache was fixed the day before - retention changed, the
+// number of sharp operations did not. Two defaults drive it on a 466M box:
+//   - the libvips operation cache defaults to 50M / 20 files / 100 items. Thumbnails here are keyed on
+//     the source frame's mtime, so every frame is processed once and the hit rate is near zero; the only
+//     real reuse is one frame at two widths. 8M is enough for that and reclaims the rest.
+//   - concurrency defaults to the core count (4), and each worker allocates its own tile buffers, which
+//     also multiplies the number of glibc arenas in play. Serial is plenty for 200-600px thumbnails.
+const sharp = require('sharp');
+sharp.cache({ memory: 8, files: 4, items: 20 });
+sharp.concurrency(1);
+console.log(`Loaded 'sharp' using 'cache=${JSON.stringify(sharp.cache())}, concurrency=${sharp.concurrency()}'`);
+
 const server_snapshots = require('./server-function-snapshot-mainview.js')(app, '/snapshot', {
     directory: configData.DATA_CACHE,
     server: configData.SERVER_ARCHIVER,

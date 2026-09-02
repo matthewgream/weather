@@ -365,7 +365,7 @@ function createSectionDataSummary(list, data_location, vars) {
     summary.push(timeinfo);
 
     ////
-    const { alerts, conditions, phenomena } = interpretation;
+    const { alerts, conditions, phenomena } = (interpretation || {});
     if (alerts?.length || internalBatteryWH65 !== 'OFF') summary.push('', '<span style="font-weight:bold;">' + capitalise(joinand([...(alerts || []), ...(internalBatteryWH65 === 'OFF' ? [] : ['faulty battery for WH66'])])) + '.</span>');
     if (conditions?.length) summary.push('', capitalise(joinand([...new Set(conditions)])) + '.');
     if (phenomena?.length) summary.push('', coalescePhenomena([...new Set(phenomena)]).join('; ') + '.');

@@ -36,7 +36,7 @@ function getSnapshotTimestamp(filename) {
 
 function initialise(app, prefix, directory, server) {
     const { SnapshotThumbnailsManager, getThumbnailData } = require('./server-function-snapshot.js');
-    const snapshotThumbnailsManager = new SnapshotThumbnailsManager({ maxEntries: THUMBNAIL_CACHE_SIZE, ttl: THUMBNAIL_CACHE_TIME });
+    const snapshotThumbnailsManager = new SnapshotThumbnailsManager({ size: THUMBNAIL_CACHE_SIZE, time: THUMBNAIL_CACHE_TIME });
 
     //
 

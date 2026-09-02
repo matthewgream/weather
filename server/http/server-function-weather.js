@@ -183,7 +183,11 @@ function weatherStorageStats(options) {
     const stats = [];
     stats.push(`cache: ${weatherData.size} entries, ~${formatter.bytesToString(JSON.stringify(weatherData.raw).length)}`);
     stats.push(`store: ${Object.keys(weatherStore).length} entries, ~${formatter.bytesToString(JSON.stringify(weatherStore).length)}`);
-    stats.push(`astro: ${formatter.millisToString(Date.now() - weatherCacheAstronomy.timestampAstronomy.getTime(), '')} old`);
+    // Populated by __weatherSituation(), which runs *after* weatherStorageManage() in getWeatherInterpretation(),
+    // so it is still empty on the first pass - and a forward clock jump (RTC-less host, NTP correcting a stale
+    // boot clock) can make stats fall due on that very first pass rather than statsInterval later.
+    if (weatherCacheAstronomy.timestampAstronomy)
+        stats.push(`astro: ${formatter.millisToString(Date.now() - weatherCacheAstronomy.timestampAstronomy.getTime(), '')} old`);
     if (options.storage?.persistence)
         stats.push(options.storage.persistence.filter((level) => level.enabled && level.lastSave).map((level) => `persist[${level.type}]: saved ${formatter.millisToString(Date.now() - level.lastSave, '')} ago`));
     console.error(`weather: storage stats - ${stats.flat().join('; ')}`);
@@ -223,7 +227,14 @@ function weatherStorageManage(options) {
 
     // stats periodically
     if (now > weatherStorageStatsTimestamp + options.storage.statsInterval) {
-        weatherStorageStats(options);
+        // Stats are diagnostics and must never abort the interpretation path: a throw here used to skip
+        // __weatherSituation() entirely, so the cache it fills could never be populated and every later
+        // call failed identically - a deadlock that persisted until restart.
+        try {
+            weatherStorageStats(options);
+        } catch (e) {
+            console.error(`weather: storage stats failed (non-fatal): ${e}`);
+        }
         weatherStorageStatsTimestamp = now;
     }
 }
